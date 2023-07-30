@@ -62,6 +62,15 @@ namespace convdiff_hdg {
   };
 
   using namespace dealii;
+
+  /// Abstract type for a function on a facet
+  template <int dim>
+  class FaceFunction
+  {
+  public:
+    virtual double value_normal(const Point<dim>& p, const Tensor<1,dim>& normal,
+            const unsigned int = 0) const = 0;
+  };
   
   // The HDG solution procedure follows closely that of step-7. The major
   // difference is the use of three different sets of DoFHandler and FE
@@ -82,6 +91,7 @@ namespace convdiff_hdg {
         std::shared_ptr<const TensorFunction<1, dim>> convection_velocity,
         std::shared_ptr<const Function<dim>> rhs_func, 
         std::shared_ptr<const Function<dim>> dirichlet_bc,
+        std::shared_ptr<const FaceFunction<dim>> neumann_bc,
         std::shared_ptr<const Function<dim>> solution_func,
         std::shared_ptr<const Function<dim>> solution_and_gradient);
     void run();
@@ -173,12 +183,17 @@ namespace convdiff_hdg {
     const RefinementMode refinement_mode;
     ConvergenceTable     convergence_table;
 
+    unsigned int dirichlet_marker{0};
+    unsigned int neumann_marker{1};
+
     /// Convection velocity function
     std::shared_ptr<const TensorFunction<1,dim>> conv_vel_function;
     /// Source term
     std::shared_ptr<const Function<dim>> rhs_function;
     /// Dirichlet boundary condition
     std::shared_ptr<const Function<dim>> dirichlet_bc_function;
+    /// Neumann boundary condition
+    std::shared_ptr<const FaceFunction<dim>> neumann_bc_function;
     /// Exact solution (if available)
     std::shared_ptr<const Function<dim>> solution_function;
     std::shared_ptr<const Function<dim>> solution_n_gradient;

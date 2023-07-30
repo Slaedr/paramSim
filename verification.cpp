@@ -207,6 +207,23 @@ namespace Step51
     }
   };
 
+  template <int dim>
+  class Neumann : public convdiff_hdg::FaceFunction<dim>
+  {
+  public:
+    virtual double value_normal(const Point<dim>& p, const Tensor<1,dim>& normal,
+            const unsigned int = 0) const override
+    {
+        return -exact_solution.gradient(p) *
+                            normal +
+                          convection.value(p) * normal *
+                            exact_solution.value(p);
+    }
+  private:
+    Solution<dim> exact_solution;
+    ConvectionVelocity<dim> convection;
+  };
+
 
 
 
@@ -225,6 +242,7 @@ int main()
   auto exact_soln_grad = std::make_shared<Step51::SolutionAndGradient<dim>>();
   auto rhs = std::make_shared<Step51::RightHandSide<dim>>();
   auto dirichlet_bc = std::make_shared<Step51::Solution<dim>>();
+  auto neumann_bc = std::make_shared<Step51::Neumann<dim>>();
   auto conv_vel = std::make_shared<Step51::ConvectionVelocity<dim>>();
 
   try
@@ -239,7 +257,7 @@ int main()
                   << std::endl;
 
         convdiff_hdg::HDG<dim> hdg_problem(1, convdiff_hdg::adaptive_refinement,
-                conv_vel, rhs, dirichlet_bc, exact_soln, exact_soln_grad);
+                conv_vel, rhs, dirichlet_bc, neumann_bc, exact_soln, exact_soln_grad);
         hdg_problem.run();
 
         std::cout << std::endl;
@@ -251,7 +269,7 @@ int main()
                   << std::endl;
 
         convdiff_hdg::HDG<dim> hdg_problem(1, convdiff_hdg::global_refinement,
-                conv_vel, rhs, dirichlet_bc, exact_soln, exact_soln_grad);
+                conv_vel, rhs, dirichlet_bc, neumann_bc, exact_soln, exact_soln_grad);
         hdg_problem.run();
 
         std::cout << std::endl;

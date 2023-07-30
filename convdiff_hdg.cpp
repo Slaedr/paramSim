@@ -17,6 +17,7 @@ namespace convdiff_hdg {
         std::shared_ptr<const TensorFunction<1, dim>> convection_velocity,
         std::shared_ptr<const Function<dim>> rhs_func, 
         std::shared_ptr<const Function<dim>> dirichlet_bc,
+        std::shared_ptr<const FaceFunction<dim>> neumann_bc,
         std::shared_ptr<const Function<dim>> solution_func,
         std::shared_ptr<const Function<dim>> solution_and_gradient)
     : fe_local(FE_DGQ<dim>(degree), dim, FE_DGQ<dim>(degree), 1)
@@ -29,6 +30,7 @@ namespace convdiff_hdg {
     , conv_vel_function{convection_velocity}
     , rhs_function{rhs_func}
     , dirichlet_bc_function{dirichlet_bc}
+    , neumann_bc_function{neumann_bc}
     , solution_function{solution_func}
     , solution_n_gradient{solution_and_gradient}
   {}
@@ -57,8 +59,7 @@ namespace convdiff_hdg {
     constraints.clear();
     DoFTools::make_hanging_node_constraints(dof_handler, constraints);
     std::map<types::boundary_id, const Function<dim> *> boundary_functions;
-    //Solution<dim>                                       solution_function;
-    boundary_functions[0] = dirichlet_bc_function.get();
+    boundary_functions[dirichlet_marker] = dirichlet_bc_function.get();
     // Project boundary values to compute nodal values; these are stored in constrains.
     VectorTools::project_boundary_values(dof_handler,
                                          boundary_functions,
@@ -512,13 +513,10 @@ namespace convdiff_hdg {
                     }
 
                 if (cell->face(face_no)->at_boundary() &&
-                    (cell->face(face_no)->boundary_id() == 1))
+                    (cell->face(face_no)->boundary_id() == neumann_marker))
                   {
                     const double neumann_value =
-                      -scratch.exact_solution->gradient(quadrature_point) *
-                        normal +
-                      convection * normal *
-                        scratch.exact_solution->value(quadrature_point);
+                      neumann_bc_function->value_normal(quadrature_point, normal);
                     for (unsigned int i = 0;
                          i < scratch.fe_support_on_face[face_no].size();
                          ++i)

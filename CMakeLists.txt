@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.13.4)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 find_package(deal.II 9.5.0 REQUIRED
   HINTS ${DEAL_II_DIR} ../ ../../ $ENV{DEAL_II_DIR}
   )
