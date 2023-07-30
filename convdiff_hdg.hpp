@@ -26,8 +26,7 @@
 #include <deal.II/numerics/matrix_tools.h>
 #include <deal.II/numerics/data_out.h>
 
-// However, we do have a few new includes for the example.
-// The first one defines finite element spaces on the faces
+// Defines finite element spaces on the faces
 // of the triangulation, which we refer to as the 'skeleton'.
 // These finite elements do not have any support on the element
 // interior, and they represent polynomials that have a single
@@ -35,7 +34,7 @@
 // on codimension-2 surfaces.
 #include <deal.II/fe/fe_face.h>
 
-// The second new file we include defines a new type of sparse matrix.  The
+// Defines a new type of sparse matrix.  The
 // regular <code>SparseMatrix</code> type stores indices to all non-zero
 // entries.  The <code>ChunkSparseMatrix</code> takes advantage of the coupled
 // nature of DG solutions.  It stores an index to a matrix sub-block of a
@@ -45,7 +44,7 @@
 // and results in similar speedups when using the matrix in solvers.
 #include <deal.II/lac/chunk_sparse_matrix.h>
 
-// The final new include for this example deals with data output.  Since
+// Deals with data output.  Since
 // we have a finite element field defined on the skeleton of the mesh,
 // we would like to visualize what that solution actually is.
 // DataOutFaces does exactly this; the interface is the almost the same
@@ -71,6 +70,34 @@ namespace convdiff_hdg {
     virtual double value_normal(const Point<dim>& p, const Tensor<1,dim>& normal,
             const unsigned int = 0) const = 0;
   };
+
+  class DomainGeometry
+  {
+  public:
+      static constexpr int dim = 2;
+      virtual void generate_grid(dealii::Triangulation<dim>& tria,
+              const unsigned int initial_resolution) const = 0;
+  };
+
+  template <int dim>
+  struct CDParams {
+    /// Geometry
+    std::shared_ptr<const DomainGeometry> geom;
+    /// Convection velocity function
+    std::shared_ptr<const TensorFunction<1,dim>> conv_vel_function;
+    /// Source term
+    std::shared_ptr<const Function<dim>> rhs_function;
+    /// Dirichlet boundary condition
+    std::shared_ptr<const Function<dim>> dirichlet_bc_function;
+    /// Neumann boundary condition
+    std::shared_ptr<const FaceFunction<dim>> neumann_bc_function;
+    /// Exact solution (if available)
+    std::shared_ptr<const Function<dim>> solution_function;
+    std::shared_ptr<const Function<dim>> solution_n_gradient;
+
+    unsigned int dirichlet_marker{0};
+    unsigned int neumann_marker{1};
+  };
   
   // The HDG solution procedure follows closely that of step-7. The major
   // difference is the use of three different sets of DoFHandler and FE
@@ -88,21 +115,16 @@ namespace convdiff_hdg {
   {
   public:
     HDG(const unsigned int degree, const RefinementMode refinement_mode,
-        std::shared_ptr<const TensorFunction<1, dim>> convection_velocity,
-        std::shared_ptr<const Function<dim>> rhs_func, 
-        std::shared_ptr<const Function<dim>> dirichlet_bc,
-        std::shared_ptr<const FaceFunction<dim>> neumann_bc,
-        std::shared_ptr<const Function<dim>> solution_func,
-        std::shared_ptr<const Function<dim>> solution_and_gradient);
-    void run();
+        const CDParams<dim>& convdiff_params);
+    void run(int num_cycles, unsigned int initial_resolution);
 
   private:
     void setup_system();
     void assemble_system(const bool reconstruct_trace = false);
     void solve();
     void postprocess();
-    void refine_grid(const unsigned int cycle);
-    void output_results(const unsigned int cycle);
+    void refine_grid(int cycle, unsigned int initial_resolution);
+    void output_results(const int cycle);
 
     // Data for the assembly and solution of the primal variables.
     struct PerTaskData;
@@ -183,20 +205,7 @@ namespace convdiff_hdg {
     const RefinementMode refinement_mode;
     ConvergenceTable     convergence_table;
 
-    unsigned int dirichlet_marker{0};
-    unsigned int neumann_marker{1};
-
-    /// Convection velocity function
-    std::shared_ptr<const TensorFunction<1,dim>> conv_vel_function;
-    /// Source term
-    std::shared_ptr<const Function<dim>> rhs_function;
-    /// Dirichlet boundary condition
-    std::shared_ptr<const Function<dim>> dirichlet_bc_function;
-    /// Neumann boundary condition
-    std::shared_ptr<const FaceFunction<dim>> neumann_bc_function;
-    /// Exact solution (if available)
-    std::shared_ptr<const Function<dim>> solution_function;
-    std::shared_ptr<const Function<dim>> solution_n_gradient;
+    CDParams<dim> cdparams;
   };
 
 

@@ -1,5 +1,7 @@
 #include "convdiff_hdg.hpp"
 
+#include <algorithm>
+
 namespace convdiff_hdg {
   
   using namespace dealii;
@@ -14,12 +16,7 @@ namespace convdiff_hdg {
   template <int dim>
   HDG<dim>
   ::HDG(const unsigned int degree, const RefinementMode refinement_mode,
-        std::shared_ptr<const TensorFunction<1, dim>> convection_velocity,
-        std::shared_ptr<const Function<dim>> rhs_func, 
-        std::shared_ptr<const Function<dim>> dirichlet_bc,
-        std::shared_ptr<const FaceFunction<dim>> neumann_bc,
-        std::shared_ptr<const Function<dim>> solution_func,
-        std::shared_ptr<const Function<dim>> solution_and_gradient)
+        const CDParams<dim>& convdiff_params)
     : fe_local(FE_DGQ<dim>(degree), dim, FE_DGQ<dim>(degree), 1)
     , dof_handler_local(triangulation)
     , fe(degree)
@@ -27,12 +24,7 @@ namespace convdiff_hdg {
     , fe_u_post(degree + 1)
     , dof_handler_u_post(triangulation)
     , refinement_mode(refinement_mode)
-    , conv_vel_function{convection_velocity}
-    , rhs_function{rhs_func}
-    , dirichlet_bc_function{dirichlet_bc}
-    , neumann_bc_function{neumann_bc}
-    , solution_function{solution_func}
-    , solution_n_gradient{solution_and_gradient}
+    , cdparams(convdiff_params)
   {}
 
   // @sect4{HDG::setup_system}
@@ -59,7 +51,7 @@ namespace convdiff_hdg {
     constraints.clear();
     DoFTools::make_hanging_node_constraints(dof_handler, constraints);
     std::map<types::boundary_id, const Function<dim> *> boundary_functions;
-    boundary_functions[dirichlet_marker] = dirichlet_bc_function.get();
+    boundary_functions[cdparams.dirichlet_marker] = cdparams.dirichlet_bc_function.get();
     // Project boundary values to compute nodal values; these are stored in constrains.
     VectorTools::project_boundary_values(dof_handler,
                                          boundary_functions,
@@ -324,7 +316,8 @@ namespace convdiff_hdg {
                         local_flags,
                         local_face_flags,
                         flags,
-                        conv_vel_function.get(), rhs_function.get(), solution_function.get());
+                        cdparams.conv_vel_function.get(), cdparams.rhs_function.get(),
+                        cdparams.solution_function.get());
 
     WorkStream::run(dof_handler.begin_active(),
         dof_handler.end(),
@@ -513,10 +506,10 @@ namespace convdiff_hdg {
                     }
 
                 if (cell->face(face_no)->at_boundary() &&
-                    (cell->face(face_no)->boundary_id() == neumann_marker))
+                    (cell->face(face_no)->boundary_id() == cdparams.neumann_marker))
                   {
                     const double neumann_value =
-                      neumann_bc_function->value_normal(quadrature_point, normal);
+                      cdparams.neumann_bc_function->value_normal(quadrature_point, normal);
                     for (unsigned int i = 0;
                          i < scratch.fe_support_on_face[face_no].size();
                          ++i)
@@ -695,7 +688,7 @@ namespace convdiff_hdg {
     VectorTools::integrate_difference(dof_handler_local,
                                       solution_local,
                                       //SolutionAndGradient<dim>(),
-                                      *solution_n_gradient,
+                                      *cdparams.solution_n_gradient,
                                       difference_per_cell,
                                       QGauss<dim>(fe.degree + 2),
                                       VectorTools::L2_norm,
@@ -710,7 +703,7 @@ namespace convdiff_hdg {
     VectorTools::integrate_difference(dof_handler_local,
                                       solution_local,
                                       //SolutionAndGradient<dim>(),
-                                      *solution_n_gradient,
+                                      *cdparams.solution_n_gradient,
                                       difference_per_cell,
                                       QGauss<dim>(fe.degree + 2),
                                       VectorTools::L2_norm,
@@ -723,7 +716,7 @@ namespace convdiff_hdg {
     VectorTools::integrate_difference(dof_handler_u_post,
                                       solution_u_post,
                                       //Solution<dim>(),
-                                      *solution_function,
+                                      *cdparams.solution_function,
                                       difference_per_cell,
                                       QGauss<dim>(fe.degree + 3),
                                       VectorTools::L2_norm);
@@ -846,7 +839,7 @@ namespace convdiff_hdg {
   // DoFHandler objects.  The graphical output for the skeleton
   // variable is done through use of the DataOutFaces class.
   template <int dim>
-  void HDG<dim>::output_results(const unsigned int cycle)
+  void HDG<dim>::output_results(const int cycle)
   {
     std::string filename;
     switch (refinement_mode)
@@ -935,15 +928,14 @@ namespace convdiff_hdg {
   // give a decent indication of the non-regular regions in the scalar local
   // solutions.
   template <int dim>
-  void HDG<dim>::refine_grid(const unsigned int cycle)
+  void HDG<dim>::refine_grid(const int cycle, const unsigned int initial_resolution)
   {
-    const Point<dim> lower_left{-1.0, -1.0};
-    const Point<dim> upper_right{1.0, 1.0};
-    const std::vector<unsigned int> num_cells_per_dim{2,2};
+    //const Point<dim> lower_left{-1.0, -1.0};
+    //const Point<dim> upper_right{1.0, 1.0};
+    //const std::vector<unsigned int> base_num_cells_per_dim{2,2};
     if (cycle == 0)
       {
-        // The 'true' below "colorizes" the mesh; boundary IDs are set
-        GridGenerator::subdivided_hyper_rectangle(triangulation, num_cells_per_dim, lower_left, upper_right);
+        cdparams.geom->generate_grid(triangulation, initial_resolution);
         triangulation.refine_global(3 - dim);
       }
     else
@@ -952,10 +944,8 @@ namespace convdiff_hdg {
           case global_refinement:
             {
               triangulation.clear();
-              GridGenerator::subdivided_hyper_cube(triangulation,
-                                                   num_cells_per_dim[0] + (cycle % 2),
-                                                   lower_left[0],
-                                                   upper_right[0]);
+              const auto resolution = initial_resolution + cycle % 2;
+              cdparams.geom->generate_grid(triangulation, resolution);
               triangulation.refine_global(3 - dim + cycle / 2);
               break;
             }
@@ -1008,13 +998,13 @@ namespace convdiff_hdg {
   // We loop over 10 cycles, refining the grid on each one.  At the end,
   // convergence tables are created.
   template <int dim>
-  void HDG<dim>::run()
+  void HDG<dim>::run(const int num_cycles, const unsigned int initial_resolution)
   {
-    for (unsigned int cycle = 0; cycle < 10; ++cycle)
+    for (int cycle = 0; cycle < num_cycles; ++cycle)
       {
         std::cout << "Cycle " << cycle << ':' << std::endl;
 
-        refine_grid(cycle);
+        refine_grid(cycle, initial_resolution);
         setup_system();
         assemble_system(false);
         solve();

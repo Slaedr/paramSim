@@ -7,12 +7,23 @@ find_package(deal.II 9.5.0 REQUIRED
   )
 deal_ii_initialize_cached_variables()
 
+find_package(Boost 1.60.0 COMPONENTS program_options)
+
 project(convdiff_hdg)
 
-add_library(convdiff_hdg convdiff_hdg.cpp)
+add_library(convdiff_hdg convdiff_hdg.cpp cmdparser.cpp)
 deal_ii_setup_target(convdiff_hdg)
+if(Boost_FOUND)
+  target_link_libraries(convdiff_hdg Boost::program_options)
+else()
+  target_link_libraries(convdiff_hdg "/usr/lib/x86_64-linux-gnu/libboost_program_options.so")
+endif()
 
 add_executable(verification verification.cpp)
 deal_ii_setup_target(verification)
 target_link_libraries(verification convdiff_hdg)
+
+add_executable(bc_ensemble bc_ensemble.cpp)
+deal_ii_setup_target(bc_ensemble)
+target_link_libraries(bc_ensemble convdiff_hdg)
 

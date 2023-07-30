@@ -27,14 +27,15 @@
 
 #include <deal.II/base/multithread_info.h>
 
+#include "cmdparser.hpp"
 #include "convdiff_hdg.hpp"
 
 // We start by putting all of our classes into their own namespace.
-namespace Step51
+namespace cd_ensemble
 {
   using namespace dealii;
 
-  class Cube : public convdiff_hdg::DomainGeometry
+  class Rectangle : public convdiff_hdg::DomainGeometry
   {
   public:
       using DomainGeometry::dim;
@@ -42,10 +43,32 @@ namespace Step51
       virtual void generate_grid(dealii::Triangulation<dim>& tria,
               const unsigned int initial_resolution) const override
       {
-          const double lower_left = -1;
-          const double upper_right = 1;
-          dealii::GridGenerator::subdivided_hyper_cube(tria, initial_resolution,
+          const dealii::Tensor<1,dim> dims = upper_right - lower_left;
+          const auto num_cells_per_dim = get_cells_per_dim(dims, initial_resolution);
+          // The 'true' below "colorizes" the mesh; boundary IDs are set
+          dealii::GridGenerator::subdivided_hyper_rectangle(tria, num_cells_per_dim,
                   lower_left, upper_right);
+          tria.refine_global(3 - dim);
+      }
+  
+  protected:
+      dealii::Point<dim> lower_left{-1.0, -1.0};
+      dealii::Point<dim> upper_right{2.0, 1.0};
+  
+      std::vector<unsigned int> get_cells_per_dim(const dealii::Tensor<1,dim>& dims,
+              const unsigned int init_res) const
+      {
+          const double min_dim = std::min(dims[0], dims[1]);
+          const double max_dim = std::max(dims[0], dims[1]);
+          const int min_idx = dims[0] < dims[1] ? 0 : 1;
+          std::vector<unsigned int> num_cells_per_dim(dim);
+          num_cells_per_dim[min_idx] = init_res;
+          const auto other_res = static_cast<unsigned int>(std::round(max_dim / min_dim * init_res));
+          const auto other_idx = (min_idx + 1) % dim;
+          num_cells_per_dim[other_idx] = other_res;
+          std::cout << "Num cells per dim = " << num_cells_per_dim[0] << ", " 
+              << num_cells_per_dim[1] << std::endl;
+          return num_cells_per_dim;
       }
   };
 
@@ -223,6 +246,18 @@ namespace Step51
   };
 
   template <int dim>
+  class ZeroNeumann : public convdiff_hdg::FaceFunction<dim>
+  {
+  public:
+    virtual double value_normal(const Point<dim>& /*p*/ = 0,
+            const Tensor<1,dim>& /*normal*/ = 0,
+            const unsigned int = 0) const override
+    {
+        return 0;
+    }
+  };
+
+  template <int dim>
   class Neumann : public convdiff_hdg::FaceFunction<dim>
   {
   public:
@@ -239,73 +274,58 @@ namespace Step51
     ConvectionVelocity<dim> convection;
   };
 
+} // end of namespace cd_ensemble
 
 
 
-} // end of namespace Step51
-
-
-
-int main()
+int main(int argc, char *argv[])
 {
   // Reads DEAL_II_NUM_THREADS env var
   dealii::MultithreadInfo::set_thread_limit();
+
+  const auto runparams = convdiff_hdg::parse_cmd_options_ensemble(argc, argv);
+
+  constexpr unsigned int dim = 2;
+
+  auto geom = std::make_shared<cd_ensemble::Rectangle>();
+
+  const int poly_degree = 1;
+
+  auto exact_soln = std::make_shared<cd_ensemble::Solution<dim>>();
+  auto exact_soln_grad = std::make_shared<cd_ensemble::SolutionAndGradient<dim>>();
+  auto rhs = std::make_shared<cd_ensemble::RightHandSide<dim>>();
+  auto dirichlet_bc = std::make_shared<cd_ensemble::Solution<dim>>();
+  auto neumann_bc = std::make_shared<cd_ensemble::Neumann<dim>>();
+  auto conv_vel = std::make_shared<cd_ensemble::ConvectionVelocity<dim>>();
   
-  auto geom = std::make_shared<Step51::Cube>();
-
-  const unsigned int dim = 2;
-  
-  const int refine_levels = 8;
-  const unsigned int initial_resolution = 2;
-
-  auto exact_soln = std::make_shared<Step51::Solution<dim>>();
-  auto exact_soln_grad = std::make_shared<Step51::SolutionAndGradient<dim>>();
-  auto rhs = std::make_shared<Step51::RightHandSide<dim>>();
-  auto dirichlet_bc = std::make_shared<Step51::Solution<dim>>();
-  auto neumann_bc = std::make_shared<Step51::Neumann<dim>>();
-  auto conv_vel = std::make_shared<Step51::ConvectionVelocity<dim>>();
-
   convdiff_hdg::CDParams<dim> cdparams {
       geom, conv_vel, rhs, dirichlet_bc, neumann_bc, exact_soln, exact_soln_grad };
 
   try
     {
-      // Now for the three calls to the main class in complete analogy to
-      // step-7.
-      {
-        std::cout << "Solving with Q1 elements, adaptive refinement"
-                  << std::endl
-                  << "============================================="
-                  << std::endl
-                  << std::endl;
-
-        convdiff_hdg::HDG<dim> hdg_problem(1, convdiff_hdg::adaptive_refinement, cdparams);
-        hdg_problem.run(refine_levels, initial_resolution);
-
-        std::cout << std::endl;
-      }
-
       {
         std::cout << "Solving with Q1 elements, global refinement" << std::endl
                   << "===========================================" << std::endl
                   << std::endl;
 
-        convdiff_hdg::HDG<dim> hdg_problem(1, convdiff_hdg::global_refinement, cdparams);
-        hdg_problem.run(refine_levels, initial_resolution);
+        convdiff_hdg::HDG<dim> hdg_problem(poly_degree, convdiff_hdg::global_refinement,
+                cdparams);
+        hdg_problem.run(runparams.refine_levels, runparams.initial_resolution);
 
         std::cout << std::endl;
       }
 
+      // This might be a good use-case for mesh-independent learning later.
       //{
-      //  std::cout << "Solving with Q3 elements, global refinement" << std::endl
-      //            << "===========================================" << std::endl
+      //  std::cout << "Solving with Q1 elements, adaptive refinement"
+      //            << std::endl
+      //            << "============================================="
+      //            << std::endl
       //            << std::endl;
 
-      //  convdiff_hdg::HDG<dim> hdg_problem(3, convdiff_hdg::global_refinement);
-      //  hdg_problem.run();
-
-      //  std::cout << std::endl;
-      //}
+      //  convdiff_hdg::HDG<dim> hdg_problem(1, convdiff_hdg::adaptive_refinement,
+      //          conv_vel, rhs, dirichlet_bc, neumann_bc, exact_soln, exact_soln_grad);
+      //  hdg_problem.run(5);
     }
   catch (std::exception &exc)
     {
