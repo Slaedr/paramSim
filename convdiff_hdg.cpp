@@ -2,6 +2,8 @@
 
 #include <algorithm>
 
+#include <deal.II/lac/precondition_block.h>
+
 namespace convdiff_hdg {
   
   using namespace dealii;
@@ -66,7 +68,8 @@ namespace convdiff_hdg {
     {
       DynamicSparsityPattern dsp(dof_handler.n_dofs());
       DoFTools::make_sparsity_pattern(dof_handler, dsp, constraints, false);
-      sparsity_pattern.copy_from(dsp, fe.n_dofs_per_face());
+      //sparsity_pattern.copy_from(dsp, fe.n_dofs_per_face());
+      sparsity_pattern.copy_from(dsp);
     }
     system_matrix.reinit(sparsity_pattern);
   }
@@ -605,23 +608,24 @@ namespace convdiff_hdg {
   }
 
 
-
-  // @sect4{HDG::solve}
-  // The skeleton solution is solved for by using a BiCGStab solver with
-  // identity preconditioner.
   template <int dim>
   void HDG<dim>::solve()
   {
     SolverControl                  solver_control(system_matrix.m() * 10,
                                  1e-11 * system_rhs.l2_norm());
+    PreconditionSOR<SparseMatrix<double> > precondition;
+    precondition.initialize(system_matrix,
+            PreconditionSOR<SparseMatrix<double>>::AdditionalData(.8));
     SolverBicgstab<Vector<double>> solver(solver_control);
-    solver.solve(system_matrix, solution, system_rhs, PreconditionIdentity());
+    //solver.solve(system_matrix, solution, system_rhs, PreconditionIdentity());
+    solver.solve(system_matrix, solution, system_rhs, precondition);
 
     std::cout << "   Number of BiCGStab iterations: "
               << solver_control.last_step() << std::endl;
 
     system_matrix.clear();
-    sparsity_pattern.reinit(0, 0, 0, 1);
+    //sparsity_pattern.reinit(0, 0, 0, 1);
+    sparsity_pattern.reinit(0, 0, 0);
 
     constraints.distribute(solution);
 
@@ -985,12 +989,13 @@ namespace convdiff_hdg {
     // conditions. Since we re-create the triangulation every time for global
     // refinement, the flags are set in every refinement step, not just at the
     // beginning.
-    for (const auto &cell : triangulation.cell_iterators())
-      for (const auto &face : cell->face_iterators())
-        if (face->at_boundary())
-          if ((std::fabs(face->center()(0) - (-1)) < 1e-12) ||
-              (std::fabs(face->center()(1) - (-1)) < 1e-12))
-            face->set_boundary_id(1);
+    //for (const auto &cell : triangulation.cell_iterators())
+    //  for (const auto &face : cell->face_iterators())
+    //    if (face->at_boundary())
+    //      if ((std::fabs(face->center()(0) - (-1)) < 1e-12) ||
+    //          (std::fabs(face->center()(1) - (-1)) < 1e-12))
+    //        face->set_boundary_id(1);
+    cdparams.geom->set_boundary_ids(triangulation);
   }
 
   // @sect4{HDG::run}

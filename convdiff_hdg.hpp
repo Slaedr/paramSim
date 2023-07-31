@@ -1,3 +1,5 @@
+#ifndef CONVDIFF_HDG_HPP_
+#define CONVDIFF_HDG_HPP_
 
 #include <deal.II/base/quadrature_lib.h>
 #include <deal.II/base/function.h>
@@ -42,7 +44,8 @@
 // number of degrees of freedom per face defined by the skeleton solution
 // field. This reduces the memory consumption of the matrix by up to one third
 // and results in similar speedups when using the matrix in solvers.
-#include <deal.II/lac/chunk_sparse_matrix.h>
+//#include <deal.II/lac/chunk_sparse_matrix.h>
+#include <deal.II/lac/sparse_matrix.h>
 
 // Deals with data output.  Since
 // we have a finite element field defined on the skeleton of the mesh,
@@ -71,18 +74,55 @@ namespace convdiff_hdg {
             const unsigned int = 0) const = 0;
   };
 
+  /** Abstraction for generating a Deal II Triangulation from some kind of geometry description.
+   *
+   * Also provides a routine for setting boundary face IDs for boundary conditions.
+   */
+  template <int dim> 
   class DomainGeometry
   {
   public:
-      static constexpr int dim = 2;
+      /// Type describing a boundary marker and the condition for a point to be on that boundary
+      using bc_mark_desc = std::pair<int, std::function<bool(const dealii::Point<dim>&)>>;
+
+      DomainGeometry() { }
+      
+      DomainGeometry(const std::vector<bc_mark_desc>& bc_marks)
+          : bciddesc(bc_marks)
+      { }
+
       virtual void generate_grid(dealii::Triangulation<dim>& tria,
               const unsigned int initial_resolution) const = 0;
+
+      void set_bc_mark_desc(const std::vector<bc_mark_desc>& bc_marks) {
+          bciddesc = bc_marks;
+      }
+
+      virtual void set_boundary_ids(dealii::Triangulation<dim>& tria) const
+      {
+          if(bciddesc.empty()) {
+              return;
+          }
+          for (const auto &cell : tria.cell_iterators()) {
+            for (const auto &face : cell->face_iterators()) {
+              if (face->at_boundary()) {
+                for (auto bcid : bciddesc) {
+                  if (bcid.second(face->center())) {
+                    face->set_boundary_id(bcid.first);
+                  }
+                }
+              }
+            }
+          }
+      }
+  protected:
+      std::vector<bc_mark_desc> bciddesc;
   };
 
   template <int dim>
   struct CDParams {
     /// Geometry
-    std::shared_ptr<const DomainGeometry> geom;
+    std::shared_ptr<const DomainGeometry<dim>> geom;
     /// Convection velocity function
     std::shared_ptr<const TensorFunction<1,dim>> conv_vel_function;
     /// Source term
@@ -95,8 +135,8 @@ namespace convdiff_hdg {
     std::shared_ptr<const Function<dim>> solution_function;
     std::shared_ptr<const Function<dim>> solution_n_gradient;
 
-    unsigned int dirichlet_marker{0};
-    unsigned int neumann_marker{1};
+    unsigned int dirichlet_marker;
+    unsigned int neumann_marker;
   };
   
   // The HDG solution procedure follows closely that of step-7. The major
@@ -198,8 +238,10 @@ namespace convdiff_hdg {
     // matrices: You need a sparsity pattern of type ChunkSparsityPattern and
     // the actual matrix object. When creating the sparsity pattern, we just
     // have to additionally pass the size of local blocks.
-    ChunkSparsityPattern      sparsity_pattern;
-    ChunkSparseMatrix<double> system_matrix;
+    //ChunkSparsityPattern      sparsity_pattern;
+    //ChunkSparseMatrix<double> system_matrix;
+    SparsityPattern      sparsity_pattern;
+    SparseMatrix<double> system_matrix;
 
     // Same as step-7:
     const RefinementMode refinement_mode;
@@ -208,5 +250,5 @@ namespace convdiff_hdg {
     CDParams<dim> cdparams;
   };
 
-
 }
+#endif
