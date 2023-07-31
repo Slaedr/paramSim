@@ -31,27 +31,28 @@
 #include "convdiff_hdg.hpp"
 #include "cases/step51.hpp"
 
-int main()
+int main(int argc, char *argv[])
 {
   // Reads DEAL_II_NUM_THREADS env var
   dealii::MultithreadInfo::set_thread_limit();
+
+  const auto params = convdiff_hdg::parse_cmd_options_ensemble(argc, argv);
   
   const unsigned int dim = 2;
 
   std::vector<convdiff_hdg::DomainGeometry<dim>::bc_mark_desc> bcmarks;
   bcmarks.push_back(std::make_pair(1, 
       [](const dealii::Point<dim>& p) {
-          if ((std::fabs(p(0) - (-1)) < 1e-12) ||
-              (std::fabs(p(1) - (-1)) < 1e-12))
-              return true;
-          else
-              return false;
+          //if ((std::fabs(p(0) - (-1)) < 1e-12) ||
+          //    (std::fabs(p(1) - (-1)) < 1e-12))
+          //    return true;
+          //else
+          //    return false;
+          (void)p;
+          return false;
       }));
   
   auto geom = std::make_shared<cases::step51::Cube<dim>>(bcmarks);
-  
-  const int refine_levels = 8;
-  const unsigned int initial_resolution = 2;
 
   auto exact_soln = std::make_shared<cases::step51::Solution<dim>>();
   auto exact_soln_grad = std::make_shared<cases::step51::SolutionAndGradient<dim>>();
@@ -71,7 +72,7 @@ int main()
                   << std::endl;
 
         convdiff_hdg::HDG<dim> hdg_problem(1, convdiff_hdg::global_refinement, cdparams);
-        hdg_problem.run(refine_levels, initial_resolution);
+        hdg_problem.run(params.refine_levels, params.initial_resolution);
 
         std::cout << std::endl;
       }

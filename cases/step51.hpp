@@ -35,49 +35,69 @@ namespace step51 {
   template <int dim>
   class SolutionBase
   {
+  public:
+    static constexpr unsigned int n_source_centers = 3;
   protected:
-    static const unsigned int n_source_centers = 3;
-    static const Point<dim>   source_centers[n_source_centers];
-    static const double       width;
+    const std::array<Point<dim>, n_source_centers> source_centers;
+    const std::array<double, n_source_centers> coeffs{{1.0, 1.0, 1.0}};
+    const double width = 1.0/5.0;
+
+    std::array<Point<dim>, n_source_centers> get_source_centers() const
+    {
+        static_assert(dim > 0 && dim <= 3, "dim must be 1, 2 or 3!");
+        std::array<Point<dim>, n_source_centers> points;
+        if constexpr (dim == 1) {
+            points =
+            {{Point<1>(-1.0 / 3.0), Point<1>(0.0), Point<1>(+1.0 / 3.0)}};
+        } else if constexpr (dim == 2) {
+            points =
+            {{Point<2>(-0.5, +0.5), Point<2>(-0.5, -0.5), Point<2>(+0.5, -0.5)}};
+        }
+        else {
+            points = {{
+              Point<3>(-0.5, +0.5, 0.25),
+              Point<3>(-0.6, -0.5, -0.125),
+              Point<3>(+0.5, -0.5, 0.5)}};
+        }
+        return points;
+    }
+
+    SolutionBase() : source_centers(get_source_centers())
+    { }
+
+    SolutionBase(const std::array<Point<dim>, n_source_centers> centers,
+            const std::array<double, n_source_centers> coefficients,
+            const double width_sigma)
+        : source_centers{centers}, coeffs{coefficients}, width{width_sigma}
+    { }
   };
-
-
-  template <>
-  const Point<1>
-    SolutionBase<1>::source_centers[SolutionBase<1>::n_source_centers] =
-      {Point<1>(-1.0 / 3.0), Point<1>(0.0), Point<1>(+1.0 / 3.0)};
-
-
-  template <>
-  const Point<2>
-    SolutionBase<2>::source_centers[SolutionBase<2>::n_source_centers] =
-      {Point<2>(-0.5, +0.5), Point<2>(-0.5, -0.5), Point<2>(+0.5, -0.5)};
-
-  template <>
-  const Point<3>
-    SolutionBase<3>::source_centers[SolutionBase<3>::n_source_centers] = {
-      Point<3>(-0.5, +0.5, 0.25),
-      Point<3>(-0.6, -0.5, -0.125),
-      Point<3>(+0.5, -0.5, 0.5)};
-
-  template <int dim>
-  const double SolutionBase<dim>::width = 1. / 5.;
 
 
   template <int dim>
   class Solution : public Function<dim>, protected SolutionBase<dim>
   {
   public:
+    static constexpr unsigned int n_centers = SolutionBase<dim>::n_source_centers;
+
+    Solution()
+    { }
+    
+    Solution(const std::array<Point<dim>, n_centers> centers,
+            const std::array<double, n_centers> coefficients,
+            const double width_sigma)
+        : SolutionBase<dim>(centers, coefficients, width_sigma)
+    { }
+
     virtual double value(const Point<dim> &p,
                          const unsigned int /*component*/ = 0) const override
     {
       double sum = 0;
       for (unsigned int i = 0; i < this->n_source_centers; ++i)
-        {
+      {
           const Tensor<1, dim> x_minus_xi = p - this->source_centers[i];
           sum +=
             std::exp(-x_minus_xi.norm_square() / (this->width * this->width));
-        }
+      }
 
       return sum /
              std::pow(2. * numbers::PI * this->width * this->width, dim / 2.);
@@ -89,14 +109,14 @@ namespace step51 {
     {
       Tensor<1, dim> sum;
       for (unsigned int i = 0; i < this->n_source_centers; ++i)
-        {
+      {
           const Tensor<1, dim> x_minus_xi = p - this->source_centers[i];
 
           sum +=
             (-2 / (this->width * this->width) *
              std::exp(-x_minus_xi.norm_square() / (this->width * this->width)) *
              x_minus_xi);
-        }
+      }
 
       return sum /
              std::pow(2. * numbers::PI * this->width * this->width, dim / 2.);
@@ -110,23 +130,34 @@ namespace step51 {
   // error of the HDG approximation and its implementation is to simply call
   // value and gradient function of the Solution class.
   template <int dim>
-  class SolutionAndGradient : public Function<dim>, protected SolutionBase<dim>
+  class SolutionAndGradient : public Function<dim>//, protected SolutionBase<dim>
   {
   public:
     SolutionAndGradient()
       : Function<dim>(dim + 1)
     {}
 
+    static constexpr int n_centers = SolutionBase<dim>::n_source_centers;
+    
+    SolutionAndGradient(const std::array<Point<dim>, n_centers> centers,
+            const std::array<double, n_centers> coefficients,
+            const double width_sigma)
+        : Function<dim>(dim+1), solution(centers, coefficients, width_sigma)
+    { }
+
     virtual void vector_value(const Point<dim> &p,
                               Vector<double> &  v) const override
     {
       AssertDimension(v.size(), dim + 1);
-      Solution<dim>  solution;
+      //Solution<dim>  solution;
       Tensor<1, dim> grad = solution.gradient(p);
       for (unsigned int d = 0; d < dim; ++d)
         v[d] = -grad[d];
       v[dim] = solution.value(p);
     }
+
+  private:
+    Solution<dim> solution;
   };
 
 
@@ -177,6 +208,17 @@ namespace step51 {
   class RightHandSide : public Function<dim>, protected SolutionBase<dim>
   {
   public:
+    static constexpr int n_centers = SolutionBase<dim>::n_source_centers;
+
+    RightHandSide()
+    { }
+
+    RightHandSide(const std::array<Point<dim>, n_centers> centers,
+            const std::array<double, n_centers> coefficients,
+            const double width_sigma)
+        : SolutionBase<dim>(centers, coefficients, width_sigma)
+    { }
+
     virtual double value(const Point<dim> &p,
                          const unsigned int /*component*/ = 0) const override
     {
@@ -203,6 +245,16 @@ namespace step51 {
   class Neumann : public convdiff_hdg::FaceFunction<dim>
   {
   public:
+    static constexpr int n_centers = SolutionBase<dim>::n_source_centers;
+
+    Neumann() { }
+
+    Neumann(const std::array<Point<dim>, n_centers> centers,
+            const std::array<double, n_centers> coefficients,
+            const double width_sigma)
+        : exact_solution(centers, coefficients, width_sigma)
+    { }
+
     virtual double value_normal(const Point<dim>& p, const Tensor<1,dim>& normal,
             const unsigned int = 0) const override
     {
