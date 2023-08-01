@@ -25,11 +25,15 @@ else()
   target_link_libraries(convdiff_hdg "/usr/lib/x86_64-linux-gnu/libboost_program_options.so")
 endif()
 
+add_library(cases cases/step51.cpp)
+deal_ii_setup_target(cases)
+target_link_libraries(cases convdiff_hdg)
+
 add_executable(verification verification.cpp)
 deal_ii_setup_target(verification)
 target_link_libraries(verification convdiff_hdg)
 
-add_executable(bc_ensemble bc_ensemble.cpp)
-deal_ii_setup_target(bc_ensemble)
-target_link_libraries(bc_ensemble convdiff_hdg)
+add_executable(hdg_run_case run_case.cpp)
+deal_ii_setup_target(hdg_run_case)
+target_link_libraries(hdg_run_case convdiff_hdg cases)
 

@@ -24,6 +24,7 @@
 // examples and are not commented on.
 
 #include <iostream>
+#include <boost/program_options/options_description.hpp>
 
 #include <deal.II/base/multithread_info.h>
 
@@ -31,38 +32,55 @@
 #include "convdiff_hdg.hpp"
 #include "cases/step51.hpp"
 
+namespace bpo = boost::program_options;
+
 int main(int argc, char *argv[])
 {
   // Reads DEAL_II_NUM_THREADS env var
   dealii::MultithreadInfo::set_thread_limit();
-
-  const auto params = convdiff_hdg::parse_cmd_options_ensemble(argc, argv);
   
-  const unsigned int dim = 2;
+  constexpr unsigned int dim = 2;
+    
+  bpo::options_description desc
+      ("Solves one Convection-Diffusion problem given one set of parameters.");
+  convdiff_hdg::add_common_options(desc, "");
+
+  cases::Step51<dim>::add_case_cmd_args(desc);
+
+  // complete all options addition before calling the following line
+  const bpo::variables_map cmdmap = convdiff_hdg::get_cmd_args(argc, argv, desc);
+  if(cmdmap.count("help")) {
+      std::cout << desc << std::endl;
+      return 0;
+  }
+
+  cases::Step51<dim> tcase(cmdmap);
+
+  const int dirichlet_id = 0;
+  const int neumann_id = 1;
+
+  const auto refine_levels = cmdmap["refine_levels"].as<int>();
+  const auto initial_resolution = cmdmap["initial_resolution"].as<unsigned int>();
 
   std::vector<convdiff_hdg::DomainGeometry<dim>::bc_mark_desc> bcmarks;
-  bcmarks.push_back(std::make_pair(1, 
+  bcmarks.push_back(std::make_pair(neumann_id, 
       [](const dealii::Point<dim>& p) {
-          //if ((std::fabs(p(0) - (-1)) < 1e-12) ||
-          //    (std::fabs(p(1) - (-1)) < 1e-12))
-          //    return true;
-          //else
-          //    return false;
           (void)p;
           return false;
       }));
   
   auto geom = std::make_shared<cases::step51::Cube<dim>>(bcmarks);
 
-  auto exact_soln = std::make_shared<cases::step51::Solution<dim>>();
-  auto exact_soln_grad = std::make_shared<cases::step51::SolutionAndGradient<dim>>();
-  auto rhs = std::make_shared<cases::step51::RightHandSide<dim>>();
-  auto dirichlet_bc = std::make_shared<cases::step51::Solution<dim>>();
-  auto neumann_bc = std::make_shared<cases::step51::Neumann<dim>>();
-  auto conv_vel = std::make_shared<cases::step51::ConvectionVelocity<dim>>();
+  auto exact_soln = tcase.get_exact_solution();
+  auto exact_soln_grad = tcase.get_exact_solution_and_gradient();
+  auto rhs = tcase.get_right_hand_side();
+  auto dirichlet_bc = tcase.get_exact_solution();
+  auto neumann_bc = tcase.get_neumann_bc();
+  auto conv_vel = tcase.get_convection_velocity();
 
   convdiff_hdg::CDParams<dim> cdparams {
-      geom, conv_vel, rhs, dirichlet_bc, neumann_bc, exact_soln, exact_soln_grad, 0, 1 };
+      geom, conv_vel, rhs, dirichlet_bc, neumann_bc, exact_soln, exact_soln_grad,
+      dirichlet_id, neumann_id };
 
   try
     {
@@ -72,7 +90,7 @@ int main(int argc, char *argv[])
                   << std::endl;
 
         convdiff_hdg::HDG<dim> hdg_problem(1, convdiff_hdg::global_refinement, cdparams);
-        hdg_problem.run(params.refine_levels, params.initial_resolution);
+        hdg_problem.run(refine_levels, initial_resolution);
 
         std::cout << std::endl;
       }

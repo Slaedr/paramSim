@@ -1,10 +1,15 @@
 #ifndef CONVDIFF_HDG_CASES_STEP51_HPP_
 #define CONVDIFF_HDG_CASES_STEP51_HPP_
 
+#include <boost/program_options/options_description.hpp>
+#include <boost/program_options/variables_map.hpp>
+
 #include "../convdiff_hdg.hpp"
 
 namespace cases {
+
 namespace step51 {
+
 
   using namespace dealii;
 
@@ -95,7 +100,7 @@ namespace step51 {
       for (unsigned int i = 0; i < this->n_source_centers; ++i)
       {
           const Tensor<1, dim> x_minus_xi = p - this->source_centers[i];
-          sum +=
+          sum += this->coeffs[i] *
             std::exp(-x_minus_xi.norm_square() / (this->width * this->width));
       }
 
@@ -112,7 +117,7 @@ namespace step51 {
       {
           const Tensor<1, dim> x_minus_xi = p - this->source_centers[i];
 
-          sum +=
+          sum += this->coeffs[i] *
             (-2 / (this->width * this->width) *
              std::exp(-x_minus_xi.norm_square() / (this->width * this->width)) *
              x_minus_xi);
@@ -229,7 +234,7 @@ namespace step51 {
         {
           const Tensor<1, dim> x_minus_xi = p - this->source_centers[i];
 
-          sum +=
+          sum += this->coeffs[i] *
             ((2 * dim - 2 * convection * x_minus_xi -
               4 * x_minus_xi.norm_square() / (this->width * this->width)) /
              (this->width * this->width) *
@@ -268,8 +273,52 @@ namespace step51 {
     ConvectionVelocity<dim> convection;
   };
 
-
 }
+
+
+namespace bpo = boost::program_options;
+
+
+template <int dim>
+class Step51
+{
+public:
+    Step51(const bpo::variables_map&);
+
+    static void add_case_cmd_args(bpo::options_description&);
+
+    std::shared_ptr<const step51::Solution<dim>> get_exact_solution() const {
+        return exact_soln_;
+    }
+
+    std::shared_ptr<const step51::SolutionAndGradient<dim>>
+        get_exact_solution_and_gradient() const {
+        return exact_soln_grad_;
+    }
+
+    std::shared_ptr<const step51::RightHandSide<dim>> get_right_hand_side() const {
+        return rhs_;
+    }
+
+    std::shared_ptr<const step51::Neumann<dim>> get_neumann_bc() const {
+        return neumann_;
+    }
+
+    std::shared_ptr<const step51::ConvectionVelocity<dim>> get_convection_velocity() const
+    {
+        return conv_vel_;
+    }
+
+private:
+    static const std::array<std::string, 3> dimnames;
+
+    std::shared_ptr<step51::Solution<dim>> exact_soln_;
+    std::shared_ptr<step51::SolutionAndGradient<dim>> exact_soln_grad_;
+    std::shared_ptr<step51::RightHandSide<dim>> rhs_;
+    std::shared_ptr<step51::Neumann<dim>> neumann_;
+    std::shared_ptr<step51::ConvectionVelocity<dim>> conv_vel_;
+};
+
 }
 
 #endif
