@@ -860,6 +860,8 @@ namespace convdiff_hdg {
 
     std::string face_out(filename);
     face_out += "-face";
+    std::string boundary_out(filename);
+    boundary_out += "-boundary";
 
     filename += "-q" + Utilities::int_to_string(fe.degree, 1);
     filename += "-" + Utilities::int_to_string(cycle, 2);
@@ -895,6 +897,7 @@ namespace convdiff_hdg {
 
     data_out.build_patches(fe.degree);
     data_out.write_vtk(output);
+    output.close();
 
     face_out += "-q" + Utilities::int_to_string(fe.degree, 1);
     face_out += "-" + Utilities::int_to_string(cycle, 2);
@@ -917,6 +920,23 @@ namespace convdiff_hdg {
 
     data_out_face.build_patches(fe.degree);
     data_out_face.write_vtk(face_output);
+    face_output.close();
+   
+    // Write boundary data 
+    boundary_out += "-q" + Utilities::int_to_string(fe.degree, 1);
+    boundary_out += "-" + Utilities::int_to_string(cycle, 2);
+    boundary_out += ".vtk";
+    std::ofstream b_output(boundary_out);
+    DataOutFaces<dim> data_out_boundary(true);
+    face_name[0] = "u_post";
+    data_out_boundary.add_data_vector(dof_handler_u_post,
+                                  solution_u_post,
+                                  face_name,
+                                  face_component_type);
+
+    data_out_boundary.build_patches(fe.degree);
+    data_out_boundary.write_vtk(b_output);
+    b_output.close();
   }
 
   // @sect4{HDG::refine_grid}
