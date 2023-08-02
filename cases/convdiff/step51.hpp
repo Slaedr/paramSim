@@ -4,7 +4,7 @@
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/variables_map.hpp>
 
-#include "../convdiff_hdg.hpp"
+#include "../../pdes/convdiff/convdiff_hdg.hpp"
 
 namespace cases {
 

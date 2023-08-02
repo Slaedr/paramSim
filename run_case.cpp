@@ -29,8 +29,8 @@
 #include <deal.II/base/multithread_info.h>
 
 #include "cmdparser.hpp"
-#include "convdiff_hdg.hpp"
-#include "cases/step51.hpp"
+#include "pdes/convdiff/convdiff_hdg.hpp"
+#include "cases/convdiff/step51.hpp"
 
 namespace bpo = boost::program_options;
 
