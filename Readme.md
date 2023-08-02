@@ -1,6 +1,9 @@
-Convdiff-HDG
-============
+ParamSim
+========
 
-A program to solve linear convection-diffusion equations by a hybridized discontinuous Galerkin (HDG) finite element method. This is based on the [Step-51 example](https://dealii.org/current/doxygen/deal.II/step_51.html) of the DEAL-II library by Martin Kronbichler and Scott Miller.
+A set of programs to solve partial differential equations by finite element methods under different parameters. This is based on [DEAL-II library](https://dealii.org) and some example codes from that project.
 
-The code focuses on solving a fixed PDE but for different types of boundary functions.
+Some of the example codes used are:
+- [Step-51 example](https://dealii.org/current/doxygen/deal.II/step_51.html) by Martin Kronbichler and Scott Miller.
+
+The code focuses on solving a fixed PDE but for different types of parameters, esp. boundary data.
