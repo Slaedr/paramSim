@@ -1,4 +1,6 @@
-#include "step51.hpp"
+#include "verify.hpp"
+
+#include <limits>
 
 namespace paramsim {
 namespace cases {
@@ -6,13 +8,13 @@ namespace cases {
 using namespace dealii;
    
 template <int dim>
-const std::array<std::string, 3> Step51<dim>::dimnames{{"x","y","z"}};
+const std::array<std::string, 3> PoissonVerify<dim>::dimnames{{"x","y","z"}};
 
 template <int dim>
-void Step51<dim>::initialize(const bpo::variables_map& params)
+void PoissonVerify<dim>::initialize(const bpo::variables_map& params)
 {
-    constexpr int n_centers = step51::Solution<dim>::n_centers;
     if(params.count("width")) {
+        constexpr int n_centers = poisson_verify::Params<dim>::n_centers;
         std::array<Point<dim>, n_centers> centers;
         std::array<double, n_centers> coeffs;
         for(int ic = 0; ic < n_centers; ic++) {
@@ -27,16 +29,11 @@ void Step51<dim>::initialize(const bpo::variables_map& params)
             coeffs[ic] = params[coflag.c_str()].as<double>();
         }
         const double width_sigma = params["width"].as<double>();
-        this->exact_soln_ = std::make_shared<cases::step51::Solution<dim>>(centers, coeffs,
-                width_sigma);
-        this->exact_soln_and_grad_ = std::make_shared<cases::step51::SolutionAndGradient<dim>>(
-                centers, coeffs, width_sigma);
-        this->rhs_ = std::make_shared<cases::step51::RightHandSide<dim>>(
-                centers, coeffs, width_sigma);
-        this->neumann_ = std::make_shared<cases::step51::Neumann<dim>>(
-                centers, coeffs, width_sigma);
+        poisson_verify::Params<dim> params(centers, coeffs, width_sigma);
+        this->exact_soln_ = std::make_shared<poisson_verify::Solution<dim>>(params);
+        this->rhs_ = std::make_shared<poisson_verify::RightHandSide<dim>>(params);
+        this->neumann_ = std::make_shared<poisson_verify::Neumann<dim>>(params);
         this->dirichlet_ = this->exact_soln_;
-        this->conv_vel_ = std::make_shared<cases::step51::ConvectionVelocity<dim>>();
 
         // Write out params to confirm
         std::cout << "Case 'verify' for Poisson: read parameters:\n";
@@ -49,34 +46,44 @@ void Step51<dim>::initialize(const bpo::variables_map& params)
             std::cout << "), coeff = " << coeffs[ic] << std::endl;
         }
     } else {
-        this->exact_soln_ = std::make_shared<cases::step51::Solution<dim>>();
-        this->exact_soln_and_grad_ = std::make_shared<cases::step51::SolutionAndGradient<dim>>();
-        this->rhs_ = std::make_shared<cases::step51::RightHandSide<dim>>();
+        this->exact_soln_ = std::make_shared<poisson_verify::Solution<dim>>();
+        this->rhs_ = std::make_shared<poisson_verify::RightHandSide<dim>>();
+        this->neumann_ = std::make_shared<poisson_verify::Neumann<dim>>();
         this->dirichlet_ = this->exact_soln_;
-        this->neumann_ = std::make_shared<cases::step51::Neumann<dim>>();
-        this->conv_vel_ = std::make_shared<cases::step51::ConvectionVelocity<dim>>();
+        std::cout << "Case 'verify' for Poisson: default parameters.\n";
     }
 
-    this->bcid_dirichlet_ = 0;
-    this->bcid_neumann_ = 1;
+    //constexpr double tol = 100*std::numeric_limits<double>::epsilon();
+    this->bcid_dirichlet_ = 1;
+    this->bcid_neumann_ = 2;
     std::vector<typename DomainGeometry<dim>::bc_mark_desc> bcmarks;
-    bcmarks.push_back(std::make_pair(this->bcid_neumann_, 
-        [](const dealii::Point<dim>& p) {
-            if ((std::fabs(p(0) - (-1)) < 1e-12) ||
-                (std::fabs(p(1) - (-1)) < 1e-12))
-                return true;
-            else
-                return false;
-        }));
-    this->geom_ = std::make_shared<cases::step51::Cube<dim>>(bcmarks);
+    //bcmarks.push_back(std::make_pair(this->bcid_dirichlet_, 
+    //    [](const dealii::Point<dim>& p) {
+    //    if(std::abs(p[0] - 1.0) > tol && std::abs(p[1] - 1.0) > tol) {
+    //        return true;
+    //    } else {
+    //        return false;
+    //    }
+    //    }));
+    //bcmarks.push_back(std::make_pair(this->bcid_neumann_, 
+    //    [](const dealii::Point<dim>& p) {
+    //    if(std::abs(p[0] - 1.0) < tol || std::abs(p[1] - 1.0) < tol) {
+    //        return true;
+    //    } else {
+    //        return false;
+    //    }
+    //    }));
+    bcmarks.push_back(std::make_pair(this->bcid_dirichlet_, 
+        [](const dealii::Point<dim>& ) { return true; }));
+    this->geom_ = std::make_shared<poisson_verify::Cube<dim>>(bcmarks);
 }
     
 template <int dim>
-void Step51<dim>::add_case_cmd_args(bpo::options_description& desc) const
+void PoissonVerify<dim>::add_case_cmd_args(bpo::options_description& desc) const
 {
 	desc.add_options()
         ("width", bpo::value<double>(), "Width of each hill");
-    constexpr int n_centers = step51::Solution<dim>::n_centers;
+    constexpr int n_centers = poisson_verify::Params<dim>::n_centers;
     for(int ic = 0; ic < n_centers; ic++) {
         for(int idim = 0; idim < dim; idim++) {
             const std::string flag =
@@ -96,7 +103,7 @@ void Step51<dim>::add_case_cmd_args(bpo::options_description& desc) const
     }
 }
 
-template class Step51<2>;
+template class PoissonVerify<2>;
 
 }
 }

@@ -3,9 +3,14 @@
 
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/variables_map.hpp>
+#include <deal.II/grid/grid_generator.h>
 
+#include "../case.hpp"
+#include "convdiffcase.hpp"
+#include "../../pdes/pdebase.hpp"
 #include "../../pdes/convdiff/convdiff_hdg.hpp"
 
+namespace paramsim {
 namespace cases {
 
 namespace step51 {
@@ -14,11 +19,11 @@ namespace step51 {
   using namespace dealii;
 
   template <int dim>
-  class Cube : public convdiff_hdg::DomainGeometry<dim>
+  class Cube : public DomainGeometry<dim>
   {
   public:
-      Cube(const std::vector<typename convdiff_hdg::DomainGeometry<dim>::bc_mark_desc>& bcmarks)
-          : convdiff_hdg::DomainGeometry<dim>(bcmarks)
+      Cube(const std::vector<typename DomainGeometry<dim>::bc_mark_desc>& bcmarks)
+          : DomainGeometry<dim>(bcmarks)
       { }
   
       virtual void generate_grid(dealii::Triangulation<dim>& tria,
@@ -129,13 +134,12 @@ namespace step51 {
   };
 
 
-
   // This class implements a function where the scalar solution and its negative
   // gradient are collected together. This function is used when computing the
   // error of the HDG approximation and its implementation is to simply call
   // value and gradient function of the Solution class.
   template <int dim>
-  class SolutionAndGradient : public Function<dim>//, protected SolutionBase<dim>
+  class SolutionAndGradient : public Function<dim>
   {
   public:
     SolutionAndGradient()
@@ -154,7 +158,6 @@ namespace step51 {
                               Vector<double> &  v) const override
     {
       AssertDimension(v.size(), dim + 1);
-      //Solution<dim>  solution;
       Tensor<1, dim> grad = solution.gradient(p);
       for (unsigned int d = 0; d < dim; ++d)
         v[d] = -grad[d];
@@ -203,7 +206,6 @@ namespace step51 {
   };
 
 
-
   // The last function we implement is the right hand side for the
   // manufactured solution. It is very similar to step-7, with the exception
   // that we now have a convection term instead of the reaction term. Since
@@ -247,7 +249,7 @@ namespace step51 {
   };
 
   template <int dim>
-  class Neumann : public convdiff_hdg::FaceFunction<dim>
+  class Neumann : public FaceFunction<dim>
   {
   public:
     static constexpr int n_centers = SolutionBase<dim>::n_source_centers;
@@ -276,49 +278,64 @@ namespace step51 {
 }
 
 
-namespace bpo = boost::program_options;
-
 
 template <int dim>
-class Step51
-{
+class Step51 final : public convdiffcase_verification<dim> {
 public:
-    Step51(const bpo::variables_map&);
+    /** Sets up case parameters from command line parameters.
+     *
+     * \warning If the parameter width is not passed, it uses all default parameters,
+     * ignoring any other parameters even if passed on the command line.
+     */
+    void initialize(const bpo::variables_map&) override;
 
-    static void add_case_cmd_args(bpo::options_description&);
-
-    std::shared_ptr<const step51::Solution<dim>> get_exact_solution() const {
-        return exact_soln_;
-    }
-
-    std::shared_ptr<const step51::SolutionAndGradient<dim>>
-        get_exact_solution_and_gradient() const {
-        return exact_soln_grad_;
-    }
-
-    std::shared_ptr<const step51::RightHandSide<dim>> get_right_hand_side() const {
-        return rhs_;
-    }
-
-    std::shared_ptr<const step51::Neumann<dim>> get_neumann_bc() const {
-        return neumann_;
-    }
-
-    std::shared_ptr<const step51::ConvectionVelocity<dim>> get_convection_velocity() const
-    {
-        return conv_vel_;
-    }
+    void add_case_cmd_args(bpo::options_description&) const override;
 
 private:
     static const std::array<std::string, 3> dimnames;
-
-    std::shared_ptr<step51::Solution<dim>> exact_soln_;
-    std::shared_ptr<step51::SolutionAndGradient<dim>> exact_soln_grad_;
-    std::shared_ptr<step51::RightHandSide<dim>> rhs_;
-    std::shared_ptr<step51::Neumann<dim>> neumann_;
-    std::shared_ptr<step51::ConvectionVelocity<dim>> conv_vel_;
 };
 
+
+namespace unused {
+  template <int dim>
+  class Rectangle : public DomainGeometry<dim>
+  {
+  public:
+      virtual void generate_grid(dealii::Triangulation<dim>& tria,
+              const unsigned int initial_resolution) const override
+      {
+          const dealii::Tensor<1,dim> dims = upper_right - lower_left;
+          const auto num_cells_per_dim = get_cells_per_dim(dims, initial_resolution);
+          // The 'true' below "colorizes" the mesh; boundary IDs are set
+          dealii::GridGenerator::subdivided_hyper_rectangle(tria, num_cells_per_dim,
+                  lower_left, upper_right);
+      }
+  
+  protected:
+      dealii::Point<dim> lower_left{-1.0, -1.0};
+      dealii::Point<dim> upper_right{2.0, 1.0};
+  
+      std::vector<unsigned int> get_cells_per_dim(const dealii::Tensor<1,dim>& dims,
+              const unsigned int init_res) const
+      {
+          static_assert(dim == 2, "Not implemented for anything but 2D!");
+          const double min_dim = std::min(dims[0], dims[1]);
+          const double max_dim = std::max(dims[0], dims[1]);
+          const int min_idx = dims[0] < dims[1] ? 0 : 1;
+          std::vector<unsigned int> num_cells_per_dim(dim);
+          num_cells_per_dim[min_idx] = init_res;
+          const auto other_res =
+              static_cast<unsigned int>(std::round(max_dim / min_dim * init_res));
+          const auto other_idx = (min_idx + 1) % dim;
+          num_cells_per_dim[other_idx] = other_res;
+          std::cout << "Num cells per dim = " << num_cells_per_dim[0] << ", " 
+              << num_cells_per_dim[1] << std::endl;
+          return num_cells_per_dim;
+      }
+  };
+}
+
+}
 }
 
 #endif

@@ -1,3 +1,2 @@
 
-add_library(convdiff_hdg convdiff_hdg.cpp)
-deal_ii_setup_target(convdiff_hdg)
+target_sources(paramsim_solvers PRIVATE convdiff_hdg.cpp)

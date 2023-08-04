@@ -4,7 +4,7 @@
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/variables_map.hpp>
 
-namespace convdiff_hdg {
+namespace paramsim {
 
 namespace bpo = boost::program_options;
 

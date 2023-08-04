@@ -1,7 +1,6 @@
 #ifndef CONVDIFF_HDG_HPP_
 #define CONVDIFF_HDG_HPP_
 
-#include <deal.II/base/quadrature_lib.h>
 #include <deal.II/base/function.h>
 #include <deal.II/base/tensor_function.h>
 #include <deal.II/base/exceptions.h>
@@ -12,10 +11,7 @@
 #include <deal.II/lac/affine_constraints.h>
 #include <deal.II/lac/full_matrix.h>
 #include <deal.II/lac/dynamic_sparsity_pattern.h>
-#include <deal.II/lac/solver_bicgstab.h>
-#include <deal.II/lac/precondition.h>
 #include <deal.II/grid/tria.h>
-#include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/grid_refinement.h>
 #include <deal.II/dofs/dof_handler.h>
 #include <deal.II/dofs/dof_renumbering.h>
@@ -23,7 +19,6 @@
 #include <deal.II/fe/fe_dgq.h>
 #include <deal.II/fe/fe_system.h>
 #include <deal.II/fe/fe_values.h>
-#include <deal.II/numerics/vector_tools.h>
 #include <deal.II/numerics/error_estimator.h>
 #include <deal.II/numerics/matrix_tools.h>
 #include <deal.II/numerics/data_out.h>
@@ -55,89 +50,15 @@
 // the simulation.
 #include <deal.II/numerics/data_out_faces.h>
 
-namespace convdiff_hdg {
-  
-  enum RefinementMode
-  {
-    global_refinement,
-    adaptive_refinement
-  };
+#include "../../geometrybase.hpp"
+#include "../pdebase.hpp"
+#include "../../cases/case.hpp"
+#include "../../cases/convdiff/convdiffcase.hpp"
+
+namespace paramsim {
+namespace pde {
 
   using namespace dealii;
-
-  /// Abstract type for a function on a facet
-  template <int dim>
-  class FaceFunction
-  {
-  public:
-    virtual double value_normal(const Point<dim>& p, const Tensor<1,dim>& normal,
-            const unsigned int = 0) const = 0;
-  };
-
-  /** Abstraction for generating a Deal II Triangulation from some kind of geometry description.
-   *
-   * Also provides a routine for setting boundary face IDs for boundary conditions.
-   */
-  template <int dim> 
-  class DomainGeometry
-  {
-  public:
-      /// Type describing a boundary marker and the condition for a point to be on that boundary
-      using bc_mark_desc = std::pair<int, std::function<bool(const dealii::Point<dim>&)>>;
-
-      DomainGeometry() { }
-      
-      DomainGeometry(const std::vector<bc_mark_desc>& bc_marks)
-          : bciddesc(bc_marks)
-      { }
-
-      virtual void generate_grid(dealii::Triangulation<dim>& tria,
-              const unsigned int initial_resolution) const = 0;
-
-      void set_bc_mark_desc(const std::vector<bc_mark_desc>& bc_marks) {
-          bciddesc = bc_marks;
-      }
-
-      virtual void set_boundary_ids(dealii::Triangulation<dim>& tria) const
-      {
-          if(bciddesc.empty()) {
-              return;
-          }
-          for (const auto &cell : tria.cell_iterators()) {
-            for (const auto &face : cell->face_iterators()) {
-              if (face->at_boundary()) {
-                for (auto bcid : bciddesc) {
-                  if (bcid.second(face->center())) {
-                    face->set_boundary_id(bcid.first);
-                  }
-                }
-              }
-            }
-          }
-      }
-  protected:
-      std::vector<bc_mark_desc> bciddesc;
-  };
-
-  template <int dim>
-  struct CDParams {
-    /// Geometry
-    std::shared_ptr<const DomainGeometry<dim>> geom;
-    /// Convection velocity function
-    std::shared_ptr<const TensorFunction<1,dim>> conv_vel_function;
-    /// Source term
-    std::shared_ptr<const Function<dim>> rhs_function;
-    /// Dirichlet boundary condition
-    std::shared_ptr<const Function<dim>> dirichlet_bc_function;
-    /// Neumann boundary condition
-    std::shared_ptr<const FaceFunction<dim>> neumann_bc_function;
-    /// Exact solution (if available)
-    std::shared_ptr<const Function<dim>> solution_function;
-    std::shared_ptr<const Function<dim>> solution_n_gradient;
-
-    unsigned int dirichlet_marker;
-    unsigned int neumann_marker;
-  };
   
   // The HDG solution procedure follows closely that of step-7. The major
   // difference is the use of three different sets of DoFHandler and FE
@@ -151,12 +72,13 @@ namespace convdiff_hdg {
   // values) and for the postprocessing where we extract a solution that
   // converges at higher order.
   template <int dim>
-  class HDG
+  class ConvdiffHDG : public PDESolver<dim>
   {
   public:
-    HDG(const unsigned int degree, const RefinementMode refinement_mode,
-        const CDParams<dim>& convdiff_params);
-    void run(int num_cycles, unsigned int initial_resolution);
+    ConvdiffHDG(std::shared_ptr<const convdiffcase_verification<dim>> tcase,
+        const int degree, const unsigned initial_resolution,
+        const MeshRefineMode refinement_mode, const int num_cycles);
+    void run() override;
 
   private:
     void setup_system();
@@ -189,6 +111,8 @@ namespace convdiff_hdg {
       PostProcessScratchData &                              scratch,
       unsigned int &                                        empty_data);
 
+    const MeshRefineMode refinement_mode_;
+    const int num_cycles_;
 
     Triangulation<dim> triangulation;
 
@@ -243,12 +167,9 @@ namespace convdiff_hdg {
     SparsityPattern      sparsity_pattern;
     SparseMatrix<double> system_matrix;
 
-    // Same as step-7:
-    const RefinementMode refinement_mode;
     ConvergenceTable     convergence_table;
-
-    CDParams<dim> cdparams;
   };
 
+}
 }
 #endif

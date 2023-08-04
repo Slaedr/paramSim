@@ -5,9 +5,6 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Don't emit warnings for using C++17 features
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-c++17-extensions")
-
 find_package(deal.II 9.5.0 REQUIRED
   HINTS ${DEAL_II_DIR} ../ ../../ $ENV{DEAL_II_DIR}
   )
@@ -28,11 +25,7 @@ endif()
 add_subdirectory(pdes)
 add_subdirectory(cases)
 
-add_executable(verification verification.cpp)
-deal_ii_setup_target(verification)
-target_link_libraries(verification convdiff_hdg)
-
-add_executable(hdg_run_case run_case.cpp)
-deal_ii_setup_target(hdg_run_case)
-target_link_libraries(hdg_run_case convdiff_hdg cases_convdiff utils)
+add_executable(run_case run_case.cpp)
+deal_ii_setup_target(run_case)
+target_link_libraries(run_case paramsim_solvers paramsim_cases utils)
 

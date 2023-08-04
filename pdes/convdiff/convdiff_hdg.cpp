@@ -2,13 +2,19 @@
 
 #include <algorithm>
 
+#include <deal.II/base/quadrature_lib.h>
+#include <deal.II/lac/precondition.h>
 #include <deal.II/lac/precondition_block.h>
+#include <deal.II/numerics/vector_tools.h>
+#include <deal.II/lac/solver_bicgstab.h>
+#include <memory>
 
-namespace convdiff_hdg {
+namespace paramsim {
+namespace pde {
   
   using namespace dealii;
 
-  // @sect3{The HDG class implementation}
+  // @sect3{The ConvdiffHDG class implementation}
 
   // @sect4{Constructor}
   // The constructor is similar to those in other examples, with the exception
@@ -16,26 +22,27 @@ namespace convdiff_hdg {
   // create a system of finite elements for the local DG part, including the
   // gradient/flux part and the scalar part.
   template <int dim>
-  HDG<dim>
-  ::HDG(const unsigned int degree, const RefinementMode refinement_mode,
-        const CDParams<dim>& convdiff_params)
-    : fe_local(FE_DGQ<dim>(degree), dim, FE_DGQ<dim>(degree), 1)
+  ConvdiffHDG<dim>
+    ::ConvdiffHDG(std::shared_ptr<const convdiffcase_verification<dim>> tcase,
+        const int degree, const unsigned initial_resolution,
+        const MeshRefineMode refinement_mode, const int num_cycles)
+    : PDESolver<dim>(tcase, degree, initial_resolution)
+    , refinement_mode_(refinement_mode), num_cycles_{num_cycles}
+    , fe_local(FE_DGQ<dim>(degree), dim, FE_DGQ<dim>(degree), 1)
     , dof_handler_local(triangulation)
     , fe(degree)
     , dof_handler(triangulation)
     , fe_u_post(degree + 1)
     , dof_handler_u_post(triangulation)
-    , refinement_mode(refinement_mode)
-    , cdparams(convdiff_params)
   {}
 
-  // @sect4{HDG::setup_system}
+  // @sect4{ConvdiffHDG::setup_system}
   // The system for an HDG solution is setup in an analogous manner to most
   // of the other tutorial programs.  We are careful to distribute dofs with
   // all of our DoFHandler objects.  The @p solution and @p system_matrix
   // objects go with the global skeleton solution.
   template <int dim>
-  void HDG<dim>::setup_system()
+  void ConvdiffHDG<dim>::setup_system()
   {
     dof_handler_local.distribute_dofs(fe_local);
     dof_handler.distribute_dofs(fe);
@@ -53,7 +60,8 @@ namespace convdiff_hdg {
     constraints.clear();
     DoFTools::make_hanging_node_constraints(dof_handler, constraints);
     std::map<types::boundary_id, const Function<dim> *> boundary_functions;
-    boundary_functions[cdparams.dirichlet_marker] = cdparams.dirichlet_bc_function.get();
+    boundary_functions[this->tcase_->get_dirichlet_marker()] =
+        this->tcase_->get_dirichlet_bc().get();
     // Project boundary values to compute nodal values; these are stored in constrains.
     VectorTools::project_boundary_values(dof_handler,
                                          boundary_functions,
@@ -76,7 +84,7 @@ namespace convdiff_hdg {
 
 
 
-  // @sect4{HDG::PerTaskData}
+  // @sect4{ConvdiffHDG::PerTaskData}
   // Next comes the definition of the local data structures for the parallel
   // assembly. The first structure @p PerTaskData contains the local vector
   // and matrix that are written into the global matrix, whereas the
@@ -93,7 +101,7 @@ namespace convdiff_hdg {
   // assembly. Since we need to pass this information on to the local worker
   // routines, we store it once in the task data.
   template <int dim>
-  struct HDG<dim>::PerTaskData
+  struct ConvdiffHDG<dim>::PerTaskData
   {
     FullMatrix<double>                   cell_matrix;
     Vector<double>                       cell_vector;
@@ -111,7 +119,7 @@ namespace convdiff_hdg {
 
 
 
-  // @sect4{HDG::ScratchData}
+  // @sect4{ConvdiffHDG::ScratchData}
   // @p ScratchData contains persistent data for each
   // thread within WorkStream.  The FEValues, matrix,
   // and vector objects should be familiar by now.  There are two objects that
@@ -125,7 +133,7 @@ namespace convdiff_hdg {
   // stored this information, we would be forced to assemble a large number of
   // zero terms on each cell, which would significantly slow the program.
   template <int dim>
-  struct HDG<dim>::ScratchData
+  struct ConvdiffHDG<dim>::ScratchData
   {
     FEValues<dim>     fe_values_local;
     FEFaceValues<dim> fe_face_values_local;
@@ -232,12 +240,12 @@ namespace convdiff_hdg {
 
 
 
-  // @sect4{HDG::PostProcessScratchData}
+  // @sect4{ConvdiffHDG::PostProcessScratchData}
   // @p PostProcessScratchData contains the data used by WorkStream
   // when post-processing the local solution $u^*$.  It is similar, but much
   // simpler, than @p ScratchData.
   template <int dim>
-  struct HDG<dim>::PostProcessScratchData
+  struct ConvdiffHDG<dim>::PostProcessScratchData
   {
     FEValues<dim> fe_values_local;
     FEValues<dim> fe_values;
@@ -280,7 +288,7 @@ namespace convdiff_hdg {
 
 
 
-  // @sect4{HDG::assemble_system}
+  // @sect4{ConvdiffHDG::assemble_system}
   // The @p assemble_system function is similar to the one on Step-32, where
   // the quadrature formula and the update flags are set up, and then
   // <code>WorkStream</code> is used to do the work in a multi-threaded
@@ -297,7 +305,7 @@ namespace convdiff_hdg {
   // example, OpenBLAS compiled without multithreading inside the BLAS/LAPACK
   // calls needs to built with a flag called `USE_LOCKING` set to true.
   template <int dim>
-  void HDG<dim>
+  void ConvdiffHDG<dim>
   ::assemble_system(const bool trace_reconstruct)
   {
     const QGauss<dim>     quadrature_formula(fe.degree + 1);
@@ -312,6 +320,7 @@ namespace convdiff_hdg {
                             update_quadrature_points | update_JxW_values);
 
     PerTaskData task_data(fe.n_dofs_per_cell(), trace_reconstruct);
+    auto ccase = std::dynamic_pointer_cast<const convdiffcase_verification<dim>>(this->tcase_);
     ScratchData scratch(fe,
                         fe_local,
                         quadrature_formula,
@@ -319,25 +328,26 @@ namespace convdiff_hdg {
                         local_flags,
                         local_face_flags,
                         flags,
-                        cdparams.conv_vel_function.get(), cdparams.rhs_function.get(),
-                        cdparams.solution_function.get());
+                        ccase->get_convection_velocity().get(),
+                        ccase->get_right_hand_side().get(),
+                        ccase->get_exact_solution().get());
 
     WorkStream::run(dof_handler.begin_active(),
         dof_handler.end(),
         *this,
-        &HDG<dim>::assemble_system_one_cell,
-        &HDG<dim>::copy_local_to_global,
+        &ConvdiffHDG<dim>::assemble_system_one_cell,
+        &ConvdiffHDG<dim>::copy_local_to_global,
         scratch, task_data);
   }
 
 
 
-  // @sect4{HDG::assemble_system_one_cell}
-  // The real work of the HDG program is done by @p assemble_system_one_cell.
+  // @sect4{ConvdiffHDG::assemble_system_one_cell}
+  // The real work of the ConvdiffHDG program is done by @p assemble_system_one_cell.
   // Assembling the local matrices $A, B, C$ is done here, along with the
   // local contributions of the global matrix $D$.
   template <int dim>
-  void HDG<dim>::assemble_system_one_cell(
+  void ConvdiffHDG<dim>::assemble_system_one_cell(
     const typename DoFHandler<dim>::active_cell_iterator &cell,
     ScratchData &                                         scratch,
     PerTaskData &                                         task_data)
@@ -367,6 +377,11 @@ namespace convdiff_hdg {
         task_data.cell_vector = 0;
       }
     scratch.fe_values_local.reinit(loc_cell);
+    
+    auto ccase = std::dynamic_pointer_cast<const CaseWithNeumannBC<Case<dim>>>(this->tcase_);
+    if(!ccase) {
+        throw std::runtime_error("Invalid case for Neumann BCs!");
+    }
 
     // We first compute the cell-interior contribution to @p ll_matrix matrix
     // (referred to as matrix $A$ in the introduction) corresponding to
@@ -509,10 +524,10 @@ namespace convdiff_hdg {
                     }
 
                 if (cell->face(face_no)->at_boundary() &&
-                    (cell->face(face_no)->boundary_id() == cdparams.neumann_marker))
+                    (cell->face(face_no)->boundary_id() == ccase->get_neumann_marker()))
                   {
                     const double neumann_value =
-                      cdparams.neumann_bc_function->value_normal(quadrature_point, normal);
+                      ccase->get_neumann_bc()->value_normal(quadrature_point, normal);
                     for (unsigned int i = 0;
                          i < scratch.fe_support_on_face[face_no].size();
                          ++i)
@@ -593,11 +608,11 @@ namespace convdiff_hdg {
 
 
 
-  // @sect4{HDG::copy_local_to_global}
+  // @sect4{ConvdiffHDG::copy_local_to_global}
   // If we are in the first step of the solution, i.e. @p trace_reconstruct=false,
   // then we assemble the local matrices into the global system.
   template <int dim>
-  void HDG<dim>::copy_local_to_global(const PerTaskData &data)
+  void ConvdiffHDG<dim>::copy_local_to_global(const PerTaskData &data)
   {
     if (data.trace_reconstruct == false)
       constraints.distribute_local_to_global(data.cell_matrix,
@@ -609,7 +624,7 @@ namespace convdiff_hdg {
 
 
   template <int dim>
-  void HDG<dim>::solve()
+  void ConvdiffHDG<dim>::solve()
   {
     SolverControl                  solver_control(system_matrix.m() * 10,
                                  1e-11 * system_rhs.l2_norm());
@@ -638,7 +653,7 @@ namespace convdiff_hdg {
 
 
 
-  // @sect4{HDG::postprocess}
+  // @sect4{ConvdiffHDG::postprocess}
 
   // The postprocess method serves two purposes. First, we want to construct a
   // post-processed scalar variables in the element space of degree $p+1$ that
@@ -662,7 +677,7 @@ namespace convdiff_hdg {
   // parts of either of them. Eventually, we also compute the L2-error of the
   // post-processed solution and add the results into the convergence table.
   template <int dim>
-  void HDG<dim>::postprocess()
+  void ConvdiffHDG<dim>::postprocess()
   {
     {
       const QGauss<dim> quadrature_formula(fe_u_post.degree + 1);
@@ -688,11 +703,15 @@ namespace convdiff_hdg {
 
     Vector<float> difference_per_cell(triangulation.n_active_cells());
 
+    auto ccase = std::dynamic_pointer_cast<const convdiffcase_verification<dim>>(this->tcase_);
+    if(!ccase) {
+        throw std::runtime_error("Invalid case for HDG convergence analysis!");
+    }
+
     ComponentSelectFunction<dim> value_select(dim, dim + 1);
     VectorTools::integrate_difference(dof_handler_local,
                                       solution_local,
-                                      //SolutionAndGradient<dim>(),
-                                      *cdparams.solution_n_gradient,
+                                      *ccase->get_exact_solution_and_gradient(),
                                       difference_per_cell,
                                       QGauss<dim>(fe.degree + 2),
                                       VectorTools::L2_norm,
@@ -706,8 +725,7 @@ namespace convdiff_hdg {
       std::pair<unsigned int, unsigned int>(0, dim), dim + 1);
     VectorTools::integrate_difference(dof_handler_local,
                                       solution_local,
-                                      //SolutionAndGradient<dim>(),
-                                      *cdparams.solution_n_gradient,
+                                      *ccase->get_exact_solution_and_gradient(),
                                       difference_per_cell,
                                       QGauss<dim>(fe.degree + 2),
                                       VectorTools::L2_norm,
@@ -719,8 +737,7 @@ namespace convdiff_hdg {
 
     VectorTools::integrate_difference(dof_handler_u_post,
                                       solution_u_post,
-                                      //Solution<dim>(),
-                                      *cdparams.solution_function,
+                                      *ccase->get_exact_solution(),
                                       difference_per_cell,
                                       QGauss<dim>(fe.degree + 3),
                                       VectorTools::L2_norm);
@@ -747,7 +764,7 @@ namespace convdiff_hdg {
 
 
 
-  // @sect4{HDG::postprocess_one_cell}
+  // @sect4{ConvdiffHDG::postprocess_one_cell}
   //
   // This is the actual work done for the postprocessing. According to the
   // discussion in the introduction, we need to set up a system that projects
@@ -767,7 +784,7 @@ namespace convdiff_hdg {
   // last row would give us a singular system. This way, our program can also
   // be used for those elements.
   template <int dim>
-  void HDG<dim>::postprocess_one_cell(
+  void ConvdiffHDG<dim>::postprocess_one_cell(
     const typename DoFHandler<dim>::active_cell_iterator &cell,
     PostProcessScratchData &                              scratch,
     unsigned int &)
@@ -833,7 +850,7 @@ namespace convdiff_hdg {
 
 
 
-  // @sect4{HDG::output_results}
+  // @sect4{ConvdiffHDG::output_results}
   // We have 3 sets of results that we would like to output:  the local
   // solution, the post-processed local solution, and the skeleton solution. The
   // former 2 both 'live' on element volumes, whereas the latter lives on
@@ -843,15 +860,15 @@ namespace convdiff_hdg {
   // DoFHandler objects.  The graphical output for the skeleton
   // variable is done through use of the DataOutFaces class.
   template <int dim>
-  void HDG<dim>::output_results(const int cycle)
+  void ConvdiffHDG<dim>::output_results(const int cycle)
   {
     std::string filename;
-    switch (refinement_mode)
+    switch (refinement_mode_)
       {
-        case global_refinement:
+          case MeshRefineMode::global_refinement:
           filename = "solution-global";
           break;
-        case adaptive_refinement:
+          case MeshRefineMode::adaptive_refinement:
           filename = "solution-adaptive";
           break;
         default:
@@ -939,7 +956,7 @@ namespace convdiff_hdg {
     b_output.close();
   }
 
-  // @sect4{HDG::refine_grid}
+  // @sect4{ConvdiffHDG::refine_grid}
 
   // We implement two different refinement cases for HDG, just as in
   // <code>Step-7</code>: adaptive_refinement and global_refinement.  The
@@ -952,29 +969,26 @@ namespace convdiff_hdg {
   // give a decent indication of the non-regular regions in the scalar local
   // solutions.
   template <int dim>
-  void HDG<dim>::refine_grid(const int cycle, const unsigned int initial_resolution)
+  void ConvdiffHDG<dim>::refine_grid(const int cycle, const unsigned int initial_resolution)
   {
-    //const Point<dim> lower_left{-1.0, -1.0};
-    //const Point<dim> upper_right{1.0, 1.0};
-    //const std::vector<unsigned int> base_num_cells_per_dim{2,2};
     if (cycle == 0)
       {
-        cdparams.geom->generate_grid(triangulation, initial_resolution);
+        this->tcase_->get_geometry()->generate_grid(triangulation, initial_resolution);
         triangulation.refine_global(3 - dim);
       }
     else
-      switch (refinement_mode)
+      switch (refinement_mode_)
         {
-          case global_refinement:
+            case MeshRefineMode::global_refinement:
             {
               triangulation.clear();
               const auto resolution = initial_resolution + cycle % 2;
-              cdparams.geom->generate_grid(triangulation, resolution);
+              this->tcase_->get_geometry()->generate_grid(triangulation, resolution);
               triangulation.refine_global(3 - dim + cycle / 2);
               break;
             }
 
-          case adaptive_refinement:
+            case MeshRefineMode::adaptive_refinement:
             {
               Vector<float> estimated_error_per_cell(
                 triangulation.n_active_cells());
@@ -1015,21 +1029,21 @@ namespace convdiff_hdg {
     //      if ((std::fabs(face->center()(0) - (-1)) < 1e-12) ||
     //          (std::fabs(face->center()(1) - (-1)) < 1e-12))
     //        face->set_boundary_id(1);
-    cdparams.geom->set_boundary_ids(triangulation);
+    this->tcase_->get_geometry()->set_boundary_ids(triangulation);
   }
 
-  // @sect4{HDG::run}
+  // @sect4{ConvdiffHDG::run}
   // The functionality here is basically the same as <code>Step-7</code>.
   // We loop over 10 cycles, refining the grid on each one.  At the end,
   // convergence tables are created.
   template <int dim>
-  void HDG<dim>::run(const int num_cycles, const unsigned int initial_resolution)
+  void ConvdiffHDG<dim>::run()
   {
-    for (int cycle = 0; cycle < num_cycles; ++cycle)
+    for (int cycle = 0; cycle < num_cycles_; ++cycle)
       {
         std::cout << "Cycle " << cycle << ':' << std::endl;
 
-        refine_grid(cycle, initial_resolution);
+        refine_grid(cycle, this->init_res_);
         setup_system();
         assemble_system(false);
         solve();
@@ -1044,7 +1058,7 @@ namespace convdiff_hdg {
     // number of cells as a reference column and additionally specifying the
     // dimension of the problem, which gives the necessary information for the
     // relation between number of cells and mesh size.
-    if (refinement_mode == global_refinement)
+    if (refinement_mode_ == MeshRefineMode::global_refinement)
       {
         convergence_table.evaluate_convergence_rates(
           "val L2", "cells", ConvergenceTable::reduction_rate_log2, dim);
@@ -1056,6 +1070,7 @@ namespace convdiff_hdg {
     convergence_table.write_text(std::cout);
   }
 
-  template class HDG<2>;
+  template class ConvdiffHDG<2>;
 
+}
 }
