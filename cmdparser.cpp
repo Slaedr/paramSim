@@ -20,6 +20,8 @@ void add_common_options(bpo::options_description& desc, const std::string help_m
          "Number of cells in first grid")
         ("fe_degree", bpo::value<int>()->default_value(1),
          "Polynomial degree of FEM basis functions to use")
+        ("output_prefix", bpo::value<std::string>()->default_value("."),
+         "Output location along with filename prefix for vtk output")
         ;
 }
 

@@ -58,6 +58,7 @@ int main(int argc, char *argv[])
   const auto refine_levels = common_cmdmap["refine_levels"].as<int>();
   const auto initial_resolution = common_cmdmap["initial_resolution"].as<unsigned>();
   const auto fe_degree = common_cmdmap["fe_degree"].as<int>();
+  const auto outpath = common_cmdmap["output_prefix"].as<std::string>();
 
   std::shared_ptr<Case<dim>> tcase = create_case<dim>(case_str);
     
@@ -68,7 +69,8 @@ int main(int argc, char *argv[])
   const bpo::variables_map case_cmdmap = get_cmd_args(argc, argv, case_desc);
   tcase->initialize(case_cmdmap);
 
-  PDEParams<dim> pdeparams{solver_str, tcase, fe_degree, initial_resolution, refine_levels};
+  PDEParams<dim> pdeparams{solver_str, tcase, fe_degree, initial_resolution, refine_levels,
+      outpath};
 
   auto pdesolver = create_pde_solver(pdeparams);
 

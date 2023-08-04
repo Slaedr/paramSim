@@ -77,7 +77,7 @@ namespace pde {
   public:
     ConvdiffHDG(std::shared_ptr<const convdiffcase_verification<dim>> tcase,
         const int degree, const unsigned initial_resolution,
-        const MeshRefineMode refinement_mode, const int num_cycles);
+        const MeshRefineMode refinement_mode, const int num_cycles, const std::string& outpath);
     void run() override;
 
   private:

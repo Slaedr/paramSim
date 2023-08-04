@@ -30,7 +30,7 @@ class PoissonCG : public PDESolver<dim>
 {
 public:
   PoissonCG(std::shared_ptr<const Case<dim>> tcase, int degree, unsigned int initial_resolution,
-      int refine_levels);
+      int refine_levels, const std::string& output_path);
 
   void run() override;
   
@@ -41,7 +41,7 @@ private:
   void setup_system();
   void assemble_system();
   void solve();
-  void output_results() const;
+  void output_results(int cycle) const;
 
   using PDESolver<dim>::tcase_;
   using PDESolver<dim>::fe_degree_;

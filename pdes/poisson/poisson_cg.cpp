@@ -50,8 +50,8 @@ namespace pde {
 
 template <int dim>
 PoissonCG<dim>::PoissonCG(std::shared_ptr<const Case<dim>> tcase, const int degree,
-    const unsigned int init_res, const int refine_levels)
-  : PDESolver<dim>(tcase, degree, init_res), num_cycles_{refine_levels},
+    const unsigned int init_res, const int refine_levels, const std::string& output_path)
+  : PDESolver<dim>(tcase, degree, init_res, output_path), num_cycles_{refine_levels},
   fe(fe_degree_), dof_handler(triangulation)
 {
 }
@@ -237,7 +237,7 @@ void PoissonCG<dim>::solve()
 }
 
 template <int dim>
-void PoissonCG<dim>::output_results() const
+void PoissonCG<dim>::output_results(const int cycle) const
 {
   DataOut<dim> data_out;
 
@@ -246,13 +246,13 @@ void PoissonCG<dim>::output_results() const
 
   data_out.build_patches();
 
-  std::ofstream output(dim == 2 ? "solution-2d.vtk" : "solution-3d.vtk");
+  const std::string file_prefix = this->output_path_ + "-" + std::to_string(cycle);
+  std::ofstream output(file_prefix + ".vtk");
   data_out.write_vtk(output);
    
-  const std::string boundary_out("solution-boundary.vtk"); 
-  std::ofstream b_output(boundary_out);
+  std::ofstream b_output(file_prefix + "-boundary.vtk");
   DataOutFaces<dim> data_out_boundary(true);
-  std::vector<std::string> face_name(1, "u");
+  std::vector<std::string> face_name(1, "solution");
   std::vector<DataComponentInterpretation::DataComponentInterpretation>
       face_component_type(1, DataComponentInterpretation::component_is_scalar);
   data_out_boundary.add_data_vector(dof_handler,
@@ -281,7 +281,7 @@ void PoissonCG<dim>::run()
     setup_system();
     assemble_system();
     solve();
-    output_results();
+    output_results(imesh);
 
     convergence_table.add_value("cells", triangulation.n_active_cells());
     convergence_table.add_value("dofs", dof_handler.n_dofs());

@@ -25,8 +25,8 @@ namespace pde {
   ConvdiffHDG<dim>
     ::ConvdiffHDG(std::shared_ptr<const convdiffcase_verification<dim>> tcase,
         const int degree, const unsigned initial_resolution,
-        const MeshRefineMode refinement_mode, const int num_cycles)
-    : PDESolver<dim>(tcase, degree, initial_resolution)
+        const MeshRefineMode refinement_mode, const int num_cycles, const std::string& outpath)
+    : PDESolver<dim>(tcase, degree, initial_resolution, outpath)
     , refinement_mode_(refinement_mode), num_cycles_{num_cycles}
     , fe_local(FE_DGQ<dim>(degree), dim, FE_DGQ<dim>(degree), 1)
     , dof_handler_local(triangulation)
@@ -866,10 +866,10 @@ namespace pde {
     switch (refinement_mode_)
       {
           case MeshRefineMode::global_refinement:
-          filename = "solution-global";
+          filename = this->output_path_ + "solution";
           break;
           case MeshRefineMode::adaptive_refinement:
-          filename = "solution-adaptive";
+          filename = this->output_path_ + "solution-adaptive";
           break;
         default:
           Assert(false, ExcNotImplemented());
@@ -1023,12 +1023,6 @@ namespace pde {
     // conditions. Since we re-create the triangulation every time for global
     // refinement, the flags are set in every refinement step, not just at the
     // beginning.
-    //for (const auto &cell : triangulation.cell_iterators())
-    //  for (const auto &face : cell->face_iterators())
-    //    if (face->at_boundary())
-    //      if ((std::fabs(face->center()(0) - (-1)) < 1e-12) ||
-    //          (std::fabs(face->center()(1) - (-1)) < 1e-12))
-    //        face->set_boundary_id(1);
     this->tcase_->get_geometry()->set_boundary_ids(triangulation);
   }
 
