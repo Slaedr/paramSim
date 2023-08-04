@@ -18,6 +18,9 @@
  */
 #include "poisson_cg.hpp"
 
+#include <fstream>
+#include <iostream>
+
 // @sect3{Include files}
 
 // The first few (many?) include files have already been used in the previous
@@ -35,14 +38,9 @@
 #include <deal.II/base/convergence_table.h>
 
 #include <deal.II/numerics/data_out.h>
-#include <fstream>
-#include <iostream>
+#include <deal.II/numerics/data_out_faces.h>
 
-// This is new, however: in the previous example we got some unwanted output
-// from the linear solvers. If we want to suppress it, we have to include this
-// file and add a single line somewhere to the program (see the main()
-// function below for that):
-#include <deal.II/base/logstream.h>
+//#include <deal.II/base/logstream.h>
 
 // The final step, as in previous programs, is to import all the deal.II class
 // and function names into the global namespace:
@@ -250,6 +248,20 @@ void PoissonCG<dim>::output_results() const
 
   std::ofstream output(dim == 2 ? "solution-2d.vtk" : "solution-3d.vtk");
   data_out.write_vtk(output);
+   
+  const std::string boundary_out("solution-boundary.vtk"); 
+  std::ofstream b_output(boundary_out);
+  DataOutFaces<dim> data_out_boundary(true);
+  std::vector<std::string> face_name(1, "u");
+  std::vector<DataComponentInterpretation::DataComponentInterpretation>
+      face_component_type(1, DataComponentInterpretation::component_is_scalar);
+  data_out_boundary.add_data_vector(dof_handler,
+                                    solution,
+                                    face_name,
+                                    face_component_type);
+  data_out_boundary.build_patches(fe.degree);
+  data_out_boundary.write_vtk(b_output);
+  b_output.close();
 }
 
 template <int dim>
