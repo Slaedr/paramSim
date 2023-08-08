@@ -33,7 +33,6 @@ void PoissonVerify<dim>::initialize(const bpo::variables_map& params)
         this->exact_soln_ = std::make_shared<poisson_verify::Solution<dim>>(params);
         this->rhs_ = std::make_shared<poisson_verify::RightHandSide<dim>>(params);
         this->neumann_ = std::make_shared<poisson_verify::Neumann<dim>>(params);
-        this->dirichlet_ = this->exact_soln_;
 
         // Write out params to confirm
         std::cout << "Case 'verify' for Poisson: read parameters:\n";
@@ -49,12 +48,11 @@ void PoissonVerify<dim>::initialize(const bpo::variables_map& params)
         this->exact_soln_ = std::make_shared<poisson_verify::Solution<dim>>();
         this->rhs_ = std::make_shared<poisson_verify::RightHandSide<dim>>();
         this->neumann_ = std::make_shared<poisson_verify::Neumann<dim>>();
-        this->dirichlet_ = this->exact_soln_;
         std::cout << "Case 'verify' for Poisson: default parameters.\n";
     }
 
+    this->bc_dirichlet_.push_back(dirichlet_bc<dim>{1, this->exact_soln_});
     //constexpr double tol = 100*std::numeric_limits<double>::epsilon();
-    this->bcid_dirichlet_ = 1;
     this->bcid_neumann_ = 2;
     std::vector<typename DomainGeometry<dim>::bc_mark_desc> bcmarks;
     //bcmarks.push_back(std::make_pair(this->bcid_dirichlet_, 
@@ -73,7 +71,7 @@ void PoissonVerify<dim>::initialize(const bpo::variables_map& params)
     //        return false;
     //    }
     //    }));
-    bcmarks.push_back(std::make_pair(this->bcid_dirichlet_, 
+    bcmarks.push_back(std::make_pair(this->bc_dirichlet_[0].bc_id, 
         [](const dealii::Point<dim>& ) { return true; }));
     this->geom_ = std::make_shared<poisson_verify::Cube<dim>>(bcmarks);
 }

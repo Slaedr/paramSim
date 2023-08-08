@@ -209,15 +209,16 @@ void PoissonCG<dim>::assemble_system()
   // interpolate_boundary_values will do nothing on these faces. For
   // the Laplace equation doing nothing is equivalent to assuming that
   // on those parts of the boundary a zero Neumann boundary condition holds.
-  std::map<types::global_dof_index, double> boundary_values;
-  VectorTools::interpolate_boundary_values(dof_handler,
-                                           tcase_->get_dirichlet_marker(),
-                                           *tcase_->get_dirichlet_bc(),
-                                           boundary_values);
-  MatrixTools::apply_boundary_values(boundary_values,
-                                     system_matrix,
-                                     solution,
-                                     system_rhs);
+  for(auto bc : tcase_->get_dirichlet_bcs()) {
+      std::map<types::global_dof_index, double> boundary_values;
+      VectorTools::interpolate_boundary_values(dof_handler,
+                                               bc.bc_id, *bc.bc_fn,
+                                               boundary_values);
+      MatrixTools::apply_boundary_values(boundary_values,
+                                         system_matrix,
+                                         solution,
+                                         system_rhs);
+  }
 }
 
 template <int dim>

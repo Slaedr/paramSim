@@ -1,4 +1,4 @@
-add_library(paramsim_solvers pdebase.cpp report_convergence.cpp)
+add_library(paramsim_solvers pdebase.cpp)
 
 add_subdirectory(poisson)
 add_subdirectory(convdiff)

@@ -35,7 +35,6 @@ void Step51<dim>::initialize(const bpo::variables_map& params)
                 centers, coeffs, width_sigma);
         this->neumann_ = std::make_shared<cases::step51::Neumann<dim>>(
                 centers, coeffs, width_sigma);
-        this->dirichlet_ = this->exact_soln_;
         this->conv_vel_ = std::make_shared<cases::step51::ConvectionVelocity<dim>>();
 
         // Write out params to confirm
@@ -52,12 +51,11 @@ void Step51<dim>::initialize(const bpo::variables_map& params)
         this->exact_soln_ = std::make_shared<cases::step51::Solution<dim>>();
         this->exact_soln_and_grad_ = std::make_shared<cases::step51::SolutionAndGradient<dim>>();
         this->rhs_ = std::make_shared<cases::step51::RightHandSide<dim>>();
-        this->dirichlet_ = this->exact_soln_;
         this->neumann_ = std::make_shared<cases::step51::Neumann<dim>>();
         this->conv_vel_ = std::make_shared<cases::step51::ConvectionVelocity<dim>>();
     }
 
-    this->bcid_dirichlet_ = 0;
+    this->bc_dirichlet_.push_back(dirichlet_bc<dim>{0, this->exact_soln_});
     this->bcid_neumann_ = 1;
     std::vector<typename DomainGeometry<dim>::bc_mark_desc> bcmarks;
     bcmarks.push_back(std::make_pair(this->bcid_neumann_, 

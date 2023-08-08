@@ -1,6 +1,8 @@
 #ifndef PARAMSIM_CASES_HPP_
 #define PARAMSIM_CASES_HPP_
 
+#include <vector>
+
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/variables_map.hpp>
 #include <deal.II/base/function.h>
@@ -10,6 +12,12 @@
 namespace paramsim {
 
 namespace bpo = boost::program_options;
+
+template <int dim>
+struct dirichlet_bc {
+    bc_id_t bc_id;
+    std::shared_ptr<const dealii::Function<dim>> bc_fn;
+};
 
 /// Abstract class gathering all testcase-specific data and descriptions
 template <int dimension>
@@ -30,21 +38,16 @@ public:
         return rhs_;
     }
 
-    std::shared_ptr<const dealii::Function<dim>> get_dirichlet_bc() const {
-        return dirichlet_;
-    }
-
-    /** Get the mesh marker ID for dirichlet boundaries.
-     *
-     * \note boundary_id is unsigned int in DEAL.II 9.5.1.
+    /** Get dirichlet boundary conditions.
      */
-    dealii::types::boundary_id get_dirichlet_marker() const { return bcid_dirichlet_; }
+    const std::vector<dirichlet_bc<dim>>& get_dirichlet_bcs() const {
+        return bc_dirichlet_;
+    }
 
 protected:
     std::shared_ptr<const DomainGeometry<dim>> geom_;
     std::shared_ptr<dealii::Function<dim>> rhs_;
-    std::shared_ptr<dealii::Function<dim>> dirichlet_;
-    dealii::types::boundary_id bcid_dirichlet_;
+    std::vector<dirichlet_bc<dim>> bc_dirichlet_;
 };
 
 /** Generates a case given a string description.

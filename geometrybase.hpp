@@ -7,6 +7,8 @@
 
 namespace paramsim {
 
+using bc_id_t = dealii::types::boundary_id;
+
 /** Abstraction for generating a Deal II Triangulation from some kind of geometry description.
  *
  * Also provides a routine for setting boundary face IDs for boundary conditions.
@@ -16,8 +18,7 @@ class DomainGeometry
 {
 public:
     /// Type describing a boundary marker and the condition for a point to be on that boundary
-    using bc_mark_desc = std::pair<dealii::types::boundary_id,
-          std::function<bool(const dealii::Point<dim>&)>>;
+    using bc_mark_desc = std::pair<bc_id_t, std::function<bool(const dealii::Point<dim>&)>>;
 
     DomainGeometry() { }
     

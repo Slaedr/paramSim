@@ -60,8 +60,9 @@ namespace pde {
     constraints.clear();
     DoFTools::make_hanging_node_constraints(dof_handler, constraints);
     std::map<types::boundary_id, const Function<dim> *> boundary_functions;
-    boundary_functions[this->tcase_->get_dirichlet_marker()] =
-        this->tcase_->get_dirichlet_bc().get();
+    for(auto bc : this->tcase_->get_dirichlet_bcs()) {
+      boundary_functions[bc.bc_id] = bc.bc_fn.get();
+    }
     // Project boundary values to compute nodal values; these are stored in constrains.
     VectorTools::project_boundary_values(dof_handler,
                                          boundary_functions,
