@@ -11,7 +11,7 @@ void add_common_options(bpo::options_description& desc, const std::string help_m
     desc.add_options()
         ("help", help_msg.c_str())
         ("case", bpo::value<std::string>(),
-         "Name of the PDE case to solve: 'poisson_verify', 'convdiff_step51'")
+         "Name of the PDE case to solve: 'poisson_verify', 'poisson_bc_exp', 'convdiff_step51'")
         ("solver", bpo::value<std::string>(),
          "Type of PDE solver to use: 'poisson_cg', 'convdiff_hdg'")
         ("refine_levels", bpo::value<int>()->default_value(5),
@@ -20,7 +20,7 @@ void add_common_options(bpo::options_description& desc, const std::string help_m
          "Number of cells in first grid")
         ("fe_degree", bpo::value<int>()->default_value(1),
          "Polynomial degree of FEM basis functions to use")
-        ("output_prefix", bpo::value<std::string>()->default_value("."),
+        ("output_prefix,o", bpo::value<std::string>()->default_value("./case-"),
          "Output location along with filename prefix for vtk output")
         ;
 }
