@@ -1,0 +1,19 @@
+{
+  "num_samples" : 10,
+  "batch_size" : 1,
+  "simulation_exec_path" : "../../../run_case",
+  "resolution" : 64,
+  "solver_type" : "poisson_cg",
+  "case_type" : "poisson_bc_exp",
+  "centers" : [
+      {
+          "coords_bounds" : [[-0.8, 0.1], [-0.8, 0.1]],
+          "coeff_bounds" : [0.3, 0.9]
+      },
+      {
+          "coords_bounds" : [[-0.1, 0.8], [-0.1, 0.8]],
+          "coeff_bounds" : [0.3, 0.9]
+      }
+  ],
+  "width_bounds" : [0.2, 0.7]
+}
