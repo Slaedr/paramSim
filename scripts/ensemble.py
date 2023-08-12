@@ -7,16 +7,10 @@ from libensemble.executors import Executor
 from libensemble.libE import libE
 import libensemble.tools
 
-from scripts.setup_case import setup_case, get_args_str
-
-"""
-Each dict of simulation parameters has as key the name of the param (without dashes)
-and has value the value of the parameter.
-"""
+from setup_case import setup_case, get_args_str
 
 def gen_random_samples(H_in, persis_info, gen_specs):
 
-    # Pull out user parameters
     user_specs = gen_specs["user"]
     batch_size = user_specs["gen_batch_size"]
 
@@ -40,13 +34,11 @@ def gen_random_samples(H_in, persis_info, gen_specs):
     return out, persis_info
 
 def run_case(H_in, persis_info, sim_specs, libE_info):
-    print("run case input:")
-    print(H_in)
     for ibatch in range(len(H_in)):
         case_argstr = get_args_str(sim_specs["user"]["case_type"], H_in[ibatch])
         all_args = sim_specs["user"]["common_args"] + case_argstr
 
-        # Submit our forces app for execution
+        # Submit our app for execution
         exctr = Executor.executor
         task = exctr.submit(app_name="run_fem_case", app_args=all_args)
         # Block until the task finishes
@@ -97,7 +89,7 @@ def run_ensemble(case_file_path):
 
     exit_criteria = {"sim_max": case_data["num_samples"]}
 
-    # Seed random streams for each worker, particularly for gen_f
+    # Seed random streams for each worker for gen_f
     persis_info = libe.tools.add_unique_random_streams({}, nworkers + 1)
 
     # Launch libEnsemble

@@ -4,6 +4,12 @@ import numpy as np
 def setup_case(case_data : dict, gen_specs : dict, sim_specs : dict):
     """ Depending on the case type, adds case-specific ensemble run parameters to
         libensemble dicts.
+        
+        For the case poisson_bc_exp, this needs an array "centers" of length 3, each having
+        dict "coords_bounds" (lower and upper bounds for y-coordinates, so array of length 2),
+        dict "coeff_bounds" (lower and upper bounds for coefficients, so array of length 2).
+        In addition, a key "width_bounds" with a 2-array as value, having lower and upper bounds
+        for the width of each exponential hill.
 
         @param[in] case_data  Dict of ensemble options supplied in the ensemble settings JSON.
         @param[in,out] gen_specs  Parameter bounds are populated in this libEnsemble dict.
@@ -29,8 +35,6 @@ def setup_case(case_data : dict, gen_specs : dict, sim_specs : dict):
         gen_specs["user"]["lower"]["centers"] = l_cbounds
         gen_specs["user"]["upper"]["centers"] = u_cbounds
         
-        #l_wbound = np.array([case_data["width_bounds"][0]], dtype=np.float32)
-        #u_wbound = np.array([case_data["width_bounds"][1]], dtype=np.float32)
         l_wbound = case_data["width_bounds"][0]
         u_wbound = case_data["width_bounds"][1]
         gen_specs["user"]["lower"]["width"] = np.array([l_wbound], dtype=np.float32)

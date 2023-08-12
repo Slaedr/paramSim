@@ -2,11 +2,11 @@
 
 import argparse
 
-from context import scripts
-from scripts import ensemble
+#from context import scripts
+import ensemble
 
 parser = argparse.ArgumentParser()
-parser.add_argument("-e", "--ensemble_params_file", type=str,
+parser.add_argument("-e", "--ensemble_params_file", required=True,
         help="JSON file containing settings for case parameters")
 args, unknown = parser.parse_known_args()
 
