@@ -16,9 +16,11 @@ and has value the value of the parameter.
 
 def gen_random_samples(H_in, persis_info, gen_specs):
 
-    out = {}
     # Pull out user parameters
     user_specs = gen_specs["user"]
+    batch_size = user_specs["gen_batch_size"]
+
+    out = np.zeros(batch_size, dtype=gen_specs["out"])
 
     # Iterate over types of parameters to generate
     for paramset in gen_specs["out"]:
@@ -30,23 +32,18 @@ def gen_random_samples(H_in, persis_info, gen_specs):
         upper = user_specs["upper"][paramname]
         assert(lower.shape == upper.shape)
 
-        batch_size = user_specs["gen_batch_size"]
-
-        # Create empty array of "batch_size" zeros. Array dtype should match "out" fields
-        out = np.zeros(batch_size, dtype=[paramset,])
-
         # Set the "x" output field to contain random numbers, using random stream
-        out[paramname] = persis_info["rand_stream"].uniform(lower, upper, (batch_size,) + lower.shape)
+        out[paramname] = persis_info["rand_stream"].uniform(lower, upper,
+                                                            (batch_size,) + lower.shape)
 
     # Send back our output and persis_info
     return out, persis_info
 
 def run_case(H_in, persis_info, sim_specs, libE_info):
-    for ibatch in range(sim_specs["user"]["batch_size"]):
-        sim_args = {}
-        for name in sim_specs["in"]:
-            sim_args[name] = H_in[name][ibatch]
-        case_argstr = get_args_str(sim_specs["user"]["case_type"], sim_args)
+    print("run case input:")
+    print(H_in)
+    for ibatch in range(len(H_in)):
+        case_argstr = get_args_str(sim_specs["user"]["case_type"], H_in[ibatch])
         all_args = sim_specs["user"]["common_args"] + case_argstr
 
         # Submit our forces app for execution
