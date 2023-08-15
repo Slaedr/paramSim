@@ -18,7 +18,6 @@ def gen_random_samples(H_in, persis_info, gen_specs):
 
     # Iterate over types of parameters to generate
     for paramset in gen_specs["out"]:
-        print("Generating random values for parameter set " + str(paramset))
         paramname = paramset[0]
         paramtype = paramset[1]
         paramsizes = paramset[2]
@@ -48,7 +47,7 @@ def run_case(H_in, persis_info, sim_specs, libE_info):
 def run_ensemble(case_file_path):
 
     nworkers, is_manager, libE_specs, _ = libe.tools.parse_args()
-    libe.logger.set_level("DEBUG")
+    libe.logger.set_level("INFO")
     exctr = Executor()
 
     # Read params for this ensemble-case

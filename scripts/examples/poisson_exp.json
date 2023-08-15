@@ -2,7 +2,7 @@
   "num_samples" : 5,
   "batch_size" : 1,
   "simulation_exec_path" : "../../../run_case",
-  "resolution" : 64,
+  "resolution" : 63,
   "solver_type" : "poisson_cg",
   "case_type" : "poisson_bc_exp",
   "centers" : [

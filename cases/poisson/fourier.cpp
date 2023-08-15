@@ -72,9 +72,9 @@ void PoissonBCFourier<dim>::initialize(const bpo::variables_map& params)
 template <int dim>
 void PoissonBCFourier<dim>::add_case_cmd_args(bpo::options_description& desc) const
 {
-	desc.add_options()
+    desc.add_options()
         ("wavelength", bpo::value<double>(), "The fundamental wavelength for zeroth mode");
-	desc.add_options() ("a0", bpo::value<double>(), "Constant term");
+    desc.add_options() ("a0", bpo::value<double>(), "Constant term");
     constexpr int n_modes = poisson_fourier::Params<dim>::n_modes;
     for(int ic = 1; ic < n_modes+1; ic++) {
         const std::string coflag =
