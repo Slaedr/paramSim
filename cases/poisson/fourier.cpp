@@ -6,9 +6,6 @@ namespace paramsim {
 namespace cases {
 
 using namespace dealii;
-   
-// template <int dim>
-// const std::array<std::string, 3> PoissonBCExp<dim>::dimnames{{"x","y","z"}};
 
 template <int dim>
 void PoissonBCFourier<dim>::initialize(const bpo::variables_map& params)
@@ -41,7 +38,7 @@ void PoissonBCFourier<dim>::initialize(const bpo::variables_map& params)
         }
     } else {
         dirichlet1 = std::make_shared<poisson_fourier::DirichletIn<dim>>();
-        std::cout << "Case 'bc_exp' for Poisson: default parameters.\n";
+        std::cout << "Case 'bc_fourier' for Poisson: default parameters.\n";
     }
 
     this->rhs_ = std::make_shared<poisson_fourier::RightHandSide<dim>>();
