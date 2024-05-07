@@ -14,18 +14,10 @@ find_package(Boost 1.60.0 COMPONENTS program_options)
 
 project(paramsim)
 
-add_library(utils cmdparser.cpp)
-deal_ii_setup_target(utils)
-if(Boost_FOUND)
-    target_link_libraries(utils Boost::program_options)
-else()
-    target_link_libraries(utils "/usr/lib/x86_64-linux-gnu/libboost_program_options.so")
-endif()
-
 add_subdirectory(pdes)
+add_subdirectory(utils)
 add_subdirectory(cases)
 
 add_executable(run_case run_case.cpp)
 deal_ii_setup_target(run_case)
-target_link_libraries(run_case paramsim_solvers paramsim_cases utils)
-
+target_link_libraries(run_case paramsim_solvers paramsim_cases paramsim_utils utils)

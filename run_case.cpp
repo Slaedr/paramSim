@@ -28,7 +28,7 @@
 
 #include <deal.II/base/multithread_info.h>
 
-#include "cmdparser.hpp"
+#include "utils/cmdparser.hpp"
 #include "cases/case.hpp"
 #include "pdes/pdebase.hpp"
 
@@ -59,6 +59,9 @@ int main(int argc, char *argv[])
   const auto initial_resolution = common_cmdmap["initial_resolution"].as<unsigned>();
   const auto fe_degree = common_cmdmap["fe_degree"].as<int>();
   const auto outpath = common_cmdmap["output_prefix"].as<std::string>();
+  const auto is_adaptive = common_cmdmap["is_adaptive"].as<bool>();
+  const auto tolerance = common_cmdmap["tolerance"].as<double>();
+  const auto max_its = common_cmdmap["max_its"].as<int>();
 
   std::shared_ptr<Case<dim>> tcase = create_case<dim>(case_str);
     
@@ -70,9 +73,10 @@ int main(int argc, char *argv[])
   tcase->initialize(case_cmdmap);
 
   PDEParams<dim> pdeparams{solver_str, tcase, fe_degree, initial_resolution, refine_levels,
-      outpath};
+  is_adaptive, outpath};
+  SolverParams solver_params{tolerance, max_its};
 
-  auto pdesolver = create_pde_solver(pdeparams);
+  auto pdesolver = create_pde_solver(pdeparams, solver_params);
 
   try
   {

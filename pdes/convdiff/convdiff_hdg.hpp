@@ -76,8 +76,8 @@ namespace pde {
   {
   public:
     ConvdiffHDG(std::shared_ptr<const convdiffcase_verification<dim>> tcase,
-        const int degree, const unsigned initial_resolution,
-        const MeshRefineMode refinement_mode, const int num_cycles, const std::string& outpath);
+        int degree, unsigned initial_resolution, int num_cycles, bool is_adaptive,
+        const std::string& outpath, const SolverParams& solver_params);
     void run() override;
 
   private:
@@ -111,7 +111,6 @@ namespace pde {
       PostProcessScratchData &                              scratch,
       unsigned int &                                        empty_data);
 
-    const MeshRefineMode refinement_mode_;
     const int num_cycles_;
 
     Triangulation<dim> triangulation;

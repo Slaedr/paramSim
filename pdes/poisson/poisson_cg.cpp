@@ -50,8 +50,9 @@ namespace pde {
 
 template <int dim>
 PoissonCG<dim>::PoissonCG(std::shared_ptr<const Case<dim>> tcase, const int degree,
-    const unsigned int init_res, const int refine_levels, const std::string& output_path)
-  : PDESolver<dim>(tcase, degree, init_res, output_path), num_cycles_{refine_levels},
+    const unsigned int init_res, const int refine_levels, const std::string& output_path,
+    const SolverParams& params)
+  : PDESolver<dim>(tcase, degree, init_res, false, output_path, params), num_cycles_{refine_levels},
   fe(fe_degree_), dof_handler(triangulation)
 {
 }

@@ -25,10 +25,10 @@ namespace pde {
   ConvdiffHDG<dim>
     ::ConvdiffHDG(std::shared_ptr<const convdiffcase_verification<dim>> tcase,
         const int degree, const unsigned initial_resolution,
-        const MeshRefineMode refinement_mode, const int num_cycles, const std::string& outpath)
-    : PDESolver<dim>(tcase, degree, initial_resolution, outpath)
-    , refinement_mode_(refinement_mode), num_cycles_{num_cycles}
-    , fe_local(FE_DGQ<dim>(degree), dim, FE_DGQ<dim>(degree), 1)
+        const int num_cycles, const bool is_adaptive, const std::string& outpath,
+        const SolverParams& sparams)
+    : PDESolver<dim>(tcase, degree, initial_resolution, is_adaptive, outpath, sparams)
+    , num_cycles_{num_cycles} , fe_local(FE_DGQ<dim>(degree), dim, FE_DGQ<dim>(degree), 1)
     , dof_handler_local(triangulation)
     , fe(degree)
     , dof_handler(triangulation)
@@ -864,17 +864,12 @@ namespace pde {
   void ConvdiffHDG<dim>::output_results(const int cycle)
   {
     std::string filename;
-    switch (refinement_mode_)
-      {
-          case MeshRefineMode::global_refinement:
-          filename = this->output_path_ + "solution";
-          break;
-          case MeshRefineMode::adaptive_refinement:
-          filename = this->output_path_ + "solution-adaptive";
-          break;
-        default:
-          Assert(false, ExcNotImplemented());
-      }
+    if(this->is_adaptive_)
+    {
+      filename = this->output_path_ + "solution-adaptive";
+    } else {
+      filename = this->output_path_ + "solution";
+    }
 
     std::string face_out(filename);
     face_out += "-face";
@@ -977,47 +972,34 @@ namespace pde {
         this->tcase_->get_geometry()->generate_grid(triangulation, initial_resolution);
         triangulation.refine_global(3 - dim);
       }
-    else
-      switch (refinement_mode_)
-        {
-            case MeshRefineMode::global_refinement:
-            {
-              triangulation.clear();
-              const auto resolution = initial_resolution + cycle % 2;
-              this->tcase_->get_geometry()->generate_grid(triangulation, resolution);
-              triangulation.refine_global(3 - dim + cycle / 2);
-              break;
-            }
+    else {
+      if(this->is_adaptive_) {
+        Vector<float> estimated_error_per_cell(
+          triangulation.n_active_cells());
 
-            case MeshRefineMode::adaptive_refinement:
-            {
-              Vector<float> estimated_error_per_cell(
-                triangulation.n_active_cells());
+        const FEValuesExtractors::Scalar scalar(dim);
+        std::map<types::boundary_id, const Function<dim> *>
+          neumann_boundary;
+        KellyErrorEstimator<dim>::estimate(dof_handler_local,
+                                           QGauss<dim - 1>(fe.degree + 1),
+                                           neumann_boundary,
+                                           solution_local,
+                                           estimated_error_per_cell,
+                                           fe_local.component_mask(
+                                             scalar));
 
-              const FEValuesExtractors::Scalar scalar(dim);
-              std::map<types::boundary_id, const Function<dim> *>
-                neumann_boundary;
-              KellyErrorEstimator<dim>::estimate(dof_handler_local,
-                                                 QGauss<dim - 1>(fe.degree + 1),
-                                                 neumann_boundary,
-                                                 solution_local,
-                                                 estimated_error_per_cell,
-                                                 fe_local.component_mask(
-                                                   scalar));
+        GridRefinement::refine_and_coarsen_fixed_number(
+          triangulation, estimated_error_per_cell, 0.3, 0.);
 
-              GridRefinement::refine_and_coarsen_fixed_number(
-                triangulation, estimated_error_per_cell, 0.3, 0.);
-
-              triangulation.execute_coarsening_and_refinement();
-
-              break;
-            }
-
-          default:
-            {
-              Assert(false, ExcNotImplemented());
-            }
-        }
+        triangulation.execute_coarsening_and_refinement();
+      } else {
+        // global refinement
+        triangulation.clear();
+        const auto resolution = initial_resolution + cycle % 2;
+        this->tcase_->get_geometry()->generate_grid(triangulation, resolution);
+        triangulation.refine_global(3 - dim + cycle / 2);
+      }
+    }
 
     // Just as in step-7, we set the boundary indicator of two of the faces to 1
     // where we want to specify Neumann boundary conditions instead of Dirichlet
@@ -1046,22 +1028,21 @@ namespace pde {
         output_results(cycle);
       }
 
-    // There is one minor change for the convergence table compared to step-7:
     // Since we did not refine our mesh by a factor two in each cycle (but
     // rather used the sequence 2, 3, 4, 6, 8, 12, ...), we need to tell the
     // convergence rate evaluation about this. We do this by setting the
     // number of cells as a reference column and additionally specifying the
     // dimension of the problem, which gives the necessary information for the
     // relation between number of cells and mesh size.
-    if (refinement_mode_ == MeshRefineMode::global_refinement)
-      {
+    if (! this->is_adaptive_)
+    {
         convergence_table.evaluate_convergence_rates(
           "val L2", "cells", ConvergenceTable::reduction_rate_log2, dim);
         convergence_table.evaluate_convergence_rates(
           "grad L2", "cells", ConvergenceTable::reduction_rate_log2, dim);
         convergence_table.evaluate_convergence_rates(
           "val L2-post", "cells", ConvergenceTable::reduction_rate_log2, dim);
-      }
+    }
     convergence_table.write_text(std::cout);
   }
 

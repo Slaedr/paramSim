@@ -22,7 +22,13 @@ struct PDEParams {
     int fe_degree;
     unsigned initial_resolution;
     int refine_levels;
+    bool is_adaptive;
     std::string output_path;
+};
+
+struct SolverParams {
+    double tolerance;
+    int max_its;
 };
 
 template <int dim>
@@ -30,9 +36,10 @@ class PDESolver
 {
 public:
     PDESolver(std::shared_ptr<const Case<dim>> test_case, int fe_degree,
-            unsigned initial_cell_resolution, const std::string& output_path)
+              unsigned initial_cell_resolution, const bool is_adaptive,
+              const std::string& output_path, const SolverParams& solver_params)
         : tcase_{test_case}, fe_degree_{fe_degree}, init_res_{initial_cell_resolution},
-        output_path_{output_path}
+        is_adaptive_{is_adaptive}, output_path_{output_path}, solver_params_{solver_params}
     { }
 
     virtual ~PDESolver() { }
@@ -43,11 +50,14 @@ protected:
     std::shared_ptr<const Case<dim>> tcase_;
     int fe_degree_;
     unsigned int init_res_;
+    bool is_adaptive_;
     std::string output_path_;
+    const SolverParams solver_params_;
 };
 
 template <int dim>
-std::unique_ptr<PDESolver<dim>> create_pde_solver(const PDEParams<dim>& params);
+std::unique_ptr<PDESolver<dim>> create_pde_solver(const PDEParams<dim>& params,
+                                                  const SolverParams& solver_params);
 
 }
 
