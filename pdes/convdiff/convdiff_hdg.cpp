@@ -23,16 +23,13 @@ namespace pde {
   // gradient/flux part and the scalar part.
   template <int dim>
   ConvdiffHDG<dim>
-    ::ConvdiffHDG(std::shared_ptr<const convdiffcase_verification<dim>> tcase,
-        const int degree, const unsigned initial_resolution,
-        const int num_cycles, const bool is_adaptive, const std::string& outpath,
-        const SolverParams& sparams)
-    : PDESolver<dim>(tcase, degree, initial_resolution, is_adaptive, outpath, sparams)
-    , num_cycles_{num_cycles} , fe_local(FE_DGQ<dim>(degree), dim, FE_DGQ<dim>(degree), 1)
+    ::ConvdiffHDG(const PDEParams<dim>& params, const SolverParams& sparams)
+    : PDESolver<dim>(params, sparams)
+    , fe_local(FE_DGQ<dim>(params.fe_degree), dim, FE_DGQ<dim>(params.fe_degree), 1)
     , dof_handler_local(triangulation)
-    , fe(degree)
+    , fe(params.fe_degree)
     , dof_handler(triangulation)
-    , fe_u_post(degree + 1)
+    , fe_u_post(params.fe_degree + 1)
     , dof_handler_u_post(triangulation)
   {}
 
@@ -60,7 +57,7 @@ namespace pde {
     constraints.clear();
     DoFTools::make_hanging_node_constraints(dof_handler, constraints);
     std::map<types::boundary_id, const Function<dim> *> boundary_functions;
-    for(auto bc : this->tcase_->get_dirichlet_bcs()) {
+    for(auto bc : params_.test_case->get_dirichlet_bcs()) {
       boundary_functions[bc.bc_id] = bc.bc_fn.get();
     }
     // Project boundary values to compute nodal values; these are stored in constrains.
@@ -321,7 +318,7 @@ namespace pde {
                             update_quadrature_points | update_JxW_values);
 
     PerTaskData task_data(fe.n_dofs_per_cell(), trace_reconstruct);
-    auto ccase = std::dynamic_pointer_cast<const convdiffcase_verification<dim>>(this->tcase_);
+    auto ccase = std::dynamic_pointer_cast<const convdiffcase_verification<dim>>(this->params_.test_case);
     ScratchData scratch(fe,
                         fe_local,
                         quadrature_formula,
@@ -379,7 +376,7 @@ namespace pde {
       }
     scratch.fe_values_local.reinit(loc_cell);
     
-    auto ccase = std::dynamic_pointer_cast<const CaseWithNeumannBC<Case<dim>>>(this->tcase_);
+    auto ccase = std::dynamic_pointer_cast<const CaseWithNeumannBC<Case<dim>>>(this->params_.test_case);
     if(!ccase) {
         throw std::runtime_error("Invalid case for Neumann BCs!");
     }
@@ -423,18 +420,18 @@ namespace pde {
     // contrast to more traditional DG methods, where each face is only visited
     // once in the assembly procedure.
     for (const auto face_no : cell->face_indices())
-      {
+    {
         scratch.fe_face_values_local.reinit(loc_cell, face_no);
         scratch.fe_face_values.reinit(cell, face_no);
 
         // The already obtained $\hat{u}$ values are needed when solving for the
         // local variables.
-        if (task_data.trace_reconstruct)
+        if (task_data.trace_reconstruct) {
           scratch.fe_face_values.get_function_values(solution,
                                                      scratch.trace_values);
+        }
 
-        for (unsigned int q = 0; q < n_face_q_points; ++q)
-          {
+        for (unsigned int q = 0; q < n_face_q_points; ++q) {
             const double     JxW = scratch.fe_face_values.JxW(q);
             const Point<dim> quadrature_point =
               scratch.fe_face_values.quadrature_point(q);
@@ -453,17 +450,11 @@ namespace pde {
 
             // We store the non-zero flux and scalar values, making use of the
             // support_on_face information we created in @p ScratchData.
-            for (unsigned int k = 0;
-                 k < scratch.fe_local_support_on_face[face_no].size();
-                 ++k)
-              {
-                const unsigned int kk =
-                  scratch.fe_local_support_on_face[face_no][k];
-                scratch.q_phi[k] =
-                  scratch.fe_face_values_local[fluxes].value(kk, q);
-                scratch.u_phi[k] =
-                  scratch.fe_face_values_local[scalar].value(kk, q);
-              }
+            for (unsigned k = 0; k < scratch.fe_local_support_on_face[face_no].size(); ++k) {
+                const unsigned kk = scratch.fe_local_support_on_face[face_no][k];
+                scratch.q_phi[k] = scratch.fe_face_values_local[fluxes].value(kk, q);
+                scratch.u_phi[k] = scratch.fe_face_values_local[scalar].value(kk, q);
+            }
 
             // When @p trace_reconstruct=false, we are preparing to assemble the
             // system for the skeleton variable $\hat{u}$. If this is the case,
@@ -473,19 +464,13 @@ namespace pde {
             // it can be assembled into the global system by @p
             // copy_local_to_global.
             if (!task_data.trace_reconstruct)
-              {
-                for (unsigned int k = 0;
-                     k < scratch.fe_support_on_face[face_no].size();
-                     ++k)
+            {
+                for (unsigned int k = 0; k < scratch.fe_support_on_face[face_no].size(); ++k) {
                   scratch.tr_phi[k] = scratch.fe_face_values.shape_value(
                     scratch.fe_support_on_face[face_no][k], q);
-                for (unsigned int i = 0;
-                     i < scratch.fe_local_support_on_face[face_no].size();
-                     ++i)
-                  for (unsigned int j = 0;
-                       j < scratch.fe_support_on_face[face_no].size();
-                       ++j)
-                    {
+                }
+                for (unsigned i = 0; i < scratch.fe_local_support_on_face[face_no].size(); ++i)
+                  for (unsigned j = 0; j < scratch.fe_support_on_face[face_no].size(); ++j) {
                       const unsigned int ii =
                         scratch.fe_local_support_on_face[face_no][i];
                       const unsigned int jj =
@@ -503,61 +488,47 @@ namespace pde {
                       scratch.fl_matrix(jj, ii) -=
                         ((scratch.q_phi[i] * normal +
                           tau_stab * scratch.u_phi[i]) *
-                         scratch.tr_phi[j]) *
-                        JxW;
-                    }
+                         scratch.tr_phi[j]) * JxW;
+                  }
 
-                for (unsigned int i = 0;
-                     i < scratch.fe_support_on_face[face_no].size();
-                     ++i)
-                  for (unsigned int j = 0;
-                       j < scratch.fe_support_on_face[face_no].size();
-                       ++j)
-                    {
-                      const unsigned int ii =
-                        scratch.fe_support_on_face[face_no][i];
-                      const unsigned int jj =
-                        scratch.fe_support_on_face[face_no][j];
+                for (unsigned i = 0; i < scratch.fe_support_on_face[face_no].size(); ++i)
+                  for (unsigned j = 0; j < scratch.fe_support_on_face[face_no].size(); ++j)
+                  {
+                      const unsigned ii = scratch.fe_support_on_face[face_no][i];
+                      const unsigned jj = scratch.fe_support_on_face[face_no][j];
                       task_data.cell_matrix(ii, jj) +=
                         ((convection * normal - tau_stab) * scratch.tr_phi[i] *
-                         scratch.tr_phi[j]) *
-                        JxW;
-                    }
+                         scratch.tr_phi[j]) * JxW;
+                  }
 
                 if (cell->face(face_no)->at_boundary() &&
                     (cell->face(face_no)->boundary_id() == ccase->get_neumann_marker()))
-                  {
+                {
                     const double neumann_value =
                       ccase->get_neumann_bc()->value_normal(quadrature_point, normal);
                     for (unsigned int i = 0;
                          i < scratch.fe_support_on_face[face_no].size();
                          ++i)
-                      {
+                    {
                         const unsigned int ii =
                           scratch.fe_support_on_face[face_no][i];
                         task_data.cell_vector(ii) +=
                           scratch.tr_phi[i] * neumann_value * JxW;
-                      }
-                  }
-              }
+                    }
+                }
+            }
 
             // This last term adds the contribution of the term $\left<w,\tau
             // u_h\right>_{\partial \mathcal T}$ to the local matrix. As opposed
             // to the face matrices above, we need it in both assembly stages.
-            for (unsigned int i = 0;
-                 i < scratch.fe_local_support_on_face[face_no].size();
-                 ++i)
-              for (unsigned int j = 0;
-                   j < scratch.fe_local_support_on_face[face_no].size();
-                   ++j)
-                {
-                  const unsigned int ii =
-                    scratch.fe_local_support_on_face[face_no][i];
-                  const unsigned int jj =
-                    scratch.fe_local_support_on_face[face_no][j];
+            for (unsigned i = 0; i < scratch.fe_local_support_on_face[face_no].size(); ++i)
+              for (unsigned j = 0; j < scratch.fe_local_support_on_face[face_no].size(); ++j)
+              {
+                  const unsigned ii = scratch.fe_local_support_on_face[face_no][i];
+                  const unsigned jj = scratch.fe_local_support_on_face[face_no][j];
                   scratch.ll_matrix(ii, jj) +=
                     tau_stab * scratch.u_phi[i] * scratch.u_phi[j] * JxW;
-                }
+              }
 
             // When @p trace_reconstruct=true, we are solving for the local
             // solutions on an element by element basis.  The local
@@ -569,14 +540,14 @@ namespace pde {
               for (unsigned int i = 0;
                    i < scratch.fe_local_support_on_face[face_no].size();
                    ++i)
-                {
+              {
                   const unsigned int ii =
                     scratch.fe_local_support_on_face[face_no][i];
                   scratch.l_rhs(ii) -=
                     (scratch.q_phi[i] * normal +
                      scratch.u_phi[i] * (convection * normal - tau_stab)) *
                     scratch.trace_values[q] * JxW;
-                }
+              }
           }
       }
 
@@ -588,23 +559,21 @@ namespace pde {
 
     // For (1), we compute the Schur complement and add it to the @p
     // cell_matrix, matrix $D$ in the introduction.
-    if (task_data.trace_reconstruct == false)
-      {
+    if (task_data.trace_reconstruct == false) {
         scratch.fl_matrix.mmult(scratch.tmp_matrix, scratch.ll_matrix);
         scratch.tmp_matrix.vmult_add(task_data.cell_vector, scratch.l_rhs);
         scratch.tmp_matrix.mmult(task_data.cell_matrix,
                                  scratch.lf_matrix,
                                  true);
         cell->get_dof_indices(task_data.dof_indices);
-      }
+    }
     // For (2), we are simply solving (ll_matrix).(solution_local) = (l_rhs).
     // Hence, we multiply @p l_rhs by our already inverted local-local matrix
     // and store the result using the <code>set_dof_values</code> function.
-    else
-      {
+    else {
         scratch.ll_matrix.vmult(scratch.tmp_rhs, scratch.l_rhs);
         loc_cell->set_dof_values(scratch.tmp_rhs, solution_local);
-      }
+    }
   }
 
 
@@ -615,12 +584,13 @@ namespace pde {
   template <int dim>
   void ConvdiffHDG<dim>::copy_local_to_global(const PerTaskData &data)
   {
-    if (data.trace_reconstruct == false)
+    if (data.trace_reconstruct == false) {
       constraints.distribute_local_to_global(data.cell_matrix,
                                              data.cell_vector,
                                              data.dof_indices,
                                              system_matrix,
                                              system_rhs);
+    }
   }
 
 
@@ -704,7 +674,7 @@ namespace pde {
 
     Vector<float> difference_per_cell(triangulation.n_active_cells());
 
-    auto ccase = std::dynamic_pointer_cast<const convdiffcase_verification<dim>>(this->tcase_);
+    auto ccase = std::dynamic_pointer_cast<const convdiffcase_verification<dim>>(params_.test_case);
     if(!ccase) {
         throw std::runtime_error("Invalid case for HDG convergence analysis!");
     }
@@ -864,11 +834,10 @@ namespace pde {
   void ConvdiffHDG<dim>::output_results(const int cycle)
   {
     std::string filename;
-    if(this->is_adaptive_)
-    {
-      filename = this->output_path_ + "solution-adaptive";
+    if(params_.is_adaptive) {
+      filename = params_.output_path + "solution-adaptive";
     } else {
-      filename = this->output_path_ + "solution";
+      filename = params_.output_path + "solution";
     }
 
     std::string face_out(filename);
@@ -967,13 +936,12 @@ namespace pde {
   template <int dim>
   void ConvdiffHDG<dim>::refine_grid(const int cycle, const unsigned int initial_resolution)
   {
-    if (cycle == 0)
-      {
-        this->tcase_->get_geometry()->generate_grid(triangulation, initial_resolution);
-        triangulation.refine_global(3 - dim);
-      }
+    if (cycle == 0) {
+      params_.test_case->get_geometry()->generate_grid(triangulation, initial_resolution);
+      triangulation.refine_global(3 - dim);
+    }
     else {
-      if(this->is_adaptive_) {
+      if(params_.is_adaptive) {
         Vector<float> estimated_error_per_cell(
           triangulation.n_active_cells());
 
@@ -996,7 +964,7 @@ namespace pde {
         // global refinement
         triangulation.clear();
         const auto resolution = initial_resolution + cycle % 2;
-        this->tcase_->get_geometry()->generate_grid(triangulation, resolution);
+        params_.test_case->get_geometry()->generate_grid(triangulation, resolution);
         triangulation.refine_global(3 - dim + cycle / 2);
       }
     }
@@ -1006,7 +974,7 @@ namespace pde {
     // conditions. Since we re-create the triangulation every time for global
     // refinement, the flags are set in every refinement step, not just at the
     // beginning.
-    this->tcase_->get_geometry()->set_boundary_ids(triangulation);
+    params_.test_case->get_geometry()->set_boundary_ids(triangulation);
   }
 
   // @sect4{ConvdiffHDG::run}
@@ -1016,17 +984,17 @@ namespace pde {
   template <int dim>
   void ConvdiffHDG<dim>::run()
   {
-    for (int cycle = 0; cycle < num_cycles_; ++cycle)
-      {
+    for (int cycle = 0; cycle < params_.refine_levels; ++cycle)
+    {
         std::cout << "Cycle " << cycle << ':' << std::endl;
 
-        refine_grid(cycle, this->init_res_);
+        refine_grid(cycle, params_.initial_resolution);
         setup_system();
         assemble_system(false);
         solve();
         postprocess();
         output_results(cycle);
-      }
+    }
 
     // Since we did not refine our mesh by a factor two in each cycle (but
     // rather used the sequence 2, 3, 4, 6, 8, 12, ...), we need to tell the
@@ -1034,7 +1002,7 @@ namespace pde {
     // number of cells as a reference column and additionally specifying the
     // dimension of the problem, which gives the necessary information for the
     // relation between number of cells and mesh size.
-    if (! this->is_adaptive_)
+    if (! params_.is_adaptive)
     {
         convergence_table.evaluate_convergence_rates(
           "val L2", "cells", ConvergenceTable::reduction_rate_log2, dim);

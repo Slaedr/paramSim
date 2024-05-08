@@ -59,25 +59,26 @@ namespace paramsim {
 namespace pde {
 
   using namespace dealii;
-  
-  // The HDG solution procedure follows closely that of step-7. The major
-  // difference is the use of three different sets of DoFHandler and FE
-  // objects, along with the ChunkSparseMatrix and the corresponding solutions
-  // vectors. We also use WorkStream to enable a multithreaded local solution
-  // process which exploits the embarrassingly parallel nature of the local
-  // solver. For WorkStream, we define the local operations on a cell and a
-  // copy function into the global matrix and vector. We do this both for the
-  // assembly (which is run twice, once when we generate the system matrix and
-  // once when we compute the element-interior solutions from the skeleton
-  // values) and for the postprocessing where we extract a solution that
-  // converges at higher order.
+
+  /**
+   * @brief Solves steady linear convection-diffusion with the HDG method.
+   *
+   * Note the use of three different sets of DoFHandler and FE
+   * objects, along with the ChunkSparseMatrix and the corresponding solutions
+   * vectors. We also use WorkStream to enable a multithreaded local solution
+   * process which exploits the embarrassingly parallel nature of the local
+   * solver. For WorkStream, we define the local operations on a cell and a
+   * copy function into the global matrix and vector. We do this both for the
+   * assembly (which is run twice, once when we generate the system matrix and
+   * once when we compute the element-interior solutions from the skeleton
+   * values) and for the postprocessing where we extract a solution that
+   * converges at higher order.
+   */
   template <int dim>
   class ConvdiffHDG : public PDESolver<dim>
   {
   public:
-    ConvdiffHDG(std::shared_ptr<const convdiffcase_verification<dim>> tcase,
-        int degree, unsigned initial_resolution, int num_cycles, bool is_adaptive,
-        const std::string& outpath, const SolverParams& solver_params);
+    ConvdiffHDG(const PDEParams<dim>& params, const SolverParams& solver_params);
     void run() override;
 
   private:
@@ -110,8 +111,6 @@ namespace pde {
       const typename DoFHandler<dim>::active_cell_iterator &cell,
       PostProcessScratchData &                              scratch,
       unsigned int &                                        empty_data);
-
-    const int num_cycles_;
 
     Triangulation<dim> triangulation;
 
@@ -167,6 +166,8 @@ namespace pde {
     SparseMatrix<double> system_matrix;
 
     ConvergenceTable     convergence_table;
+
+    using PDESolver<dim>::params_;
   };
 
 }

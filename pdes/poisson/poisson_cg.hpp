@@ -15,22 +15,14 @@ namespace pde {
 
 using namespace dealii;
 
-// @sect3{The <code>PoissonCG</code> class template}
-
-// This is again the same <code>PoissonCG</code> class as in the previous
-// example. The only difference is that we have now declared it as a class
-// with a template parameter, and the template parameter is of course the
-// spatial dimension in which we would like to solve the Laplace equation. Of
-// course, several of the member variables depend on this dimension as well,
-// in particular the Triangulation class, which has to represent
-// quadrilaterals or hexahedra, respectively. Apart from this, everything is
-// as before.
+/**
+ * Solves the Poisson equation with non-homogeneous Dirichlet BCs.
+ */
 template <int dim>
 class PoissonCG : public PDESolver<dim>
 {
 public:
-  PoissonCG(std::shared_ptr<const Case<dim>> tcase, int degree, unsigned int initial_resolution,
-      int refine_levels, const std::string& output_path, const SolverParams& params);
+  PoissonCG(const PDEParams<dim>& params, const SolverParams& solver_params);
 
   void run() override;
   
@@ -43,11 +35,8 @@ private:
   void solve();
   void output_results(int cycle) const;
 
-  using PDESolver<dim>::tcase_;
-  using PDESolver<dim>::fe_degree_;
-  using PDESolver<dim>::init_res_;
-
-  int num_cycles_;
+  using PDESolver<dim>::params_;
+  using PDESolver<dim>::solver_params_;
 
   Triangulation<dim> triangulation;
   FE_Q<dim>          fe;

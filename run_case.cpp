@@ -80,8 +80,8 @@ int main(int argc, char *argv[])
 
   try
   {
-      std::cout << "Solving with Q1 elements, global refinement" << std::endl
-                << "===========================================" << std::endl
+      std::cout << "Solving" << std::endl
+                << "=======" << std::endl
                 << std::endl;
 
       pdesolver->run();

@@ -3,6 +3,8 @@
 #include <cmath>
 #include <cassert>
 
+#include <deal.II/fe/fe_q.h>
+
 
 namespace paramsim {
 namespace utils {
@@ -14,7 +16,7 @@ scalar compute_Lp_norm(dealii::FEValues<dim>& fe_values, const dealii::DoFHandle
     auto update_flags = fe_values.get_update_flags();
     assert(update_flags & dealii::update_values);
     assert(update_flags & dealii::update_JxW_values);
-    auto fe = fe_values.get_fe();
+    auto& fe = fe_values.get_fe();
     const auto dofs_per_cell = fe.n_dofs_per_cell();
     const auto n_q_points = fe_values.get_quadrature().size();
     std::vector<scalar> u_quadrature_values(n_q_points);
@@ -36,6 +38,10 @@ scalar compute_Lp_norm(dealii::FEValues<dim>& fe_values, const dealii::DoFHandle
 
     return std::pow(normp, 1.0/p);
 }
+
+template double compute_Lp_norm(dealii::FEValues<2> &fe_values,
+                                const dealii::DoFHandler<2> &dof_handler,
+                                const dealii::Vector<double> &u, int p);
 
 }
 }

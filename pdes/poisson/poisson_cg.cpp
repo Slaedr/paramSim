@@ -49,11 +49,8 @@ namespace paramsim {
 namespace pde {
 
 template <int dim>
-PoissonCG<dim>::PoissonCG(std::shared_ptr<const Case<dim>> tcase, const int degree,
-    const unsigned int init_res, const int refine_levels, const std::string& output_path,
-    const SolverParams& params)
-  : PDESolver<dim>(tcase, degree, init_res, false, output_path, params), num_cycles_{refine_levels},
-  fe(fe_degree_), dof_handler(triangulation)
+PoissonCG<dim>::PoissonCG(const PDEParams<dim>& params, const SolverParams& sparams)
+  : PDESolver<dim>(params, sparams), fe(params.fe_degree), dof_handler(triangulation)
 {
 }
 
@@ -69,9 +66,9 @@ template <int dim>
 void PoissonCG<dim>::make_grid(const unsigned n_cell_dir)
 {
     triangulation.clear();
-    tcase_->get_geometry()->generate_grid(triangulation, n_cell_dir);
+    params_.test_case->get_geometry()->generate_grid(triangulation, n_cell_dir);
     //triangulation.refine_global(5);
-    tcase_->get_geometry()->set_boundary_ids(triangulation);
+    params_.test_case->get_geometry()->set_boundary_ids(triangulation);
 
     std::cout << "   Number of active cells: " << triangulation.n_active_cells()
               << std::endl
@@ -105,9 +102,9 @@ void PoissonCG<dim>::assemble_system()
 
   // In order to evaluate the non-constant
   // right hand side function we now also need the quadrature points on the
-  // cell we are presently on (previously, we only required values and
+  // cell we are presently on in addition to values and
   // gradients of the shape function from the FEValues object, as well as the
-  // quadrature weights, FEValues::JxW() ). We can tell the FEValues object to
+  // quadrature weights, FEValues::JxW(). We can tell the FEValues object to
   // do for us by also giving it the #update_quadrature_points flag:
   FEValues<dim> fe_values(fe,
                           quadrature_formula,
@@ -160,7 +157,7 @@ void PoissonCG<dim>::assemble_system()
 
             const auto &x_q = fe_values.quadrature_point(q_index);
             cell_rhs(i) += (fe_values.shape_value(i, q_index) *          // phi_i(x_q)
-                            tcase_->get_right_hand_side()->value(x_q) *   // f(x_q)
+                            params_.test_case->get_right_hand_side()->value(x_q) *   // f(x_q)
                             fe_values.JxW(q_index));                      // dx
           }
       // As a final remark to these loops: when we assemble the local
@@ -210,7 +207,7 @@ void PoissonCG<dim>::assemble_system()
   // interpolate_boundary_values will do nothing on these faces. For
   // the Laplace equation doing nothing is equivalent to assuming that
   // on those parts of the boundary a zero Neumann boundary condition holds.
-  for(auto bc : tcase_->get_dirichlet_bcs()) {
+  for(auto bc : params_.test_case->get_dirichlet_bcs()) {
       std::map<types::global_dof_index, double> boundary_values;
       VectorTools::interpolate_boundary_values(dof_handler,
                                                bc.bc_id, *bc.bc_fn,
@@ -248,7 +245,7 @@ void PoissonCG<dim>::output_results(const int cycle) const
 
   data_out.build_patches();
 
-  const std::string file_prefix = this->output_path_ + "-" + std::to_string(cycle);
+  const std::string file_prefix = params_.output_path + "-" + std::to_string(cycle);
   std::ofstream output(file_prefix + ".vtk");
   data_out.write_vtk(output);
    
@@ -273,12 +270,12 @@ void PoissonCG<dim>::run()
             << std::endl;
   
   auto scase = std::dynamic_pointer_cast<
-      const CaseWithExactSolution<CaseWithNeumannBC<Case<dim>>>>(this->tcase_);
+      const CaseWithExactSolution<CaseWithNeumannBC<Case<dim>>>>(this->params_.test_case);
   ConvergenceTable convergence_table;
 
-  for(int imesh = 0; imesh < num_cycles_; imesh++)
+  for(int imesh = 0; imesh < params_.refine_levels; imesh++)
   {
-    const unsigned resolution = this->init_res_ * (imesh+1);
+    const unsigned resolution = this->params_.initial_resolution * (imesh+1);
     make_grid(resolution);
     setup_system();
     assemble_system();
@@ -295,7 +292,7 @@ void PoissonCG<dim>::run()
                                         solution,
                                         *scase->get_exact_solution(),
                                         difference_per_cell,
-                                        QGauss<dim>(this->fe_degree_ + 2),
+                                        QGauss<dim>(params_.fe_degree + 2),
                                         VectorTools::L2_norm);
       const double post_error =
         VectorTools::compute_global_error(triangulation, difference_per_cell,

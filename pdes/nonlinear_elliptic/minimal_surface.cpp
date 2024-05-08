@@ -69,12 +69,8 @@ namespace pde {
 using namespace dealii;
 
 template <int dim>
-MinimalSurface<dim>::MinimalSurface(std::shared_ptr<const Case<dim>> tcase, int degree,
-                                    unsigned int init_res, int refine_levels,
-                                    const bool is_adaptive, const std::string& output_path,
-                                    const SolverParams& params)
-: PDESolver<dim>(tcase, degree, init_res, is_adaptive, output_path, params),
-  num_cycles_{refine_levels}, fe(fe_degree_), dof_handler(triangulation)
+MinimalSurface<dim>::MinimalSurface(const PDEParams<dim>& params, const SolverParams& s_params)
+: PDESolver<dim>(params, s_params), fe(params.fe_degree), dof_handler(triangulation)
 {}
 
 
@@ -224,7 +220,7 @@ void MinimalSurface<dim>::assemble_system()
 
   // apply zero boundary values to the linear system that defines the Newton updates
   // $\delta u^n$:
-  for(auto bc : tcase_->get_dirichlet_bcs()) {
+  for(auto bc : params_.test_case->get_dirichlet_bcs()) {
     std::map<types::global_dof_index, double> boundary_values;
     VectorTools::interpolate_boundary_values(dof_handler,
                                              bc.bc_id, Functions::ZeroFunction<dim>(),
@@ -358,7 +354,7 @@ void MinimalSurface<dim>::refine_mesh()
 template <int dim>
 void MinimalSurface<dim>::set_boundary_values()
 {
-  for(auto bc : tcase_->get_dirichlet_bcs()) {
+  for(auto bc : params_.test_case->get_dirichlet_bcs()) {
     std::map<types::global_dof_index, double> boundary_values;
     VectorTools::interpolate_boundary_values(dof_handler,
                                              bc.bc_id, *bc.bc_fn,
@@ -494,9 +490,9 @@ template <int dim>
 void MinimalSurface<dim>::make_grid(const unsigned n_cell_dir)
 {
     triangulation.clear();
-    tcase_->get_geometry()->generate_grid(triangulation, n_cell_dir);
+    params_.test_case->get_geometry()->generate_grid(triangulation, n_cell_dir);
     //triangulation.refine_global(5);
-    tcase_->get_geometry()->set_boundary_ids(triangulation);
+    params_.test_case->get_geometry()->set_boundary_ids(triangulation);
 
     std::cout << "   Number of active cells: " << triangulation.n_active_cells()
               << std::endl
@@ -544,66 +540,70 @@ template <int dim>
 void MinimalSurface<dim>::run()
 {
   //GridGenerator::hyper_ball(triangulation);
-  make_grid(this->init_res_);
+  make_grid(params_.initial_resolution);
   //triangulation.refine_global(2);
 
   setup_system(/*first time=*/true);
   set_boundary_values();
 
-  // The Newton iteration starts next. We iterate until the (norm of the)
-  // residual computed at the end of the previous iteration is less than
-  // $10^{-3}$, as checked at the end of the `do { ... } while` loop that
-  // starts here. Because we don't have a reasonable value to initialize
-  // the variable, we just use the largest value that can be represented
-  // as a `double`.
-  double last_residual_norm = std::numeric_limits<double>::max();
-  unsigned int refinement_cycle = 0;
-  do
-  {
-      std::cout << "Mesh refinement step " << refinement_cycle << std::endl;
+  if(params_.is_adaptive) {
+    // The Newton iteration starts next. We iterate until the (norm of the)
+    // residual computed at the end of the previous iteration is less than
+    // $10^{-3}$, as checked at the end of the `do { ... } while` loop that
+    // starts here. Because we don't have a reasonable value to initialize
+    // the variable, we just use the largest value that can be represented
+    // as a `double`.
+    double last_residual_norm = std::numeric_limits<double>::max();
+    unsigned int refinement_cycle = 0;
+    do
+    {
+        std::cout << "Mesh refinement step " << refinement_cycle << std::endl;
 
-      if (refinement_cycle != 0) {
-        if(this->is_adaptive_) {
+        if (refinement_cycle != 0) {
           refine_mesh();
-        } else {
-          triangulation.refine_global(1);
         }
-      }
 
-      // On every mesh we do exactly five Newton steps. We print the initial
-      // residual here and then start the iterations on this mesh.
-      //
-      // In every Newton step the system matrix and the right hand side have
-      // to be computed first, after which we store the norm of the right
-      // hand side as the residual to check against when deciding whether to
-      // stop the iterations. We then solve the linear system (the function
-      // also updates $u^{n+1}=u^n+\alpha^n\;\delta u^n$) and output the
-      // norm of the residual at the end of this Newton step.
-      //
-      // After the end of this loop, we then also output the solution on the
-      // current mesh in graphical form and increment the counter for the
-      // mesh refinement cycle.
-      std::cout << "  Initial residual: " << compute_residual(0) << std::endl;
+        // On every mesh we do exactly five Newton steps. We print the initial
+        // residual here and then start the iterations on this mesh.
+        //
+        // In every Newton step the system matrix and the right hand side have
+        // to be computed first, after which we store the norm of the right
+        // hand side as the residual to check against when deciding whether to
+        // stop the iterations. We then solve the linear system (the function
+        // also updates $u^{n+1}=u^n+\alpha^n\;\delta u^n$) and output the
+        // norm of the residual at the end of this Newton step.
+        //
+        // After the end of this loop, we then also output the solution on the
+        // current mesh in graphical form and increment the counter for the
+        // mesh refinement cycle.
+        std::cout << "  Initial residual: " << compute_residual(0) << std::endl;
 
-      for(int inner_it = 0; inner_it < solver_params_.max_its; ++inner_it)
-      {
-          assemble_system();
-          const dealii::types::global_cell_index ncells = triangulation.n_global_active_cells();
-          last_residual_norm = system_rhs.l2_norm() / std::sqrt(static_cast<double>(ncells));
+        for(int inner_it = 0; inner_it < solver_params_.max_its; ++inner_it)
+        {
+            assemble_system();
+            // TODO: Use function L2 norm for determining convergence
+            const dealii::types::global_cell_index ncells = triangulation.n_global_active_cells();
+            last_residual_norm = system_rhs.l2_norm() / std::sqrt(static_cast<double>(ncells));
 
-          solve();
+            solve();
 
-          std::cout << "  Residual norm: " << compute_residual(0) << std::endl;
-          std::cout << "  Residual norm normalized by num cells: "
-                    << last_residual_norm << std::endl;
-      }
+            std::cout << "  Residual norm: " << compute_residual(0) << std::endl;
+            std::cout << "  Residual norm normalized by num cells: "
+                      << last_residual_norm << std::endl;
+        }
 
-      output_results(refinement_cycle);
+        output_results(refinement_cycle);
 
-      ++refinement_cycle;
-      std::cout << std::endl;
+        ++refinement_cycle;
+        std::cout << std::endl;
+    }
+    while (last_residual_norm > solver_params_.tolerance);
+  } else {
+    // TODO: Add separate loop with fixed number of global refinements for non-adaptive run
+    // triangulation.refine_global(1);
+    throw std::runtime_error("Unsupported option!");
   }
-  while (last_residual_norm > solver_params_.tolerance);
+
 }
 
 template class MinimalSurface<2>;

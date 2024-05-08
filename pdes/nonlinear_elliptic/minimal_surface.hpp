@@ -23,9 +23,7 @@ template <int dim>
 class MinimalSurface : public PDESolver<dim>
 {
 public:
-  MinimalSurface(std::shared_ptr<const Case<dim>> tcase, int degree, unsigned initial_resolution,
-                 int refine_levels, bool is_adaptive, const std::string& output_path,
-                 const SolverParams& solver_params);
+  MinimalSurface(const PDEParams<dim>& params, const SolverParams& solver_params);
 
   void run() override;
   
@@ -86,9 +84,7 @@ private:
 
   void output_results(int cycle) const;
 
-  using PDESolver<dim>::tcase_;
-  using PDESolver<dim>::fe_degree_;
-  using PDESolver<dim>::init_res_;
+  using PDESolver<dim>::params_;
   using PDESolver<dim>::solver_params_;
 
   int num_cycles_;
