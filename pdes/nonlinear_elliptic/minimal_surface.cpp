@@ -261,74 +261,89 @@ void MinimalSurface<dim>::solve()
 template <int dim>
 void MinimalSurface<dim>::refine_mesh()
 {
-  Vector<float> estimated_error_per_cell(triangulation.n_active_cells());
+  if(params_.is_adaptive) {
+    Vector<float> estimated_error_per_cell(triangulation.n_active_cells());
 
-  KellyErrorEstimator<dim>::estimate(
-    dof_handler,
-    QGauss<dim - 1>(fe.degree + 1),
-    std::map<types::boundary_id, const Function<dim> *>(),
-    current_solution,
-    estimated_error_per_cell);
+    KellyErrorEstimator<dim>::estimate(
+      dof_handler,
+      QGauss<dim - 1>(fe.degree + 1),
+      std::map<types::boundary_id, const Function<dim> *>(),
+      current_solution,
+      estimated_error_per_cell);
 
-  GridRefinement::refine_and_coarsen_fixed_number(triangulation,
-                                                  estimated_error_per_cell,
-                                                  0.3,
-                                                  0.03);
+    GridRefinement::refine_and_coarsen_fixed_number(triangulation,
+                                                    estimated_error_per_cell,
+                                                    0.3,
+                                                    0.03);
 
-  // Then we need an additional step: if, for example, you flag a cell that
-  // is once more refined than its neighbor, and that neighbor is not
-  // flagged for refinement, we would end up with a jump of two refinement
-  // levels across a cell interface.  To avoid these situations, the library
-  // will silently also have to refine the neighbor cell once. It does so by
-  // calling the Triangulation::prepare_coarsening_and_refinement function
-  // before actually doing the refinement and coarsening.  This function
-  // flags a set of additional cells for refinement or coarsening, to
-  // enforce rules like the one-hanging-node rule.  The cells that are
-  // flagged for refinement and coarsening after calling this function are
-  // exactly the ones that will actually be refined or coarsened. Usually,
-  // you don't have to do this by hand
-  // (Triangulation::execute_coarsening_and_refinement does this for
-  // you). However, we need to initialize the SolutionTransfer class and it
-  // needs to know the final set of cells that will be coarsened or refined
-  // in order to store the data from the old mesh and transfer to the new
-  // one. Thus, we call the function by hand:
-  triangulation.prepare_coarsening_and_refinement();
+    // Then we need an additional step: if, for example, you flag a cell that
+    // is once more refined than its neighbor, and that neighbor is not
+    // flagged for refinement, we would end up with a jump of two refinement
+    // levels across a cell interface.  To avoid these situations, the library
+    // will silently also have to refine the neighbor cell once. It does so by
+    // calling the Triangulation::prepare_coarsening_and_refinement function
+    // before actually doing the refinement and coarsening.  This function
+    // flags a set of additional cells for refinement or coarsening, to
+    // enforce rules like the one-hanging-node rule.  The cells that are
+    // flagged for refinement and coarsening after calling this function are
+    // exactly the ones that will actually be refined or coarsened. Usually,
+    // you don't have to do this by hand
+    // (Triangulation::execute_coarsening_and_refinement does this for
+    // you). However, we need to initialize the SolutionTransfer class and it
+    // needs to know the final set of cells that will be coarsened or refined
+    // in order to store the data from the old mesh and transfer to the new
+    // one. Thus, we call the function by hand:
+    triangulation.prepare_coarsening_and_refinement();
 
-  // With this out of the way, we initialize a SolutionTransfer object with
-  // the present DoFHandler and attach the solution vector to it, followed
-  // by doing the actual refinement and distribution of degrees of freedom
-  // on the new mesh
-  SolutionTransfer<dim> solution_transfer(dof_handler);
-  solution_transfer.prepare_for_coarsening_and_refinement(current_solution);
+    // With this out of the way, we initialize a SolutionTransfer object with
+    // the present DoFHandler and attach the solution vector to it, followed
+    // by doing the actual refinement and distribution of degrees of freedom
+    // on the new mesh
+    SolutionTransfer<dim> solution_transfer(dof_handler);
+    solution_transfer.prepare_for_coarsening_and_refinement(current_solution);
 
-  triangulation.execute_coarsening_and_refinement();
+    triangulation.execute_coarsening_and_refinement();
 
-  dof_handler.distribute_dofs(fe);
+    dof_handler.distribute_dofs(fe);
 
-  // Finally, we retrieve the old solution interpolated to the new
-  // mesh. Since the SolutionTransfer function does not actually store the
-  // values of the old solution, but rather indices, we need to preserve the
-  // old solution vector until we have gotten the new interpolated
-  // values. Thus, we have the new values written into a temporary vector,
-  // and only afterwards write them into the solution vector object:
-  Vector<double> tmp(dof_handler.n_dofs());
-  solution_transfer.interpolate(current_solution, tmp);
-  current_solution = tmp;
+    // Finally, we retrieve the old solution interpolated to the new
+    // mesh. Since the SolutionTransfer function does not actually store the
+    // values of the old solution, but rather indices, we need to preserve the
+    // old solution vector until we have gotten the new interpolated
+    // values. Thus, we have the new values written into a temporary vector,
+    // and only afterwards write them into the solution vector object:
+    Vector<double> tmp(dof_handler.n_dofs());
+    solution_transfer.interpolate(current_solution, tmp);
+    current_solution = tmp;
 
-  // On the new mesh, there are different hanging nodes, for which we have to
-  // compute constraints again, after throwing away previous content of the
-  // object. To be on the safe side, we should then also make sure that the
-  // current solution's vector entries satisfy the hanging node constraints
-  // (see the discussion in the documentation of the SolutionTransfer class
-  // for why this is necessary). We could do this by calling
-  // `hanging_node_constraints.distribute(current_solution)` explicitly; we
-  // omit this step because this will happen at the end of the call to
-  // `set_boundary_values()` below, and it is not necessary to do it twice.
-  hanging_node_constraints.clear();
+    // On the new mesh, there are different hanging nodes, for which we have to
+    // compute constraints again, after throwing away previous content of the
+    // object. To be on the safe side, we should then also make sure that the
+    // current solution's vector entries satisfy the hanging node constraints
+    // (see the discussion in the documentation of the SolutionTransfer class
+    // for why this is necessary). We could do this by calling
+    // `hanging_node_constraints.distribute(current_solution)` explicitly; we
+    // omit this step because this will happen at the end of the call to
+    // `set_boundary_values()` below, and it is not necessary to do it twice.
+    hanging_node_constraints.clear();
 
-  DoFTools::make_hanging_node_constraints(dof_handler,
-                                          hanging_node_constraints);
-  hanging_node_constraints.close();
+    DoFTools::make_hanging_node_constraints(dof_handler,
+                                            hanging_node_constraints);
+    hanging_node_constraints.close();
+  }
+  else {
+    SolutionTransfer<dim> solution_transfer(dof_handler);
+    solution_transfer.prepare_for_coarsening_and_refinement(current_solution);
+
+    triangulation.prepare_coarsening_and_refinement();
+    triangulation.refine_global(1);
+
+    dof_handler.distribute_dofs(fe);
+
+    Vector<double> tmp(dof_handler.n_dofs());
+    solution_transfer.interpolate(current_solution, tmp);
+    current_solution = tmp;
+  }
 
   // Once we have the interpolated solution and all information about
   // hanging nodes, we have to make sure that the $u^n$ we now have
@@ -539,10 +554,7 @@ void MinimalSurface<dim>::output_results(const int refinement_cycle) const
 template <int dim>
 void MinimalSurface<dim>::run()
 {
-  //GridGenerator::hyper_ball(triangulation);
   make_grid(params_.initial_resolution);
-  //triangulation.refine_global(2);
-
   setup_system(/*first time=*/true);
   set_boundary_values();
 
@@ -557,7 +569,7 @@ void MinimalSurface<dim>::run()
     unsigned int refinement_cycle = 0;
     do
     {
-        std::cout << "Mesh refinement step " << refinement_cycle << std::endl;
+        std::cout << "Adaptive mesh refinement step " << refinement_cycle << std::endl;
 
         if (refinement_cycle != 0) {
           refine_mesh();
@@ -599,9 +611,31 @@ void MinimalSurface<dim>::run()
     }
     while (last_residual_norm > solver_params_.tolerance);
   } else {
-    // TODO: Add separate loop with fixed number of global refinements for non-adaptive run
-    // triangulation.refine_global(1);
-    throw std::runtime_error("Unsupported option!");
+    std::cout << "Running globally-refined meshes.\n";
+    for(int imesh = 0; imesh < params_.refine_levels; imesh++) {
+      const double init_res = compute_residual(0);
+      std::cout << "  Initial residual: " << init_res << std::endl;
+      double last_residual_norm = std::numeric_limits<double>::max();
+      const int max_its = (imesh == params_.refine_levels - 1) ? solver_params_.max_its : 5;
+
+      for(int inner_it = 0; inner_it < max_its; ++inner_it) {
+        //
+        assemble_system();
+        // Maybe use function L2 norm for determining convergence
+        last_residual_norm = system_rhs.l2_norm();
+
+        solve();
+
+        std::cout << "  Residual norm: " << last_residual_norm << std::endl;
+        if(last_residual_norm / init_res < solver_params_.tolerance) {
+          std::cout << "Converged in " << inner_it + 1 << " iterations." << std::endl;
+          break;
+        }
+      }
+      std::cout << "Relative residual = " << last_residual_norm / init_res << std::endl;
+      output_results(imesh);
+      refine_mesh();
+    }
   }
 
 }

@@ -87,8 +87,6 @@ private:
   using PDESolver<dim>::params_;
   using PDESolver<dim>::solver_params_;
 
-  int num_cycles_;
-
   Triangulation<dim> triangulation;
   FE_Q<dim>          fe;
   DoFHandler<dim>    dof_handler;
