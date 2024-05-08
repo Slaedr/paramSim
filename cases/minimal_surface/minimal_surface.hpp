@@ -1,24 +1,20 @@
-#ifndef PARAMSIM_CASES_POISSON_FOURIER_HPP_
-#define PARAMSIM_CASES_POISSON_FOURIER_HPP_
+#ifndef PARAMSIM_CASES_MINIMAL_SURFACE_HPP_
+#define PARAMSIM_CASES_MINIMAL_SURFACE_HPP_
+
 
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/variables_map.hpp>
-#include <deal.II/grid/grid_generator.h>
 
 #include "../../pdes/pdebase.hpp"
 #include "../case.hpp"
-#include "verify.hpp"
-#include "exps.hpp"
+
 
 namespace paramsim {
 namespace cases {
 
-namespace poisson_fourier {
+namespace minsurf_sin {
 
   using namespace dealii;
-
-  template <int dim>
-  using Cube = paramsim::cases::poisson_verify::Cube<dim>;
 
   template <int dim>
   struct Params {
@@ -38,47 +34,55 @@ namespace poisson_fourier {
     { }
   };
 
+
+  // The last function we implement is the right hand side for the
+  // manufactured solution.
   template <int dim>
-  class DirichletIn : public Function<dim>
+  class RightHandSide : public Function<dim>
   {
   public:
-    DirichletIn()
+    RightHandSide()
     { }
-    
-    DirichletIn(const Params<dim>& params) : params_{params}
+
+    virtual double value(const Point<dim> & = 0,
+                         const unsigned int /*component*/ = 0) const override
+    {
+        return 0.0;
+    }
+  };
+
+
+  template <int dim>
+  class Dirichlet : public Function<dim>
+  {
+  public:
+    Dirichlet()
+    { }
+
+    Dirichlet(const Params<dim>& params) : params_{params}
     { }
 
     virtual double value(const Point<dim> &p,
                          const unsigned int /*component*/ = 0) const override
     {
-      double sum = params_.a0;
-      for (int i = 0; i < Params<dim>::n_modes; ++i)
-      {
-          sum += params_.ac[i] * std::cos(i*2*pi/params_.f_wavelength*p[1])
-            + params_.bc[i] * std::sin(i*2*pi/params_.f_wavelength*p[1]);
-      }
-
-      return sum;
+        double sum = 0;
+        for(int i = 0; i < dim; i++) {
+            sum += p[i];
+        }
+        return std::sin(2*pi*sum);
     }
 
-    //static constexpr double pi = 3.14159265358979323846;
     const Params<dim> params_;
   };
 
-  template <int dim>
-  using RightHandSide = paramsim::cases::poisson_exp::RightHandSide<dim>;
-
-  template <int dim>
-  using DirichletConstant = poisson_exp::DirichletConstant<dim>;
-
-}
+} // namespace minsurf_sin
 
 
 namespace bpo = boost::program_options;
 
 
 template <int dim>
-class PoissonBCFourier final : public Case<dim>
+class MinSurfDiskSinusoidal final : public Case<dim>
 {
 public:
     void initialize(const bpo::variables_map&) override;
@@ -88,4 +92,4 @@ public:
 }
 }
 
-#endif
+#endif // MINIMAL_SURFACE_H_

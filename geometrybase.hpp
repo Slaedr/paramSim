@@ -4,6 +4,7 @@
 #include <deal.II/base/tensor_function.h>
 #include <deal.II/base/types.h>
 #include <deal.II/grid/tria.h>
+#include <deal.II/grid/grid_generator.h>
 
 namespace paramsim {
 
@@ -52,6 +53,40 @@ public:
     }
 protected:
     std::vector<bc_mark_desc> bciddesc;
+};
+
+/**
+ * Unit ball geometry, disk in 2D, centred at the origin.
+ *
+ * The initial mesh has 5 cells in 2D and 7 in 3D.
+ */
+template <int dim>
+class Ball : public DomainGeometry<dim>
+{
+public:
+    Ball(const std::vector<typename DomainGeometry<dim>::bc_mark_desc>& bcmarks)
+        : DomainGeometry<dim>(bcmarks)
+    { }
+
+    /**
+     * \brief Generates the grid.
+     *
+     * The default grid has 5 or 7 cells in 2D or 3D; 3 cells along the diameter.
+     * The grid is refined to get approximately
+     * the number of requested cells along the diameter.
+     *
+     * @param tria  The triangulation object to generate the grid in.
+     * @param ncell_dir  Requested number of cells along the diameter; this is satisfied
+     *   only approximately.
+     */
+    virtual void generate_grid(dealii::Triangulation<dim>& tria,
+            const unsigned int ncell_dir) const override
+    {
+        // Attach spherical manifold on the boundary for AMR
+        dealii::GridGenerator::hyper_ball(tria, dealii::Point<dim>(), 1.0, true);
+        // Refine
+        tria.refine_global(ncell_dir / 3);
+    }
 };
 
 /// Abstract type for a function on a facet

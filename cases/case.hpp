@@ -13,6 +13,8 @@ namespace paramsim {
 
 namespace bpo = boost::program_options;
 
+constexpr double pi = 3.14159265358979323846;
+
 template <int dim>
 struct dirichlet_bc {
     bc_id_t bc_id;
