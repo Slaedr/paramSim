@@ -554,90 +554,104 @@ void MinimalSurface<dim>::output_results(const int refinement_cycle) const
 template <int dim>
 void MinimalSurface<dim>::run()
 {
-  make_grid(params_.initial_resolution);
-  setup_system(/*first time=*/true);
-  set_boundary_values();
+    make_grid(params_.initial_resolution);
+    setup_system(/*first time=*/true);
+    set_boundary_values();
 
-  if(params_.is_adaptive) {
-    // The Newton iteration starts next. We iterate until the (norm of the)
-    // residual computed at the end of the previous iteration is less than
-    // $10^{-3}$, as checked at the end of the `do { ... } while` loop that
-    // starts here. Because we don't have a reasonable value to initialize
-    // the variable, we just use the largest value that can be represented
-    // as a `double`.
-    double last_residual_norm = std::numeric_limits<double>::max();
-    unsigned int refinement_cycle = 0;
-    do
-    {
-        std::cout << "Adaptive mesh refinement step " << refinement_cycle << std::endl;
-
-        if (refinement_cycle != 0) {
-          refine_mesh();
-        }
-
-        // On every mesh we do exactly five Newton steps. We print the initial
-        // residual here and then start the iterations on this mesh.
-        //
-        // In every Newton step the system matrix and the right hand side have
-        // to be computed first, after which we store the norm of the right
-        // hand side as the residual to check against when deciding whether to
-        // stop the iterations. We then solve the linear system (the function
-        // also updates $u^{n+1}=u^n+\alpha^n\;\delta u^n$) and output the
-        // norm of the residual at the end of this Newton step.
-        //
-        // After the end of this loop, we then also output the solution on the
-        // current mesh in graphical form and increment the counter for the
-        // mesh refinement cycle.
-        std::cout << "  Initial residual: " << compute_residual(0) << std::endl;
-
-        for(int inner_it = 0; inner_it < solver_params_.max_its; ++inner_it)
+    if(params_.is_adaptive) {
+        // The Newton iteration starts next. We iterate until the (norm of the)
+        // residual computed at the end of the previous iteration is less than
+        // $10^{-3}$, as checked at the end of the `do { ... } while` loop that
+        // starts here. Because we don't have a reasonable value to initialize
+        // the variable, we just use the largest value that can be represented
+        // as a `double`.
+        double last_residual_norm = std::numeric_limits<double>::max();
+        int refinement_cycle = 0;
+        do
         {
-            assemble_system();
-            // TODO: Use function L2 norm for determining convergence
-            const dealii::types::global_cell_index ncells = triangulation.n_global_active_cells();
-            last_residual_norm = system_rhs.l2_norm() / std::sqrt(static_cast<double>(ncells));
+            std::cout << "Adaptive mesh refinement step " << refinement_cycle << std::endl;
 
-            solve();
+            if (refinement_cycle != 0) {
+              refine_mesh();
+            }
 
-            std::cout << "  Residual norm: " << compute_residual(0) << std::endl;
-            std::cout << "  Residual norm normalized by num cells: "
-                      << last_residual_norm << std::endl;
+            // set up FEValues for residual norm computation
+            const QGauss<dim> quadrature_formula(fe.degree + 1);
+            FEValues<dim> fe_values(fe,
+                                    quadrature_formula,
+                                    update_quadrature_points | update_JxW_values
+                                    | update_values);
+
+            // On every mesh we do exactly five Newton steps. We print the initial
+            // residual here and then start the iterations on this mesh.
+            //
+            // In every Newton step the system matrix and the right hand side have
+            // to be computed first, after which we store the norm of the right
+            // hand side as the residual to check against when deciding whether to
+            // stop the iterations. We then solve the linear system (the function
+            // also updates $u^{n+1}=u^n+\alpha^n\;\delta u^n$) and output the
+            // norm of the residual at the end of this Newton step.
+            //
+            // After the end of this loop, we then also output the solution on the
+            // current mesh in graphical form and increment the counter for the
+            // mesh refinement cycle.
+            std::cout << "  Initial residual: " << compute_residual(0) << std::endl;
+
+            for(int inner_it = 0; inner_it < solver_params_.max_its; ++inner_it)
+            {
+                assemble_system();
+                last_residual_norm = utils::compute_Lp_norm(fe_values, dof_handler,
+                                                            system_rhs, 2);
+                solve();
+                std::cout << "  Residual norm: " << last_residual_norm << std::endl;
+            }
+
+            output_results(refinement_cycle);
+
+            ++refinement_cycle;
+            std::cout << std::endl;
         }
+        while (last_residual_norm > solver_params_.tolerance &&
+               refinement_cycle < params_.refine_levels);
+    } else {
+        std::cout << "Running globally-refined meshes.\n";
+        double init_res = compute_residual(0);
+        for(int imesh = 0; imesh < params_.refine_levels; imesh++) {
+            std::cout << "  Initial residual norm: " << init_res << std::endl;
+            double last_residual_norm = std::numeric_limits<double>::max();
+            const int max_its = (imesh == params_.refine_levels - 1) ?
+              solver_params_.max_its : 10;
+            const double tolerance = (imesh == params_.refine_levels - 1) ?
+              solver_params_.tolerance : 1e-1;
 
-        output_results(refinement_cycle);
+            // set up FEValues for residual norm computation
+            const QGauss<dim> quadrature_formula(fe.degree + 1);
+            FEValues<dim> fe_values(fe,
+                                    quadrature_formula,
+                                    update_quadrature_points | update_JxW_values
+                                    | update_values);
 
-        ++refinement_cycle;
-        std::cout << std::endl;
-    }
-    while (last_residual_norm > solver_params_.tolerance);
-  } else {
-    std::cout << "Running globally-refined meshes.\n";
-    for(int imesh = 0; imesh < params_.refine_levels; imesh++) {
-      const double init_res = compute_residual(0);
-      std::cout << "  Initial residual: " << init_res << std::endl;
-      double last_residual_norm = std::numeric_limits<double>::max();
-      const int max_its = (imesh == params_.refine_levels - 1) ? solver_params_.max_its : 5;
-
-      for(int inner_it = 0; inner_it < max_its; ++inner_it) {
-        //
-        assemble_system();
-        // Maybe use function L2 norm for determining convergence
-        last_residual_norm = system_rhs.l2_norm();
-
-        solve();
-
-        std::cout << "  Residual norm: " << last_residual_norm << std::endl;
-        if(last_residual_norm / init_res < solver_params_.tolerance) {
-          std::cout << "Converged in " << inner_it + 1 << " iterations." << std::endl;
-          break;
+            for(int inner_it = 0; inner_it < max_its; ++inner_it) {
+                // compute RHS, Jacobian matrix
+                assemble_system();
+                // Maybe use function L2 norm for determining convergence
+                last_residual_norm = utils::compute_Lp_norm(fe_values, dof_handler,
+                                                            system_rhs, 2);
+                if(imesh == 0 && inner_it == 0) {
+                    init_res = last_residual_norm;
+                }
+                solve();
+                std::cout << "  Residual norm: " << last_residual_norm << std::endl;
+                if(last_residual_norm / init_res < tolerance) {
+                    std::cout << "Converged in " << inner_it + 1 << " iterations." << std::endl;
+                    break;
+                }
+            }
+            std::cout << "Relative residual = " << last_residual_norm / init_res << std::endl;
+            output_results(imesh);
+            refine_mesh();
         }
-      }
-      std::cout << "Relative residual = " << last_residual_norm / init_res << std::endl;
-      output_results(imesh);
-      refine_mesh();
     }
-  }
-
 }
 
 template class MinimalSurface<2>;
