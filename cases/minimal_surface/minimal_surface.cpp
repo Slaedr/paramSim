@@ -68,7 +68,7 @@ void MinSurfDiskSinusoidal<dim>::initialize(const bpo::variables_map& params)
     std::vector<typename DomainGeometry<dim>::bc_mark_desc> bcmarks;
     bcmarks.push_back(std::make_pair(this->bc_dirichlet_[0].bc_id,
         [](const dealii::Point<dim>&) { return true; }));
-    this->geom_ = std::make_shared<Ball<dim>>(bcmarks);
+    this->geom_ = std::make_shared<geom::Ball<dim>>(bcmarks);
 }
 
 template <int dim>

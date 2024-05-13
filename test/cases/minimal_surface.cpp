@@ -37,7 +37,7 @@ protected:
 TEST_F(MinimalSurfaceDiskSinusoidal, DefaultGeometryisUnitBall)
 {
     auto geom = msds.get_geometry();
-    ASSERT_TRUE(std::dynamic_pointer_cast<const paramsim::Ball<2>>(geom));
+    ASSERT_TRUE(std::dynamic_pointer_cast<const paramsim::geom::Ball<2>>(geom));
     dealii::Triangulation<2> tria;
 
     geom->generate_grid(tria, 4);
@@ -55,7 +55,7 @@ TEST_F(MinimalSurfaceDiskSinusoidal, DefaultGeometryisUnitBall)
 TEST_F(MinimalSurfaceDiskSinusoidal, DefaultBoundaryTags)
 {
     auto geom = msds.get_geometry();
-    ASSERT_TRUE(std::dynamic_pointer_cast<const paramsim::Ball<2>>(geom));
+    ASSERT_TRUE(std::dynamic_pointer_cast<const paramsim::geom::Ball<2>>(geom));
     dealii::Triangulation<2> tria;
     geom->generate_grid(tria, 1);
     geom->set_boundary_ids(tria);

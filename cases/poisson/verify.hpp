@@ -16,24 +16,6 @@ namespace poisson_verify {
   using namespace dealii;
 
   template <int dim>
-  class Cube : public DomainGeometry<dim>
-  {
-  public:
-      Cube(const std::vector<typename DomainGeometry<dim>::bc_mark_desc>& bcmarks)
-          : DomainGeometry<dim>(bcmarks)
-      { }
-  
-      virtual void generate_grid(dealii::Triangulation<dim>& tria,
-              const unsigned int initial_resolution) const override
-      {
-          const double lower_left = -1;
-          const double upper_right = 1;
-          dealii::GridGenerator::subdivided_hyper_cube(tria, initial_resolution,
-                  lower_left, upper_right);
-      }
-  };
-
-  template <int dim>
   struct Params {
     static constexpr int n_centers = 2;
     std::array<Point<dim>, n_centers> centers{{

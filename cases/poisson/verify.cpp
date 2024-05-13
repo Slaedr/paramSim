@@ -73,9 +73,9 @@ void PoissonVerify<dim>::initialize(const bpo::variables_map& params)
     //    }));
     bcmarks.push_back(std::make_pair(this->bc_dirichlet_[0].bc_id, 
         [](const dealii::Point<dim>& ) { return true; }));
-    this->geom_ = std::make_shared<poisson_verify::Cube<dim>>(bcmarks);
+    this->geom_ = std::make_shared<geom::Cube<dim>>(bcmarks);
 }
-    
+
 template <int dim>
 void PoissonVerify<dim>::add_case_cmd_args(bpo::options_description& desc) const
 {

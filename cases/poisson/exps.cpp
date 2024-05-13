@@ -72,9 +72,9 @@ void PoissonBCExp<dim>::initialize(const bpo::variables_map& params)
             return false;
         }
         }));
-    this->geom_ = std::make_shared<poisson_exp::Cube<dim>>(bcmarks);
+    this->geom_ = std::make_shared<geom::Cube<dim>>(bcmarks);
 }
-    
+
 template <int dim>
 void PoissonBCExp<dim>::add_case_cmd_args(bpo::options_description& desc) const
 {

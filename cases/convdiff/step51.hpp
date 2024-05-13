@@ -18,24 +18,6 @@ namespace step51 {
 
   using namespace dealii;
 
-  template <int dim>
-  class Cube : public DomainGeometry<dim>
-  {
-  public:
-      Cube(const std::vector<typename DomainGeometry<dim>::bc_mark_desc>& bcmarks)
-          : DomainGeometry<dim>(bcmarks)
-      { }
-  
-      virtual void generate_grid(dealii::Triangulation<dim>& tria,
-              const unsigned int initial_resolution) const override
-      {
-          const double lower_left = -1;
-          const double upper_right = 1;
-          dealii::GridGenerator::subdivided_hyper_cube(tria, initial_resolution,
-                  lower_left, upper_right);
-      }
-  };
-
   // @sect3{Equation data}
   //
   // The structure of the analytic solution is the same as in step-7. There are

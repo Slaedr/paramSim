@@ -26,10 +26,8 @@ public:
   MinimalSurface(const PDEParams<dim>& params, const SolverParams& solver_params);
 
   void run() override;
-  
-  std::shared_ptr<Vector<double>> create_solution_vector() const;
 
-private:
+protected:
   /** Sets up the system.
    *
    * \param initial_step  Whether this is the first time it is called or not.

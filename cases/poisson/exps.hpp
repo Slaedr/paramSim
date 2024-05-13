@@ -17,9 +17,6 @@ namespace poisson_exp {
   using namespace dealii;
 
   template <int dim>
-  using Cube = paramsim::cases::poisson_verify::Cube<dim>;
-
-  template <int dim>
   struct Params {
     static constexpr int n_centers = 3;
 

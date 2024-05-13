@@ -66,9 +66,9 @@ void Step51<dim>::initialize(const bpo::variables_map& params)
             else
                 return false;
         }));
-    this->geom_ = std::make_shared<cases::step51::Cube<dim>>(bcmarks);
+    this->geom_ = std::make_shared<geom::Cube<dim>>(bcmarks);
 }
-    
+
 template <int dim>
 void Step51<dim>::add_case_cmd_args(bpo::options_description& desc) const
 {

@@ -62,7 +62,7 @@ void PoissonBCPolynomial<dim>::initialize(const bpo::variables_map& params)
             return false;
         }
         }));
-    this->geom_ = std::make_shared<poisson_poly::Cube<dim>>(bcmarks);
+    this->geom_ = std::make_shared<geom::Cube<dim>>(bcmarks);
 }
     
 template <int dim>

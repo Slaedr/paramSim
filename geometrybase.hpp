@@ -55,6 +55,8 @@ protected:
     std::vector<bc_mark_desc> bciddesc;
 };
 
+namespace geom {
+
 /**
  * Unit ball geometry, disk in 2D, centred at the origin.
  *
@@ -88,6 +90,29 @@ public:
         tria.refine_global(ncell_dir / 3);
     }
 };
+
+template <int dim>
+class Cube : public DomainGeometry<dim>
+{
+public:
+    Cube(const std::vector<typename DomainGeometry<dim>::bc_mark_desc>& bcmarks)
+        : DomainGeometry<dim>(bcmarks)
+    { }
+
+    /**
+     * \brief Generates the grid.
+     *
+     * @param tria  The triangulation object to generate the grid in.
+     * @param ncell_dir  Requested number of cells in each direction
+     */
+    virtual void generate_grid(dealii::Triangulation<dim>& tria,
+            const unsigned int ncell_dir) const override
+    {
+        dealii::GridGenerator::subdivided_hyper_cube(tria, ncell_dir, -1.0, 1.0, false);
+    }
+};
+
+} // namespace geom
 
 /// Abstract type for a function on a facet
 template <int dim>

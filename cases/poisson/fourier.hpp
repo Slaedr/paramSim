@@ -17,8 +17,8 @@ namespace poisson_fourier {
 
   using namespace dealii;
 
-  template <int dim>
-  using Cube = paramsim::cases::poisson_verify::Cube<dim>;
+  // template <int dim>
+  // using Cube = paramsim::cases::poisson_verify::Cube<dim>;
 
   template <int dim>
   struct Params {
