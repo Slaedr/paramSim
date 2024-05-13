@@ -24,6 +24,8 @@ std::unique_ptr<Case<dim>> create_case(const std::string case_str)
         return std::make_unique<cases::PoissonBCPolynomial<dim>>();
     } else if(case_str == "minimal_surface_disk_sinusoidal") {
         return std::make_unique<cases::MinSurfDiskSinusoidal<dim>>();
+    } else if(case_str == "minimal_surface_cube_sinusoidal") {
+        return std::make_unique<cases::MinSurfCubeSinusoidal<dim>>();
     } else {
         throw std::runtime_error("Non-existent case!");
     }
