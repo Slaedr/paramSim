@@ -373,7 +373,6 @@ void MinimalSurface<dim>::set_boundary_values()
     std::map<types::global_dof_index, double> boundary_values;
     VectorTools::interpolate_boundary_values(dof_handler,
                                              bc.bc_id, *bc.bc_fn,
-                                             //BoundaryValues<dim>(),
                                              boundary_values);
     for (auto &boundary_value : boundary_values) {
       current_solution(boundary_value.first) = boundary_value.second;

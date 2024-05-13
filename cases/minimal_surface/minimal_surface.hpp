@@ -89,6 +89,14 @@ public:
     void add_case_cmd_args(bpo::options_description&) const override;
 };
 
+template <int dim>
+class MinSurfCubeSinusoidal final : public Case<dim>
+{
+public:
+    void initialize(const bpo::variables_map&) override;
+    void add_case_cmd_args(bpo::options_description&) const override;
+};
+
 }
 }
 

@@ -18,6 +18,10 @@ add_subdirectory(pdes)
 add_subdirectory(utils)
 add_subdirectory(cases)
 
+enable_testing()
+
+add_subdirectory(test)
+
 add_executable(run_case run_case.cpp)
 deal_ii_setup_target(run_case)
 target_link_libraries(run_case paramsim_solvers paramsim_cases paramsim_utils utils)

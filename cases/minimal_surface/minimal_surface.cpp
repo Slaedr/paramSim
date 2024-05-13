@@ -6,6 +6,28 @@ namespace cases {
 using namespace dealii;
 
 template <int dim>
+void add_sin_cmd_args(bpo::options_description& desc)
+{
+    desc.add_options()
+        ("wavelength", bpo::value<double>(), "The fundamental wavelength for zeroth mode");
+    desc.add_options() ("a0", bpo::value<double>(), "Constant term");
+    constexpr int n_modes = minsurf_sin::Params<dim>::n_modes;
+    for(int ic = 1; ic < n_modes+1; ic++) {
+        const std::string coflag =
+            std::string("a") + std::to_string(ic);
+        const std::string descstr = "Cosine coefficient of " + std::to_string(ic) + "th mode";
+        desc.add_options()
+            (coflag.c_str(), bpo::value<double>(), descstr.c_str());
+        //eg. centers[0][1] = params["center0_y"].as<double>();
+        const std::string sflag = std::string("b") + std::to_string(ic);
+        // eg. "center1_coeff"
+        const std::string sdescstr = "Sine coefficient of " + std::to_string(ic) + "th mode";
+        desc.add_options()
+            (sflag.c_str(), bpo::value<double>(), sdescstr.c_str());
+    }
+}
+
+template <int dim>
 void MinSurfDiskSinusoidal<dim>::initialize(const bpo::variables_map& params)
 {
     std::shared_ptr<minsurf_sin::Dirichlet<dim>> dirichlet1;
@@ -52,23 +74,7 @@ void MinSurfDiskSinusoidal<dim>::initialize(const bpo::variables_map& params)
 template <int dim>
 void MinSurfDiskSinusoidal<dim>::add_case_cmd_args(bpo::options_description& desc) const
 {
-    desc.add_options()
-        ("wavelength", bpo::value<double>(), "The fundamental wavelength for zeroth mode");
-    desc.add_options() ("a0", bpo::value<double>(), "Constant term");
-    constexpr int n_modes = minsurf_sin::Params<dim>::n_modes;
-    for(int ic = 1; ic < n_modes+1; ic++) {
-        const std::string coflag =
-            std::string("a") + std::to_string(ic);
-        const std::string descstr = "Cosine coefficient of " + std::to_string(ic) + "th mode";
-        desc.add_options()
-            (coflag.c_str(), bpo::value<double>(), descstr.c_str());
-        //eg. centers[0][1] = params["center0_y"].as<double>();
-        const std::string sflag = std::string("b") + std::to_string(ic);
-        // eg. "center1_coeff"
-        const std::string sdescstr = "Sine coefficient of " + std::to_string(ic) + "th mode";
-        desc.add_options()
-            (sflag.c_str(), bpo::value<double>(), sdescstr.c_str());
-    }
+    add_sin_cmd_args<dim>(desc);
 }
 
 template class MinSurfDiskSinusoidal<2>;

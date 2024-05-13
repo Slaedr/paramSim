@@ -1,0 +1,5 @@
+add_executable(minimal_surface_test minimal_surface.cpp)
+deal_ii_setup_target(minimal_surface_test)
+target_link_libraries(minimal_surface_test paramsim_cases paramsim_utils utils GTest::gtest_main)
+
+gtest_discover_tests(minimal_surface_test)
