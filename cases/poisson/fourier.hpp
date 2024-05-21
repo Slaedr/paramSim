@@ -69,7 +69,7 @@ namespace poisson_fourier {
   using RightHandSide = paramsim::cases::poisson_exp::RightHandSide<dim>;
 
   template <int dim>
-  using DirichletConstant = poisson_exp::DirichletConstant<dim>;
+  using DirichletConstant = cases::DirichletConstant<dim>;
 
 }
 

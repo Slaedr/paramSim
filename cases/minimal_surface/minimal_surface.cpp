@@ -111,16 +111,36 @@ void MinSurfCubeSinusoidal<dim>::initialize(const bpo::variables_map& params)
         }
     } else {
         dirichlet1 = std::make_shared<minsurf_sin::Dirichlet<dim>>();
-        std::cout << "Case 'disk_sinusoidal' for Poisson: default parameters.\n";
+        std::cout << "Case 'cube_sinusoidal' for Poisson: default parameters.\n";
     }
+
+    auto dirichlet2 = std::make_shared<cases::DirichletConstant<dim>>(0.0);
 
     this->rhs_ = std::make_shared<minsurf_sin::RightHandSide<dim>>();
 
     this->bc_dirichlet_.push_back(dirichlet_bc<dim>{1, dirichlet1});
+    this->bc_dirichlet_.push_back(dirichlet_bc<dim>{2, dirichlet2});
 
     std::vector<typename DomainGeometry<dim>::bc_mark_desc> bcmarks;
+    // bcmarks.push_back(std::make_pair(this->bc_dirichlet_[0].bc_id,
+    //     [](const dealii::Point<dim>&) { return true; }));
+    constexpr double tol = 1000*std::numeric_limits<double>::epsilon();
+    bcmarks.push_back(std::make_pair(this->bc_dirichlet_[1].bc_id,
+        [](const dealii::Point<dim>& p) {
+        if(std::abs(p[0] - (-1.0)) > tol) {
+            return true;
+        } else {
+            return false;
+        }
+        }));
     bcmarks.push_back(std::make_pair(this->bc_dirichlet_[0].bc_id,
-        [](const dealii::Point<dim>&) { return true; }));
+        [](const dealii::Point<dim>& p) {
+        if(std::abs(p[0] - (-1.0)) <= tol) {
+            return true;
+        } else {
+            return false;
+        }
+        }));
     this->geom_ = std::make_shared<geom::Cube<dim>>(bcmarks);
 }
 

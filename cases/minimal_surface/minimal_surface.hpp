@@ -69,11 +69,14 @@ namespace minsurf_sin {
         for(int i = 0; i < dim; i++) {
             sum += p[i];
         }
-        return std::sin(2*pi*sum);
+        return std::sin(2*pi/params_.f_wavelength*sum);
     }
 
     const Params<dim> params_;
   };
+
+  template <int dim>
+  using DirichletConstant = cases::DirichletConstant<dim>;
 
 } // namespace minsurf_sin
 

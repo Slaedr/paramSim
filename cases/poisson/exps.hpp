@@ -110,24 +110,7 @@ namespace poisson_exp {
   };
 
   template <int dim>
-  class DirichletConstant : public Function<dim>
-  {
-  public:
-    DirichletConstant()
-    { }
-    
-    DirichletConstant(const double boundary_value) : value_{boundary_value}
-    { }
-
-    virtual double value(const Point<dim>& = 0,
-                         const unsigned int /*component*/ = 0) const override
-    {
-        return value_;
-    }
-
-    const double value_{0.0};
-  };
-
+  using DirichletConstant = cases::DirichletConstant<dim>;
 }
 
 

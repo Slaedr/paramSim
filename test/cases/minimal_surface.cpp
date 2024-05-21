@@ -67,3 +67,61 @@ TEST_F(MinimalSurfaceDiskSinusoidal, DefaultBoundaryTags)
 
     EXPECT_EQ(n_bc_dofs, 4);
 }
+
+
+class MinimalSurfaceCubeSinusoidal : public testing::Test
+{
+protected:
+    MinimalSurfaceCubeSinusoidal() : fe(1)
+    {
+        bpo::options_description common_desc
+            ("Solves one problem given one set of parameters.");
+        const bpo::variables_map common_cmdmap = get_cmd_args(0, NULL, common_desc);
+        msds.initialize(common_cmdmap);
+    }
+
+    static constexpr double eps = std::numeric_limits<double>::epsilon();
+    dealii::FE_Q<dim> fe;
+    cases::MinSurfCubeSinusoidal<dim> msds;
+};
+
+
+TEST_F(MinimalSurfaceCubeSinusoidal, DefaultGeometryisUnitCube)
+{
+    auto geom = msds.get_geometry();
+
+    ASSERT_TRUE(std::dynamic_pointer_cast<const paramsim::geom::Cube<2>>(geom));
+}
+
+TEST_F(MinimalSurfaceCubeSinusoidal, BoundaryTags)
+{
+    auto geom = msds.get_geometry();
+    dealii::Triangulation<2> tria;
+    geom->generate_grid(tria, 3);
+    geom->set_boundary_ids(tria);
+    dealii::DoFHandler<dim> dof_handler(tria);
+    dof_handler.distribute_dofs(fe);
+    constexpr double coord_tol = 1e-10;
+
+    for(const auto &cell : dof_handler.active_cell_iterators()) {
+        for(const auto &face : cell->face_iterators()) {
+            if(!face->at_boundary()) {
+                continue;
+            }
+            const auto n_verts = face->n_vertices();
+            bool on_left_boundary = true;
+            for(auto i = 0u; i < n_verts; i++) {
+                const auto point = face->vertex(i);
+                if(std::abs(point[0] + 1.0) > coord_tol) {
+                    on_left_boundary = false;
+                }
+            }
+
+            if(on_left_boundary) {
+                EXPECT_TRUE(face->boundary_id() == 1);
+            } else {
+                EXPECT_TRUE(face->boundary_id() == 2);
+            }
+        }
+    }
+}

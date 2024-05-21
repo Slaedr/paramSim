@@ -105,6 +105,31 @@ protected:
     std::shared_ptr<dealii::Function<dim>> exact_soln_and_grad_;
 };
 
+namespace cases {
+
+
+template <int dim>
+class DirichletConstant : public dealii::Function<dim>
+{
+public:
+  DirichletConstant()
+  { }
+
+  DirichletConstant(const double boundary_value) : value_{boundary_value}
+  { }
+
+  virtual double value(const dealii::Point<dim>& = 0,
+                       const unsigned int /*component*/ = 0) const override
+  {
+      return value_;
+  }
+
+  const double value_{0.0};
+};
+
+
+}
+
 
 }
 
