@@ -36,4 +36,10 @@ endif()
 
 include(GoogleTest)
 
+add_executable(geometry_test geometry.cpp)
+deal_ii_setup_target(geometry_test)
+target_link_libraries(geometry_test GTest::gtest_main)
+
+gtest_discover_tests(geometry_test)
+
 add_subdirectory(cases)

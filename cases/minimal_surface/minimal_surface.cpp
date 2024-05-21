@@ -122,8 +122,6 @@ void MinSurfCubeSinusoidal<dim>::initialize(const bpo::variables_map& params)
     this->bc_dirichlet_.push_back(dirichlet_bc<dim>{2, dirichlet2});
 
     std::vector<typename DomainGeometry<dim>::bc_mark_desc> bcmarks;
-    // bcmarks.push_back(std::make_pair(this->bc_dirichlet_[0].bc_id,
-    //     [](const dealii::Point<dim>&) { return true; }));
     constexpr double tol = 1000*std::numeric_limits<double>::epsilon();
     bcmarks.push_back(std::make_pair(this->bc_dirichlet_[1].bc_id,
         [](const dealii::Point<dim>& p) {

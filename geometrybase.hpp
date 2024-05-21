@@ -34,6 +34,11 @@ public:
         bciddesc = bc_marks;
     }
 
+    /**
+     * \brief Set a boundary maker for every face in the mesh.
+     *
+     * Sets the boundary markers according to \ref bciddesc.
+     */
     void set_boundary_ids(dealii::Triangulation<dim>& tria) const
     {
         if(bciddesc.empty()) {
@@ -52,6 +57,7 @@ public:
         }
     }
 protected:
+    /// A list of pairs of a bounary marker and its boundary face location identifier function.
     std::vector<bc_mark_desc> bciddesc;
 };
 
