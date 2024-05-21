@@ -616,7 +616,7 @@ void MinimalSurface<dim>::run()
         std::cout << "Running globally-refined meshes.\n";
         double init_res = compute_residual(0);
         for(int imesh = 0; imesh < params_.refine_levels; imesh++) {
-            std::cout << "  Initial residual norm: " << init_res << std::endl;
+            std::cout << "  Grid " << imesh << ": Initial residual norm: " << init_res << std::endl;
             double last_residual_norm = std::numeric_limits<double>::max();
             const int max_its = (imesh == params_.refine_levels - 1) ?
               solver_params_.max_its : 10;
@@ -636,11 +636,15 @@ void MinimalSurface<dim>::run()
                 // Maybe use function L2 norm for determining convergence
                 last_residual_norm = utils::compute_Lp_norm(fe_values, dof_handler,
                                                             system_rhs, 2);
-                if(imesh == 0 && inner_it == 0) {
+                // Set reference norm
+                // Sometimes, if the boundary function is aliased on a very coarse grid,
+                //  the initial residual can be zero. If so, update it on a finer grid.
+                if(imesh == 0 && inner_it == 0 || (inner_it == 0 && init_res < 1e-14)) {
                     init_res = last_residual_norm;
                 }
                 solve();
-                std::cout << "  Residual norm: " << last_residual_norm << std::endl;
+                std::cout << "    Iter. " << inner_it
+                          << " Abs. residual L2 norm: " << last_residual_norm << std::endl;
                 if(last_residual_norm / init_res < tolerance) {
                     std::cout << "Converged in " << inner_it + 1 << " iterations." << std::endl;
                     break;

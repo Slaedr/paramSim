@@ -79,41 +79,10 @@ void MinSurfDiskSinusoidal<dim>::add_case_cmd_args(bpo::options_description& des
 
 template class MinSurfDiskSinusoidal<2>;
 
-
 template <int dim>
-void MinSurfCubeSinusoidal<dim>::initialize(const bpo::variables_map& params)
+void MinSurfCubeLeft<dim>::set_geometry_and_boundary(
+    std::shared_ptr<dealii::Function<dim>> dirichlet1)
 {
-    std::shared_ptr<minsurf_sin::Dirichlet<dim>> dirichlet1;
-    if(params.count("wavelength")) {
-        constexpr int n_modes = minsurf_sin::Params<dim>::n_modes;
-        std::array<double, n_modes> as;
-        std::array<double, n_modes> bs;
-        for(int ic = 1; ic < n_modes+1; ic++) {
-            const std::string coflag =
-                std::string("a") + std::to_string(ic);
-            as[ic-1] = params[coflag.c_str()].as<double>();
-            //eg. --a1=0.6 --b1=0.4
-            const std::string sflag = std::string("b") + std::to_string(ic);
-            bs[ic-1] = params[sflag.c_str()].as<double>();
-        }
-        const double wavelength = params["wavelength"].as<double>();
-        const double a0 = params["a0"].as<double>();
-        minsurf_sin::Params<dim> params(as, bs, a0, wavelength);
-        dirichlet1 = std::make_shared<minsurf_sin::Dirichlet<dim>>(params);
-
-        // Write out params to confirm
-        std::cout << "Case 'cube_sinusoidal' for Minimum Surface: read parameters:\n";
-        std::cout << "  Fundamental wavelength = " << params.f_wavelength << std::endl;
-        std::cout << "  Constant term = " << params.a0 << std::endl;
-        for(int ic = 0; ic < n_modes; ic++) {
-            std::cout << "  Modes " << ic << ": (";
-            std::cout << as[ic] << ", " << bs[ic] << ")" << std::endl;
-        }
-    } else {
-        dirichlet1 = std::make_shared<minsurf_sin::Dirichlet<dim>>();
-        std::cout << "Case 'cube_sinusoidal' for Poisson: default parameters.\n";
-    }
-
     auto dirichlet2 = std::make_shared<cases::DirichletConstant<dim>>(0.0);
 
     this->rhs_ = std::make_shared<minsurf_sin::RightHandSide<dim>>();
@@ -140,6 +109,43 @@ void MinSurfCubeSinusoidal<dim>::initialize(const bpo::variables_map& params)
         }
         }));
     this->geom_ = std::make_shared<geom::Cube<dim>>(bcmarks);
+}
+
+template <int dim>
+void MinSurfCubeSinusoidal<dim>::initialize(const bpo::variables_map& params)
+{
+    std::shared_ptr<minsurf_sin::Dirichlet<dim>> dirichlet1;
+    if(params.count("wavelength")) {
+        constexpr int n_modes = minsurf_sin::Params<dim>::n_modes;
+        std::array<double, n_modes> as; // TODO: Remove
+        std::array<double, n_modes> bs;
+        for(int ic = 1; ic < n_modes+1; ic++) {
+            // const std::string coflag =
+            //     std::string("a") + std::to_string(ic);
+            // as[ic-1] = params[coflag.c_str()].as<double>();
+            //eg. --a1=0.6 --b1=0.4
+            const std::string sflag = std::string("b") + std::to_string(ic);
+            bs[ic-1] = params[sflag.c_str()].as<double>();
+        }
+        const double wavelength = params["wavelength"].as<double>();
+        const double a0 = params["a0"].as<double>();
+        minsurf_sin::Params<dim> params(as, bs, a0, wavelength);
+        dirichlet1 = std::make_shared<minsurf_sin::Dirichlet<dim>>(params);
+
+        // Write out params to confirm
+        std::cout << "Case 'cube_sinusoidal' for Minimum Surface: read parameters:\n";
+        std::cout << "  Fundamental wavelength = " << params.f_wavelength << std::endl;
+        std::cout << "  Constant term = " << params.a0 << std::endl;
+        for(int ic = 0; ic < n_modes; ic++) {
+            std::cout << "  Modes " << ic << ": (";
+            std::cout << bs[ic] << ")" << std::endl;
+        }
+    } else {
+        dirichlet1 = std::make_shared<minsurf_sin::Dirichlet<dim>>();
+        std::cout << "Case 'cube_sinusoidal' for Minimum Surface: default parameters.\n";
+    }
+
+    this->set_geometry_and_boundary(dirichlet1);
 }
 
 template <int dim>

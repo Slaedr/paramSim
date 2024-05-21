@@ -20,7 +20,7 @@ namespace minsurf_sin {
   struct Params {
     static constexpr int n_modes = 2;
 
-    std::array<double, n_modes> ac{{1.0, 1.0}};
+    std::array<double, n_modes> ac{{1.0, 1.0}};  //< TODO: Remove
     std::array<double, n_modes> bc{{1.0, 1.0}};
     double a0{1.0};
     double f_wavelength{1.0};
@@ -69,7 +69,14 @@ namespace minsurf_sin {
         for(int i = 0; i < dim; i++) {
             sum += p[i];
         }
-        return std::sin(2*pi/params_.f_wavelength*sum);
+        //return std::sin(2*pi/params_.f_wavelength*sum);
+        double value = params_.a0;
+        for(int imode = 0; imode < Params<dim>::n_modes; imode++) {
+            // value += params_.ac[imode] * std::cos(imode * 2*pi/params_.f_wavelength*sum)
+            //   + params_.bc[imode] * std::sin(imode * 2*pi/params_.f_wavelength*sum);
+            value += params_.bc[imode] * std::sin(imode * 2*pi/params_.f_wavelength*sum);
+        }
+        return value;
     }
 
     const Params<dim> params_;
@@ -93,7 +100,18 @@ public:
 };
 
 template <int dim>
-class MinSurfCubeSinusoidal final : public Case<dim>
+class MinSurfCubeLeft : public Case<dim>
+{
+public:
+    virtual void initialize(const bpo::variables_map&) override = 0;
+    virtual void add_case_cmd_args(bpo::options_description&) const override = 0;
+
+protected:
+    void set_geometry_and_boundary(std::shared_ptr<dealii::Function<dim>> dirichlet1);
+};
+
+template <int dim>
+class MinSurfCubeSinusoidal final : public MinSurfCubeLeft<dim>
 {
 public:
     void initialize(const bpo::variables_map&) override;
