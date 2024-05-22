@@ -156,5 +156,52 @@ void MinSurfCubeSinusoidal<dim>::add_case_cmd_args(bpo::options_description& des
 
 template class MinSurfCubeSinusoidal<2>;
 
+template <int dim>
+void MinSurfCubePolynomial<dim>::initialize(const bpo::variables_map& params)
+{
+    std::shared_ptr<minsurf_poly::Dirichlet<dim>> dirichlet1;
+    if(params.count("center_y")) {
+        constexpr int n_coeffs = minsurf_poly::Params<dim>::n_indep_coeffs;
+        std::array<double, n_coeffs> as;
+        for(int ic = 2; ic < n_coeffs+2; ic++) {
+            const std::string sflag = std::string("a") + std::to_string(ic);
+            as[ic-2] = params[sflag.c_str()].as<double>();
+        }
+        const double center_y = params["center_y"].as<double>();
+        const minsurf_poly::Params<dim> params(as, center_y);
+        dirichlet1 = std::make_shared<minsurf_poly::Dirichlet<dim>>(params);
+
+        // Write out params to confirm
+        std::cout << "Case 'cube_polynomial' for Minimum Surface: read parameters:\n";
+        std::cout << "  Expansion center = " << params.center << std::endl;
+        for(int ic = 0; ic < n_coeffs; ic++) {
+            std::cout << "  Independent coeffs " << ic+2 << ": (";
+            std::cout << as[ic] << ")" << std::endl;
+        }
+    } else {
+        dirichlet1 = std::make_shared<minsurf_poly::Dirichlet<dim>>();
+        std::cout << "Case 'cube_polynomial' for Minimum Surface: default parameters.\n";
+    }
+
+    this->set_geometry_and_boundary(dirichlet1);
+}
+
+template <int dim>
+void MinSurfCubePolynomial<dim>::add_case_cmd_args(bpo::options_description& desc) const
+{
+    desc.add_options()
+        ("center_y", bpo::value<double>(), "The polynomial terms' center or offset");
+    constexpr int n_coeffs = minsurf_poly::Params<dim>::n_indep_coeffs;
+    for(int ic = 0; ic < n_coeffs; ic++) {
+        const std::string coflag =
+            std::string("a") + std::to_string(ic+2);
+        const std::string descstr = "Coefficient of " + std::to_string(ic+2) + "th term";
+        desc.add_options()
+            (coflag.c_str(), bpo::value<double>(), descstr.c_str());
+    }
+}
+
+template class MinSurfCubePolynomial<2>;
+
 }
 }

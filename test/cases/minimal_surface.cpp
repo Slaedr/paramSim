@@ -9,6 +9,7 @@
 #include <deal.II/fe/fe_q.h>
 
 #include "../../cases/minimal_surface/minimal_surface.hpp"
+#include "../../cases/minimal_surface/gaussians.hpp"
 
 #include "../../utils/cmdparser.hpp"
 
@@ -34,7 +35,7 @@ protected:
 };
 
 
-TEST_F(MinimalSurfaceDiskSinusoidal, DefaultGeometryisUnitBall)
+TEST_F(MinimalSurfaceDiskSinusoidal, DefaultGeometryIsUnitBall)
 {
     auto geom = msds.get_geometry();
     ASSERT_TRUE(std::dynamic_pointer_cast<const paramsim::geom::Ball<2>>(geom));
@@ -86,7 +87,7 @@ protected:
 };
 
 
-TEST_F(MinimalSurfaceCubeSinusoidal, DefaultGeometryisUnitCube)
+TEST_F(MinimalSurfaceCubeSinusoidal, DefaultGeometryIsUnitCube)
 {
     auto geom = msds.get_geometry();
 
@@ -124,4 +125,66 @@ TEST_F(MinimalSurfaceCubeSinusoidal, BoundaryTags)
             }
         }
     }
+}
+
+
+class MinimalSurfaceCubePolynomial : public testing::Test
+{
+protected:
+    MinimalSurfaceCubePolynomial()
+        : params_({{2.0, 3.2, -1.3, 0.4}}, -1.5), dbc_(params_)
+    {
+    }
+
+    cases::minsurf_poly::Params<2> params_;
+    cases::minsurf_poly::Dirichlet<2> dbc_;
+};
+
+TEST_F(MinimalSurfaceCubePolynomial, DirichletConditionIsZeroAtBoundaries)
+{
+    dealii::Point<2> pbottom{0.2, -1.0};
+    dealii::Point<2> ptop{0.1, 1.0};
+    dealii::Point<2> pin{-0.2, 0.5};
+
+    EXPECT_NEAR(dbc_.value(pbottom), 0.0, 1e-14);
+    EXPECT_NEAR(dbc_.value(ptop), 0.0, 1e-15);
+}
+
+TEST_F(MinimalSurfaceCubePolynomial, DirichletConditionIsZeroAtBoundaries2)
+{
+    cases::minsurf_poly::Params<2> params({{-1.1, -2.213, 1.9, -0.003}}, -1.0/3);
+    cases::minsurf_poly::Dirichlet<2> dbc(params);
+    dealii::Point<2> pbottom{0.2, -1.0};
+    dealii::Point<2> ptop{0.1, 1.0};
+
+    EXPECT_NEAR(dbc.value(pbottom), 0.0, 1e-15);
+    EXPECT_NEAR(dbc.value(ptop), 0.0, 1e-15);
+}
+
+TEST_F(MinimalSurfaceCubePolynomial, DirichletConditionHasKnownValue)
+{
+    dealii::Point<2> pin{-0.2, 0.5};
+
+    EXPECT_DOUBLE_EQ(dbc_.value(pin), -12.693750000000001);
+}
+
+TEST(MinimalSurfaceCubeGaussians, DefaultDirichletConditionIsZeroAtBoundaries)
+{
+    cases::minsurf_gauss::Dirichlet<2> dbc;
+    dealii::Point<2> pbottom{0.2, -1.0};
+    dealii::Point<2> ptop{0.1, 1.0};
+
+    EXPECT_NEAR(dbc.value(pbottom), 0.0, 1e-15);
+    EXPECT_NEAR(dbc.value(ptop), 0.0, 1e-15);
+}
+
+TEST(MinimalSurfaceCubeGaussians, DirichletConditionIsZeroAtBoundaries)
+{
+    cases::minsurf_gauss::Params<2> params({{-0.7, -0.1, 0.9}}, {{0.3,-0.8,0.6}}, 1.0/3);
+    cases::minsurf_gauss::Dirichlet<2> dbc(params);
+    dealii::Point<2> pbottom{0.2, -1.0};
+    dealii::Point<2> ptop{0.1, 1.0};
+
+    EXPECT_NEAR(dbc.value(pbottom), 0.0, 1e-14);
+    EXPECT_NEAR(dbc.value(ptop), 0.0, 1e-15);
 }

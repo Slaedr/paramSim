@@ -6,6 +6,7 @@
 #include "poisson/polynomial.hpp"
 #include "convdiff/step51.hpp"
 #include "minimal_surface/minimal_surface.hpp"
+#include "minimal_surface/gaussians.hpp"
 
 namespace paramsim {
 
@@ -26,6 +27,10 @@ std::unique_ptr<Case<dim>> create_case(const std::string case_str)
         return std::make_unique<cases::MinSurfDiskSinusoidal<dim>>();
     } else if(case_str == "minimal_surface_cube_sinusoidal") {
         return std::make_unique<cases::MinSurfCubeSinusoidal<dim>>();
+    } else if(case_str == "minimal_surface_cube_polynomial") {
+        return std::make_unique<cases::MinSurfCubePolynomial<dim>>();
+    } else if(case_str == "minimal_surface_cube_gaussians") {
+        return std::make_unique<cases::MinSurfCubeGaussians<dim>>();
     } else {
         throw std::runtime_error("Non-existent case!");
     }
