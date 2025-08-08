@@ -35,8 +35,7 @@ namespace minsurf_sin {
   };
 
 
-  // The last function we implement is the right hand side for the
-  // manufactured solution.
+  /// Right hand side for the manufactured solution.
   template <int dim>
   class RightHandSide : public Function<dim>
   {

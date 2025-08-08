@@ -314,7 +314,9 @@ void MinimalSurface<dim>::refine_mesh()
     // values. Thus, we have the new values written into a temporary vector,
     // and only afterwards write them into the solution vector object:
     Vector<double> tmp(dof_handler.n_dofs());
-    solution_transfer.interpolate(current_solution, tmp);
+    // interpolate solution from current_solution into tmp.
+    solution_transfer.interpolate(tmp);
+    // replace current_solution with its interpolation onto the new grid.
     current_solution = tmp;
 
     // On the new mesh, there are different hanging nodes, for which we have to
@@ -342,7 +344,7 @@ void MinimalSurface<dim>::refine_mesh()
     dof_handler.distribute_dofs(fe);
 
     Vector<double> tmp(dof_handler.n_dofs());
-    solution_transfer.interpolate(current_solution, tmp);
+    solution_transfer.interpolate(tmp);
     current_solution = tmp;
   }
 

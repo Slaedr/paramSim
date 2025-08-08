@@ -1,6 +1,8 @@
 #ifndef PARAMSIM_POISSON_CG_HPP_
 #define PARAMSIM_POISSON_CG_HPP_
 
+#include <memory>
+
 #include <deal.II/grid/tria.h>
 #include <deal.II/dofs/dof_handler.h>
 #include <deal.II/fe/fe_q.h>
