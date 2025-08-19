@@ -262,7 +262,7 @@ namespace step51 {
 
 
 template <int dim>
-class Step51 final : public convdiffcase_verification<dim> {
+class Step51 final : public ConvDiffCase<dim> {
 public:
     /** Sets up case parameters from command line parameters.
      *

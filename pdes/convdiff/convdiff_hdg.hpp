@@ -78,13 +78,14 @@ namespace pde {
   class ConvdiffHDG : public PDESolver<dim>
   {
   public:
-    ConvdiffHDG(const PDEParams<dim>& params, const SolverParams& solver_params);
+    ConvdiffHDG(std::shared_ptr<const Case<dim>> test_case, const PDEParams& params,
+                const SolverParams& solver_params);
     void run() override;
 
   private:
-    void setup_system();
-    void assemble_system(const bool reconstruct_trace = false);
-    void solve();
+    void setup_system(bool initial_step) override;
+    void assemble_system(AssemblyOptions opts) override;
+    void solve() override;
     void postprocess();
     void refine_grid(int cycle, unsigned int initial_resolution);
     void output_results(const int cycle);
@@ -112,7 +113,16 @@ namespace pde {
       PostProcessScratchData &                              scratch,
       unsigned int &                                        empty_data);
 
-    Triangulation<dim> triangulation;
+    using PDESolver<dim>::case_;
+    using PDESolver<dim>::tria_;
+    using PDESolver<dim>::dof_handler_;
+    using PDESolver<dim>::solution_;
+    using PDESolver<dim>::rhs_;
+
+    // The new finite element type and corresponding <code>DoFHandler</code> are
+    // used for the global skeleton solution that couples the element-level
+    // local solutions.
+    FE_FaceQ<dim>   fe_;
 
     // The 'local' solutions are interior to each element.  These
     // represent the primal solution field $u$ as well as the auxiliary
@@ -120,14 +130,6 @@ namespace pde {
     FESystem<dim>   fe_local;
     DoFHandler<dim> dof_handler_local;
     Vector<double>  solution_local;
-
-    // The new finite element type and corresponding <code>DoFHandler</code> are
-    // used for the global skeleton solution that couples the element-level
-    // local solutions.
-    FE_FaceQ<dim>   fe;
-    DoFHandler<dim> dof_handler;
-    Vector<double>  solution;
-    Vector<double>  system_rhs;
 
     // As stated in the introduction, HDG solutions can be post-processed to
     // attain superconvergence rates of $\mathcal{O}(h^{p+2})$.  The
@@ -162,8 +164,8 @@ namespace pde {
     // have to additionally pass the size of local blocks.
     //ChunkSparsityPattern      sparsity_pattern;
     //ChunkSparseMatrix<double> system_matrix;
-    SparsityPattern      sparsity_pattern;
-    SparseMatrix<double> system_matrix;
+    using PDESolver<dim>::sparsity_pattern_;
+    using PDESolver<dim>::system_matrix_;
 
     ConvergenceTable     convergence_table;
 

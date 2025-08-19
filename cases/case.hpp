@@ -6,8 +6,10 @@
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/variables_map.hpp>
 #include <deal.II/base/function.h>
+#include <deal.II/grid/tria.h>
 
 #include "../geometrybase.hpp"
+#include "../utils/cmdparser.hpp"
 
 namespace paramsim {
 
@@ -55,19 +57,17 @@ protected:
 /** Generates a case given a string description.
  */
 template <int dim>
-std::unique_ptr<Case<dim>> create_case(const std::string case_str);
+std::unique_ptr<Case<dim>> create_case(const CommonParams& params, int n_args, const char *const args[]);
 
 /* Are mixins really the right approach to use here (below)?
  * Dynamic-casting a Case<dim>* to a more specialized type is essentially impossible
  * without knowing the derivation order for the concrete type.
  */
 
-template <typename Base>
-class CaseWithNeumannBC : public Base
+template <int dim>
+class HasNeumannBC
 {
 public:
-    static constexpr int dim = Base::dim;
-
     std::shared_ptr<const FaceFunction<dim>> get_neumann_bc() const {
         return neumann_;
     }
@@ -79,12 +79,10 @@ protected:
     dealii::types::boundary_id bcid_neumann_;
 };
 
-template <typename Base>
-class CaseWithExactSolution : public Base
+template <int dim>
+class HasExactSolution
 {
 public:
-    static constexpr int dim = Base::dim;
-
     std::shared_ptr<const dealii::Function<dim>> get_exact_solution() const {
         return exact_soln_;
     }
@@ -92,12 +90,10 @@ protected:
     std::shared_ptr<dealii::Function<dim>> exact_soln_;
 };
 
-template <typename Base>
-class CaseWithExactSolutionAndGradient : public Base
+template <int dim>
+class HasExactSolutionAndGradient
 {
 public:
-    static constexpr int dim = Base::dim;
-
     std::shared_ptr<const dealii::Function<dim>> get_exact_solution_and_gradient() const {
         return exact_soln_and_grad_;
     }

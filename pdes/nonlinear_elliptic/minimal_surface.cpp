@@ -70,9 +70,11 @@ namespace pde {
 using namespace dealii;
 
 template <int dim>
-MinimalSurface<dim>::MinimalSurface(const PDEParams<dim>& params, const SolverParams& s_params)
-: PDESolver<dim>(params, s_params), fe(params.fe_degree), dof_handler(triangulation)
-{}
+MinimalSurface<dim>::MinimalSurface(std::shared_ptr<const Case<dim>> tcase, const PDEParams& params,
+                                    const SolverParams& s_params)
+: PDESolver<dim>(tcase, params, s_params), fe_(params.fe_degree)
+{
+}
 
 
 // @sect4{MinimalSurface::setup_system}
@@ -90,30 +92,26 @@ MinimalSurface<dim>::MinimalSurface(const PDEParams<dim>& params, const SolverPa
 template <int dim>
 void MinimalSurface<dim>::setup_system(const bool initial_step)
 {
-  if (initial_step)
-  {
-    dof_handler.distribute_dofs(fe);
-    current_solution.reinit(dof_handler.n_dofs());
+    dof_handler_.distribute_dofs(fe_);
+    if (initial_step)
+    {
+        hanging_node_constraints.clear();
+        DoFTools::make_hanging_node_constraints(dof_handler_,
+                                                hanging_node_constraints);
+        hanging_node_constraints.close();
+    }
 
-    hanging_node_constraints.clear();
-    DoFTools::make_hanging_node_constraints(dof_handler,
-                                            hanging_node_constraints);
-    hanging_node_constraints.close();
-  }
+    solution_.reinit(dof_handler_.n_dofs());
+    update_.reinit(dof_handler_.n_dofs());
+    rhs_.reinit(dof_handler_.n_dofs());
 
+    DynamicSparsityPattern dsp(dof_handler_.n_dofs());
+    DoFTools::make_sparsity_pattern(dof_handler_, dsp);
 
-  // The remaining parts of the function are the same as in step-6.
+    hanging_node_constraints.condense(dsp);
 
-  newton_update.reinit(dof_handler.n_dofs());
-  system_rhs.reinit(dof_handler.n_dofs());
-
-  DynamicSparsityPattern dsp(dof_handler.n_dofs());
-  DoFTools::make_sparsity_pattern(dof_handler, dsp);
-
-  hanging_node_constraints.condense(dsp);
-
-  sparsity_pattern.copy_from(dsp);
-  system_matrix.reinit(sparsity_pattern);
+    sparsity_pattern_.copy_from(dsp);
+    system_matrix_.reinit(sparsity_pattern_);
 }
 
 // @sect4{MinimalSurface::assemble_system}
@@ -129,17 +127,17 @@ void MinimalSurface<dim>::setup_system(const bool initial_step)
 // vectors, as well as for the gradients of the previous solution at the
 // quadrature points. We then start the loop over all cells:
 template <int dim>
-void MinimalSurface<dim>::assemble_system()
+void MinimalSurface<dim>::assemble_system(AssemblyOptions)
 {
-  const QGauss<dim> quadrature_formula(fe.degree + 1);
+  const QGauss<dim> quadrature_formula(fe_.degree + 1);
 
-  system_matrix = 0;
-  system_rhs    = 0;
+  system_matrix_ = 0;
+  rhs_    = 0;
 
-  FEValues<dim> fe_values(fe, quadrature_formula,
+  FEValues<dim> fe_values(fe_, quadrature_formula,
                           update_gradients | update_quadrature_points | update_JxW_values);
 
-  const unsigned int dofs_per_cell = fe.n_dofs_per_cell();
+  const unsigned int dofs_per_cell = fe_.n_dofs_per_cell();
   const unsigned int n_q_points    = quadrature_formula.size();
 
   FullMatrix<double> cell_matrix(dofs_per_cell, dofs_per_cell);
@@ -149,7 +147,7 @@ void MinimalSurface<dim>::assemble_system()
 
   std::vector<types::global_dof_index> local_dof_indices(dofs_per_cell);
 
-  for (const auto &cell : dof_handler.active_cell_iterators())
+  for (const auto &cell : dof_handler_.active_cell_iterators())
   {
       cell_matrix = 0;
       cell_rhs    = 0;
@@ -165,7 +163,7 @@ void MinimalSurface<dim>::assemble_system()
       // cell with which the FEValues object has last been reinitialized.
       // The values of the gradients at all quadrature points are then written
       // into the second argument:
-      fe_values.get_function_gradients(current_solution,
+      fe_values.get_function_gradients(solution_,
                                        old_solution_gradients);
 
       // With this, we can then do the integration loop over all quadrature
@@ -207,29 +205,29 @@ void MinimalSurface<dim>::assemble_system()
       for (unsigned int i = 0; i < dofs_per_cell; ++i)
       {
           for (unsigned int j = 0; j < dofs_per_cell; ++j)
-            system_matrix.add(local_dof_indices[i],
+            system_matrix_.add(local_dof_indices[i],
                               local_dof_indices[j],
                               cell_matrix(i, j));
 
-          system_rhs(local_dof_indices[i]) += cell_rhs(i);
+          rhs_(local_dof_indices[i]) += cell_rhs(i);
       }
   }
 
   // we remove hanging nodes from the system
-  hanging_node_constraints.condense(system_matrix);
-  hanging_node_constraints.condense(system_rhs);
+  hanging_node_constraints.condense(system_matrix_);
+  hanging_node_constraints.condense(rhs_);
 
   // apply zero boundary values to the linear system that defines the Newton updates
   // $\delta u^n$:
-  for(auto bc : params_.test_case->get_dirichlet_bcs()) {
+  for(auto bc : case_->get_dirichlet_bcs()) {
     std::map<types::global_dof_index, double> boundary_values;
-    VectorTools::interpolate_boundary_values(dof_handler,
+    VectorTools::interpolate_boundary_values(dof_handler_,
                                              bc.bc_id, Functions::ZeroFunction<dim>(),
                                              boundary_values);
     MatrixTools::apply_boundary_values(boundary_values,
-                                       system_matrix,
-                                       newton_update,
-                                       system_rhs);
+                                       system_matrix_,
+                                       update_,
+                                       rhs_);
   }
 }
 
@@ -237,19 +235,19 @@ void MinimalSurface<dim>::assemble_system()
 template <int dim>
 void MinimalSurface<dim>::solve()
 {
-  SolverControl            solver_control(system_rhs.size(),
-                               system_rhs.l2_norm() * 1e-6);
+  SolverControl            solver_control(rhs_.size(),
+                               rhs_.l2_norm() * 1e-6);
   SolverCG<Vector<double>> solver(solver_control);
 
   PreconditionSSOR<SparseMatrix<double>> preconditioner;
-  preconditioner.initialize(system_matrix, 1.2);
+  preconditioner.initialize(system_matrix_, 1.2);
 
-  solver.solve(system_matrix, newton_update, system_rhs, preconditioner);
+  solver.solve(system_matrix_, update_, rhs_, preconditioner);
 
-  hanging_node_constraints.distribute(newton_update);
+  hanging_node_constraints.distribute(update_);
 
   const double alpha = determine_step_length();
-  current_solution.add(alpha, newton_update);
+  solution_.add(alpha, update_);
 }
 
 
@@ -263,16 +261,16 @@ template <int dim>
 void MinimalSurface<dim>::refine_mesh()
 {
   if(params_.is_adaptive) {
-    Vector<float> estimated_error_per_cell(triangulation.n_active_cells());
+    Vector<float> estimated_error_per_cell(tria_.n_active_cells());
 
     KellyErrorEstimator<dim>::estimate(
-      dof_handler,
-      QGauss<dim - 1>(fe.degree + 1),
+      dof_handler_,
+      QGauss<dim - 1>(fe_.degree + 1),
       std::map<types::boundary_id, const Function<dim> *>(),
-      current_solution,
+      solution_,
       estimated_error_per_cell);
 
-    GridRefinement::refine_and_coarsen_fixed_number(triangulation,
+    GridRefinement::refine_and_coarsen_fixed_number(tria_,
                                                     estimated_error_per_cell,
                                                     0.3,
                                                     0.03);
@@ -294,18 +292,18 @@ void MinimalSurface<dim>::refine_mesh()
     // needs to know the final set of cells that will be coarsened or refined
     // in order to store the data from the old mesh and transfer to the new
     // one. Thus, we call the function by hand:
-    triangulation.prepare_coarsening_and_refinement();
+    tria_.prepare_coarsening_and_refinement();
 
     // With this out of the way, we initialize a SolutionTransfer object with
     // the present DoFHandler and attach the solution vector to it, followed
     // by doing the actual refinement and distribution of degrees of freedom
     // on the new mesh
-    SolutionTransfer<dim> solution_transfer(dof_handler);
-    solution_transfer.prepare_for_coarsening_and_refinement(current_solution);
+    SolutionTransfer<dim> solution_transfer(dof_handler_);
+    solution_transfer.prepare_for_coarsening_and_refinement(solution_);
 
-    triangulation.execute_coarsening_and_refinement();
+    tria_.execute_coarsening_and_refinement();
 
-    dof_handler.distribute_dofs(fe);
+    dof_handler_.distribute_dofs(fe_);
 
     // Finally, we retrieve the old solution interpolated to the new
     // mesh. Since the SolutionTransfer function does not actually store the
@@ -313,11 +311,11 @@ void MinimalSurface<dim>::refine_mesh()
     // old solution vector until we have gotten the new interpolated
     // values. Thus, we have the new values written into a temporary vector,
     // and only afterwards write them into the solution vector object:
-    Vector<double> tmp(dof_handler.n_dofs());
-    // interpolate solution from current_solution into tmp.
+    Vector<double> tmp(dof_handler_.n_dofs());
+    // interpolate solution from solution_ into tmp.
     solution_transfer.interpolate(tmp);
-    // replace current_solution with its interpolation onto the new grid.
-    current_solution = tmp;
+    // replace solution_ with its interpolation onto the new grid.
+    solution_ = tmp;
 
     // On the new mesh, there are different hanging nodes, for which we have to
     // compute constraints again, after throwing away previous content of the
@@ -325,27 +323,27 @@ void MinimalSurface<dim>::refine_mesh()
     // current solution's vector entries satisfy the hanging node constraints
     // (see the discussion in the documentation of the SolutionTransfer class
     // for why this is necessary). We could do this by calling
-    // `hanging_node_constraints.distribute(current_solution)` explicitly; we
+    // `hanging_node_constraints.distribute(solution_)` explicitly; we
     // omit this step because this will happen at the end of the call to
     // `set_boundary_values()` below, and it is not necessary to do it twice.
     hanging_node_constraints.clear();
 
-    DoFTools::make_hanging_node_constraints(dof_handler,
+    DoFTools::make_hanging_node_constraints(dof_handler_,
                                             hanging_node_constraints);
     hanging_node_constraints.close();
   }
   else {
-    SolutionTransfer<dim> solution_transfer(dof_handler);
-    solution_transfer.prepare_for_coarsening_and_refinement(current_solution);
+    SolutionTransfer<dim> solution_transfer(dof_handler_);
+    solution_transfer.prepare_for_coarsening_and_refinement(solution_);
 
-    triangulation.prepare_coarsening_and_refinement();
-    triangulation.refine_global(1);
+    tria_.prepare_coarsening_and_refinement();
+    tria_.refine_global(1);
 
-    dof_handler.distribute_dofs(fe);
+    dof_handler_.distribute_dofs(fe_);
 
-    Vector<double> tmp(dof_handler.n_dofs());
+    Vector<double> tmp(dof_handler_.n_dofs());
     solution_transfer.interpolate(tmp);
-    current_solution = tmp;
+    solution_ = tmp;
   }
 
   // Once we have the interpolated solution and all information about
@@ -372,17 +370,17 @@ void MinimalSurface<dim>::refine_mesh()
 template <int dim>
 void MinimalSurface<dim>::set_boundary_values()
 {
-  for(auto bc : params_.test_case->get_dirichlet_bcs()) {
+  for(auto bc : case_->get_dirichlet_bcs()) {
     std::map<types::global_dof_index, double> boundary_values;
-    VectorTools::interpolate_boundary_values(dof_handler,
+    VectorTools::interpolate_boundary_values(dof_handler_,
                                              bc.bc_id, *bc.bc_fn,
                                              boundary_values);
     for (auto &boundary_value : boundary_values) {
-      current_solution(boundary_value.first) = boundary_value.second;
+      solution_(boundary_value.first) = boundary_value.second;
     }
   }
 
-  hanging_node_constraints.distribute(current_solution);
+  hanging_node_constraints.distribute(solution_);
 }
 
 
@@ -406,19 +404,19 @@ void MinimalSurface<dim>::set_boundary_values()
 template <int dim>
 double MinimalSurface<dim>::compute_residual(const double alpha) const
 {
-    Vector<double> residual(dof_handler.n_dofs());
+    Vector<double> residual(dof_handler_.n_dofs());
 
-    Vector<double> evaluation_point(dof_handler.n_dofs());
-    evaluation_point = current_solution;
-    evaluation_point.add(alpha, newton_update);
+    Vector<double> evaluation_point(dof_handler_.n_dofs());
+    evaluation_point = solution_;
+    evaluation_point.add(alpha, update_);
 
-    const QGauss<dim> quadrature_formula(fe.degree + 1);
-    FEValues<dim>     fe_values(fe,
+    const QGauss<dim> quadrature_formula(fe_.degree + 1);
+    FEValues<dim>     fe_values(fe_,
                             quadrature_formula,
                             update_gradients | update_quadrature_points |
                               update_JxW_values);
 
-    const unsigned int dofs_per_cell = fe.n_dofs_per_cell();
+    const unsigned int dofs_per_cell = fe_.n_dofs_per_cell();
     const unsigned int n_q_points    = quadrature_formula.size();
 
     Vector<double>              cell_residual(dofs_per_cell);
@@ -426,7 +424,7 @@ double MinimalSurface<dim>::compute_residual(const double alpha) const
 
     std::vector<types::global_dof_index> local_dof_indices(dofs_per_cell);
 
-    for (const auto &cell : dof_handler.active_cell_iterators())
+    for (const auto &cell : dof_handler_.active_cell_iterators())
     {
         cell_residual = 0;
         fe_values.reinit(cell);
@@ -474,7 +472,7 @@ double MinimalSurface<dim>::compute_residual(const double alpha) const
     // function from namespace DoFTools:
     hanging_node_constraints.condense(residual);
 
-    for (const types::global_dof_index i : DoFTools::extract_boundary_dofs(dof_handler)) {
+    for (const types::global_dof_index i : DoFTools::extract_boundary_dofs(dof_handler_)) {
         residual(i) = 0;
     }
 
@@ -503,21 +501,6 @@ double MinimalSurface<dim>::determine_step_length() const
     return 0.1;
 }
 
-template <int dim>
-void MinimalSurface<dim>::make_grid(const unsigned n_cell_dir)
-{
-    triangulation.clear();
-    params_.test_case->get_geometry()->generate_grid(triangulation, n_cell_dir);
-    //triangulation.refine_global(5);
-    params_.test_case->get_geometry()->set_boundary_ids(triangulation);
-
-    std::cout << "   Number of active cells: " << triangulation.n_active_cells()
-              << std::endl
-              << "   Total number of cells: " << triangulation.n_cells()
-              << std::endl;
-}
-
-
 // @sect4{MinimalSurface::output_results}
 
 // This last function to be called from `run()` outputs the current solution
@@ -528,9 +511,9 @@ void MinimalSurface<dim>::output_results(const int refinement_cycle) const
 {
     DataOut<dim> data_out;
 
-    data_out.attach_dof_handler(dof_handler);
-    data_out.add_data_vector(current_solution, "solution");
-    data_out.add_data_vector(newton_update, "update");
+    data_out.attach_dof_handler(dof_handler_);
+    data_out.add_data_vector(solution_, "solution");
+    data_out.add_data_vector(update_, "update");
     data_out.build_patches();
 
     const std::string file_prefix = params_.output_path + "-" +
@@ -544,11 +527,11 @@ void MinimalSurface<dim>::output_results(const int refinement_cycle) const
     std::vector<std::string> face_name(1, "solution");
     std::vector<DataComponentInterpretation::DataComponentInterpretation>
         face_component_type(1, DataComponentInterpretation::component_is_scalar);
-    data_out_boundary.add_data_vector(dof_handler,
-                                      current_solution,
+    data_out_boundary.add_data_vector(dof_handler_,
+                                      solution_,
                                       face_name,
                                       face_component_type);
-    data_out_boundary.build_patches(fe.degree);
+    data_out_boundary.build_patches(fe_.degree);
     data_out_boundary.write_vtk(b_output);
     b_output.close();
 }
@@ -570,7 +553,7 @@ void MinimalSurface<dim>::output_results(const int refinement_cycle) const
 template <int dim>
 void MinimalSurface<dim>::run()
 {
-    make_grid(params_.initial_resolution);
+    this->make_grid(params_.initial_resolution);
     setup_system(/*first time=*/true);
     set_boundary_values();
 
@@ -592,8 +575,8 @@ void MinimalSurface<dim>::run()
             }
 
             // set up FEValues for residual norm computation
-            const QGauss<dim> quadrature_formula(fe.degree + 1);
-            FEValues<dim> fe_values(fe,
+            const QGauss<dim> quadrature_formula(fe_.degree + 1);
+            FEValues<dim> fe_values(fe_,
                                     quadrature_formula,
                                     update_quadrature_points | update_JxW_values
                                     | update_values);
@@ -615,9 +598,9 @@ void MinimalSurface<dim>::run()
 
             for(int inner_it = 0; inner_it < solver_params_.max_its; ++inner_it)
             {
-                assemble_system();
-                last_residual_norm = utils::compute_Lp_norm(fe_values, dof_handler,
-                                                            system_rhs, 2);
+                assemble_system(AssemblyOptions{false});
+                last_residual_norm = utils::compute_Lp_norm(fe_values, dof_handler_,
+                                                            rhs_, 2);
                 solve();
                 std::cout << "  Residual norm: " << last_residual_norm << std::endl;
             }
@@ -641,22 +624,22 @@ void MinimalSurface<dim>::run()
               solver_params_.tolerance : 1e-1;
 
             // set up FEValues for residual norm computation
-            const QGauss<dim> quadrature_formula(fe.degree + 1);
-            FEValues<dim> fe_values(fe,
+            const QGauss<dim> quadrature_formula(fe_.degree + 1);
+            FEValues<dim> fe_values(fe_,
                                     quadrature_formula,
                                     update_quadrature_points | update_JxW_values
                                     | update_values);
 
             for(int inner_it = 0; inner_it < max_its; ++inner_it) {
                 // compute RHS, Jacobian matrix
-                assemble_system();
+                assemble_system(AssemblyOptions{false});
                 // Maybe use function L2 norm for determining convergence
-                last_residual_norm = utils::compute_Lp_norm(fe_values, dof_handler,
-                                                            system_rhs, 2);
+                last_residual_norm = utils::compute_Lp_norm(fe_values, dof_handler_,
+                                                            rhs_, 2);
                 // Set reference norm
                 // Sometimes, if the boundary function is aliased on a very coarse grid,
                 //  the initial residual can be zero. If so, update it on a finer grid.
-                if(imesh == 0 && inner_it == 0 || (inner_it == 0 && init_res < 1e-14)) {
+                if((imesh == 0 && inner_it == 0) || (inner_it == 0 && init_res < 1e-14)) {
                     init_res = last_residual_norm;
                 }
                 solve();

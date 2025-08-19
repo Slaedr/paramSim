@@ -3,11 +3,7 @@
 
 #include <memory>
 
-#include <deal.II/grid/tria.h>
-#include <deal.II/dofs/dof_handler.h>
 #include <deal.II/fe/fe_q.h>
-#include <deal.II/lac/vector.h>
-#include <deal.II/lac/sparse_matrix.h>
 
 #include "../pdebase.hpp"
 #include "../../cases/case.hpp"
@@ -24,31 +20,31 @@ template <int dim>
 class PoissonCG : public PDESolver<dim>
 {
 public:
-  PoissonCG(const PDEParams<dim>& params, const SolverParams& solver_params);
+    PoissonCG(std::shared_ptr<const Case<dim>> test_case, const PDEParams& params,
+              const SolverParams& solver_params);
 
-  void run() override;
-  
-  std::shared_ptr<Vector<double>> create_solution_vector() const;
+    void run() override;
+    
+    std::shared_ptr<Vector<double>> create_solution_vector() const;
 
 private:
-  void make_grid(unsigned resolution);
-  void setup_system();
-  void assemble_system();
-  void solve();
-  void output_results(int cycle) const;
+    void setup_system(bool initial_step) override;
+    void assemble_system(AssemblyOptions opts) override;
+    void solve() override;
+    void output_results(int cycle) const;
 
-  using PDESolver<dim>::params_;
-  using PDESolver<dim>::solver_params_;
+    using PDESolver<dim>::case_;
+    using PDESolver<dim>::params_;
+    using PDESolver<dim>::solver_params_;
 
-  Triangulation<dim> triangulation;
-  FE_Q<dim>          fe;
-  DoFHandler<dim>    dof_handler;
-
-  SparsityPattern      sparsity_pattern;
-  SparseMatrix<double> system_matrix;
-
-  Vector<double> solution;
-  Vector<double> system_rhs;
+    using PDESolver<dim>::tria_;
+    using PDESolver<dim>::dof_handler_;
+    using PDESolver<dim>::sparsity_pattern_;
+    using PDESolver<dim>::system_matrix_;
+    using PDESolver<dim>::solution_;
+    using PDESolver<dim>::rhs_;
+      
+    FE_Q<dim> fe_;
 };
 
 }

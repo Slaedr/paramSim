@@ -148,7 +148,8 @@ namespace bpo = boost::program_options;
 
 
 template <int dim>
-class PoissonVerify final : public CaseWithExactSolution<CaseWithNeumannBC<Case<dim>>>
+class PoissonVerify final : public Case<dim>, public HasExactSolution<dim>,
+                            public HasNeumannBC<dim>
 {
 public:
     void initialize(const bpo::variables_map&) override;

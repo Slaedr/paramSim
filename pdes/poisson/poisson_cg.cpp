@@ -50,56 +50,42 @@ namespace paramsim {
 namespace pde {
 
 template <int dim>
-PoissonCG<dim>::PoissonCG(const PDEParams<dim>& params, const SolverParams& sparams)
-  : PDESolver<dim>(params, sparams), fe(params.fe_degree), dof_handler(triangulation)
-{
-}
+PoissonCG<dim>::PoissonCG(std::shared_ptr<const Case<dim>> tcase, const PDEParams& params,
+                          const SolverParams& sparams)
+  : PDESolver<dim>(tcase, params, sparams), fe_(params.fe_degree)
+{ }
 
 template <int dim>
 std::shared_ptr<Vector<double>> PoissonCG<dim>::create_solution_vector() const
 {
     auto vec = std::make_shared<Vector<double>>();
-    vec->reinit(dof_handler.n_dofs());
+    vec->reinit(dof_handler_.n_dofs());
     return vec;
 }
 
 template <int dim>
-void PoissonCG<dim>::make_grid(const unsigned n_cell_dir)
+void PoissonCG<dim>::setup_system(bool)
 {
-    triangulation.clear();
-    params_.test_case->get_geometry()->generate_grid(triangulation, n_cell_dir);
-    //triangulation.refine_global(5);
-    params_.test_case->get_geometry()->set_boundary_ids(triangulation);
+    dof_handler_.distribute_dofs(fe_);
 
-    std::cout << "   Number of active cells: " << triangulation.n_active_cells()
-              << std::endl
-              << "   Total number of cells: " << triangulation.n_cells()
+    std::cout << "   Number of degrees of freedom: " << dof_handler_.n_dofs()
               << std::endl;
-}
 
-template <int dim>
-void PoissonCG<dim>::setup_system()
-{
-  dof_handler.distribute_dofs(fe);
+    DynamicSparsityPattern dsp(dof_handler_.n_dofs());
+    DoFTools::make_sparsity_pattern(dof_handler_, dsp);
+    sparsity_pattern_.copy_from(dsp);
 
-  std::cout << "   Number of degrees of freedom: " << dof_handler.n_dofs()
-            << std::endl;
+    system_matrix_.reinit(sparsity_pattern_);
 
-  DynamicSparsityPattern dsp(dof_handler.n_dofs());
-  DoFTools::make_sparsity_pattern(dof_handler, dsp);
-  sparsity_pattern.copy_from(dsp);
-
-  system_matrix.reinit(sparsity_pattern);
-
-  solution.reinit(dof_handler.n_dofs());
-  system_rhs.reinit(dof_handler.n_dofs());
+    solution_.reinit(dof_handler_.n_dofs());
+    rhs_.reinit(dof_handler_.n_dofs());
 }
 
 
 template <int dim>
-void PoissonCG<dim>::assemble_system()
+void PoissonCG<dim>::assemble_system(AssemblyOptions)
 {
-  QGauss<dim> quadrature_formula(fe.degree + 1);
+  QGauss<dim> quadrature_formula(fe_.degree + 1);
 
   // In order to evaluate the non-constant
   // right hand side function we now also need the quadrature points on the
@@ -107,7 +93,7 @@ void PoissonCG<dim>::assemble_system()
   // gradients of the shape function from the FEValues object, as well as the
   // quadrature weights, FEValues::JxW(). We can tell the FEValues object to
   // do for us by also giving it the #update_quadrature_points flag:
-  FEValues<dim> fe_values(fe,
+  FEValues<dim> fe_values(fe_,
                           quadrature_formula,
                           update_values | update_gradients |
                             update_quadrature_points | update_JxW_values);
@@ -117,7 +103,7 @@ void PoissonCG<dim>::assemble_system()
   // are presently using, but the FiniteElement class does all the necessary
   // work for you and you don't have to care about the dimension dependent
   // parts:
-  const unsigned int dofs_per_cell = fe.n_dofs_per_cell();
+  const unsigned int dofs_per_cell = fe_.n_dofs_per_cell();
 
   FullMatrix<double> cell_matrix(dofs_per_cell, dofs_per_cell);
   Vector<double>     cell_rhs(dofs_per_cell);
@@ -131,7 +117,7 @@ void PoissonCG<dim>::assemble_system()
   // depending on the dimension we are in, but to the outside world they look
   // alike and you will probably never see a difference. In any case, the real
   // type is hidden by using `auto`:
-  for (const auto &cell : dof_handler.active_cell_iterators())
+  for (const auto &cell : dof_handler_.active_cell_iterators())
     {
       fe_values.reinit(cell);
       cell_matrix = 0;
@@ -158,7 +144,7 @@ void PoissonCG<dim>::assemble_system()
 
             const auto &x_q = fe_values.quadrature_point(q_index);
             cell_rhs(i) += (fe_values.shape_value(i, q_index) *          // phi_i(x_q)
-                            params_.test_case->get_right_hand_side()->value(x_q) *   // f(x_q)
+                            case_->get_right_hand_side()->value(x_q) *   // f(x_q)
                             fe_values.JxW(q_index));                      // dx
           }
       // As a final remark to these loops: when we assemble the local
@@ -187,11 +173,11 @@ void PoissonCG<dim>::assemble_system()
       for (const unsigned int i : fe_values.dof_indices())
         {
           for (const unsigned int j : fe_values.dof_indices())
-            system_matrix.add(local_dof_indices[i],
+            system_matrix_.add(local_dof_indices[i],
                               local_dof_indices[j],
                               cell_matrix(i, j));
 
-          system_rhs(local_dof_indices[i]) += cell_rhs(i);
+          rhs_(local_dof_indices[i]) += cell_rhs(i);
         }
     }
 
@@ -208,15 +194,15 @@ void PoissonCG<dim>::assemble_system()
   // interpolate_boundary_values will do nothing on these faces. For
   // the Laplace equation doing nothing is equivalent to assuming that
   // on those parts of the boundary a zero Neumann boundary condition holds.
-  for(auto bc : params_.test_case->get_dirichlet_bcs()) {
+  for(auto bc : case_->get_dirichlet_bcs()) {
       std::map<types::global_dof_index, double> boundary_values;
-      VectorTools::interpolate_boundary_values(dof_handler,
+      VectorTools::interpolate_boundary_values(dof_handler_,
                                                bc.bc_id, *bc.bc_fn,
                                                boundary_values);
       MatrixTools::apply_boundary_values(boundary_values,
-                                         system_matrix,
-                                         solution,
-                                         system_rhs);
+                                         system_matrix_,
+                                         solution_,
+                                         rhs_);
   }
 }
 
@@ -227,8 +213,8 @@ void PoissonCG<dim>::solve()
   SolverCG<Vector<double>> solver(solver_control);
   PreconditionSSOR<SparseMatrix<double> > precondition;
   precondition.initialize(
-    system_matrix, PreconditionSSOR<SparseMatrix<double>>::AdditionalData(.8));
-  solver.solve(system_matrix, solution, system_rhs, precondition);
+    system_matrix_, PreconditionSSOR<SparseMatrix<double>>::AdditionalData(.8));
+  solver.solve(system_matrix_, solution_, rhs_, precondition);
 
   // We have made one addition, though: since we suppress output from the
   // linear solvers, we have to print the number of iterations by hand.
@@ -241,8 +227,8 @@ void PoissonCG<dim>::output_results(const int cycle) const
 {
   DataOut<dim> data_out;
 
-  data_out.attach_dof_handler(dof_handler);
-  data_out.add_data_vector(solution, "solution");
+  data_out.attach_dof_handler(dof_handler_);
+  data_out.add_data_vector(solution_, "solution");
 
   data_out.build_patches();
 
@@ -255,11 +241,11 @@ void PoissonCG<dim>::output_results(const int cycle) const
   std::vector<std::string> face_name(1, "solution");
   std::vector<DataComponentInterpretation::DataComponentInterpretation>
       face_component_type(1, DataComponentInterpretation::component_is_scalar);
-  data_out_boundary.add_data_vector(dof_handler,
-                                    solution,
+  data_out_boundary.add_data_vector(dof_handler_,
+                                    solution_,
                                     face_name,
                                     face_component_type);
-  data_out_boundary.build_patches(fe.degree);
+  data_out_boundary.build_patches(fe_.degree);
   data_out_boundary.write_vtk(b_output);
   b_output.close();
 }
@@ -270,33 +256,32 @@ void PoissonCG<dim>::run()
   std::cout << "Solving problem in " << dim << " space dimensions."
             << std::endl;
   
-  auto scase = std::dynamic_pointer_cast<
-      const CaseWithExactSolution<CaseWithNeumannBC<Case<dim>>>>(this->params_.test_case);
+  auto scase = std::dynamic_pointer_cast<const HasExactSolution<dim>>(this->case_);
   ConvergenceTable convergence_table;
 
   for(int imesh = 0; imesh < params_.refine_levels; imesh++)
   {
     const unsigned resolution = this->params_.initial_resolution * (imesh+1);
-    make_grid(resolution);
-    setup_system();
-    assemble_system();
+    this->make_grid(resolution);
+    setup_system(false);
+    assemble_system(AssemblyOptions{false});
     solve();
     output_results(imesh);
 
-    convergence_table.add_value("cells", triangulation.n_active_cells());
-    convergence_table.add_value("dofs", dof_handler.n_dofs());
+    convergence_table.add_value("cells", tria_.n_active_cells());
+    convergence_table.add_value("dofs", dof_handler_.n_dofs());
 
     if(scase && scase->get_exact_solution()) {
-      Vector<float> difference_per_cell(triangulation.n_active_cells());
+      Vector<float> difference_per_cell(tria_.n_active_cells());
 
-      VectorTools::integrate_difference(dof_handler,
-                                        solution,
+      VectorTools::integrate_difference(dof_handler_,
+                                        solution_,
                                         *scase->get_exact_solution(),
                                         difference_per_cell,
                                         QGauss<dim>(params_.fe_degree + 2),
                                         VectorTools::L2_norm);
       const double post_error =
-        VectorTools::compute_global_error(triangulation, difference_per_cell,
+        VectorTools::compute_global_error(tria_, difference_per_cell,
                                           VectorTools::L2_norm);
 
       convergence_table.add_value("val L2", post_error);

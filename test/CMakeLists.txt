@@ -1,3 +1,7 @@
+add_library(testutils grid_convergence.cpp)
+target_link_libraries(testutils paramsim_solvers paramsim_cases)
+deal_ii_setup_target(testutils)
+
 find_package(GTest 1.10.0)
 if(NOT GTest_FOUND)	
 	message(STATUS "Fetching external GTest")
@@ -42,4 +46,5 @@ target_link_libraries(geometry_test GTest::gtest_main)
 
 gtest_discover_tests(geometry_test)
 
+add_subdirectory(pdes)
 add_subdirectory(cases)

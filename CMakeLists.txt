@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.13.4)
 
+project(paramsim LANGUAGES CXX)
+
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -11,8 +13,6 @@ find_package(deal.II 9.5.0 REQUIRED
 deal_ii_initialize_cached_variables()
 
 find_package(Boost 1.60.0 COMPONENTS program_options)
-
-project(paramsim)
 
 add_subdirectory(pdes)
 add_subdirectory(utils)

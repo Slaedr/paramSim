@@ -43,4 +43,30 @@ bpo::variables_map get_cmd_args(const int argc, const char *const argv[],
 	return cmdvarmap;
 }
 
+CommonParams get_common_params(const bpo::variables_map& common_cmdmap)
+{
+    // TODO: Use C++20 designated initializers for this
+    return CommonParams {
+        /*case_str =          */ common_cmdmap["case"].as<std::string>(),
+        /*solver_str =        */ common_cmdmap["solver"].as<std::string>(),
+        /*refine_levels =     */ common_cmdmap["refine_levels"].as<int>(),
+        /*initial_resolution =*/ common_cmdmap["initial_resolution"].as<unsigned>(),
+        /*fe_degree =         */ common_cmdmap["fe_degree"].as<int>(),
+        /*outpath =           */ common_cmdmap["output_prefix"].as<std::string>(),
+        /*is_adaptive =       */ common_cmdmap["is_adaptive"].as<bool>(),
+        /*tolerance =         */ common_cmdmap["tolerance"].as<double>(),
+        /*max_its =           */ common_cmdmap["max_its"].as<int>()
+    };
+}
+
+// Convert cmd line arguments for testing
+const char** allocate_setup_args(const int nargs, const char args[][100])
+{
+    auto argv = static_cast<const char**>(std::malloc(nargs*sizeof(char**)));
+    for(int i = 0; i < nargs; i++) {
+        argv[i] = args[i];
+    }
+    return argv;
+}
+
 }

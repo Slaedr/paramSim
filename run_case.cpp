@@ -37,83 +37,69 @@ using namespace paramsim;
 
 int main(int argc, char *argv[])
 {
-  // Reads DEAL_II_NUM_THREADS env var
-  dealii::MultithreadInfo::set_thread_limit();
-  
-  constexpr unsigned int dim = 2;
+    // Reads DEAL_II_NUM_THREADS env var
+    dealii::MultithreadInfo::set_thread_limit();
 
-  bpo::options_description common_desc
-      ("Solves one problem given one set of parameters.");
-  add_common_options(common_desc, "");
+    constexpr unsigned int dim = 2;
 
-  // complete all options addition before calling the following line
-  const bpo::variables_map common_cmdmap = get_cmd_args(argc, argv, common_desc);
-  if(common_cmdmap.count("help")) {
-      std::cout << common_desc << std::endl;
-      return 0;
-  }
+    // Common options description//
+    bpo::options_description common_desc
+        ("Solves one problem given one set of parameters.");
+    add_common_options(common_desc, "");
 
-  const auto case_str = common_cmdmap["case"].as<std::string>();
-  const auto solver_str = common_cmdmap["solver"].as<std::string>();
-  const auto refine_levels = common_cmdmap["refine_levels"].as<int>();
-  const auto initial_resolution = common_cmdmap["initial_resolution"].as<unsigned>();
-  const auto fe_degree = common_cmdmap["fe_degree"].as<int>();
-  const auto outpath = common_cmdmap["output_prefix"].as<std::string>();
-  const auto is_adaptive = common_cmdmap["is_adaptive"].as<bool>();
-  const auto tolerance = common_cmdmap["tolerance"].as<double>();
-  const auto max_its = common_cmdmap["max_its"].as<int>();
+    // complete all options addition before calling the following line
+    const bpo::variables_map common_cmdmap = get_cmd_args(argc, argv, common_desc);
+    if(common_cmdmap.count("help")) {
+        std::cout << common_desc << std::endl;
+        return 0;
+    }
 
-  std::shared_ptr<Case<dim>> tcase = create_case<dim>(case_str);
-    
-  bpo::options_description case_desc
-      (std::string("Solves the case ") + case_str + " given one set of parameters.");
-  tcase->add_case_cmd_args(case_desc);
-  
-  const bpo::variables_map case_cmdmap = get_cmd_args(argc, argv, case_desc);
-  tcase->initialize(case_cmdmap);
+    const auto common_params = get_common_params(common_cmdmap);
 
-  PDEParams<dim> pdeparams{solver_str, tcase, fe_degree, initial_resolution, refine_levels,
-  is_adaptive, outpath};
-  SolverParams solver_params{tolerance, max_its};
+    std::shared_ptr<const Case<dim>> tcase = create_case<dim>(common_params, argc, argv);
 
-  auto pdesolver = create_pde_solver(pdeparams, solver_params);
+    PDEParams pdeparams{common_params.solver_str, common_params.fe_degree,
+                        common_params.initial_resolution, common_params.refine_levels,
+                        common_params.is_adaptive, common_params.outpath};
+    SolverParams solver_params{common_params.tolerance, common_params.max_outer_its};
 
-  try
-  {
-      std::cout << "Solving" << std::endl
-                << "=======" << std::endl
-                << std::endl;
+    auto pdesolver = create_pde_solver(tcase, pdeparams, solver_params);
 
-      pdesolver->run();
+    try
+    {
+        std::cout << "Solving" << std::endl
+                  << "=======" << std::endl
+                  << std::endl;
 
-      std::cout << std::endl;
-  }
-  catch (std::exception &exc)
-  {
-      std::cerr << std::endl
-                << std::endl
-                << "----------------------------------------------------"
-                << std::endl;
-      std::cerr << "Exception on processing: " << std::endl
-                << exc.what() << std::endl
-                << "Aborting!" << std::endl
-                << "----------------------------------------------------"
-                << std::endl;
-      return 1;
-  }
-  catch (...)
-  {
-      std::cerr << std::endl
-                << std::endl
-                << "----------------------------------------------------"
-                << std::endl;
-      std::cerr << "Unknown exception!" << std::endl
-                << "Aborting!" << std::endl
-                << "----------------------------------------------------"
-                << std::endl;
-      return 1;
-  }
+        pdesolver->run();
 
-  return 0;
+        std::cout << std::endl;
+    }
+    catch (std::exception &exc)
+    {
+        std::cerr << std::endl
+                  << std::endl
+                  << "----------------------------------------------------"
+                  << std::endl;
+        std::cerr << "Exception on processing: " << std::endl
+                  << exc.what() << std::endl
+                  << "Aborting!" << std::endl
+                  << "----------------------------------------------------"
+                  << std::endl;
+        return 1;
+    }
+    catch (...)
+    {
+        std::cerr << std::endl
+                  << std::endl
+                  << "----------------------------------------------------"
+                  << std::endl;
+        std::cerr << "Unknown exception!" << std::endl
+                  << "Aborting!" << std::endl
+                  << "----------------------------------------------------"
+                  << std::endl;
+        return 1;
+    }
+
+    return 0;
 }
-

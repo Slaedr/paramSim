@@ -9,6 +9,8 @@
 #include <deal.II/lac/solver_bicgstab.h>
 #include <memory>
 
+#include "../../utils/error_handling.hpp"
+
 namespace paramsim {
 namespace pde {
   
@@ -23,15 +25,14 @@ namespace pde {
   // gradient/flux part and the scalar part.
   template <int dim>
   ConvdiffHDG<dim>
-    ::ConvdiffHDG(const PDEParams<dim>& params, const SolverParams& sparams)
-    : PDESolver<dim>(params, sparams)
+    ::ConvdiffHDG(std::shared_ptr<const Case<dim>> test_case, const PDEParams& params,
+                  const SolverParams& sparams)
+    : PDESolver<dim>(test_case, params, sparams), fe_(params.fe_degree)
     , fe_local(FE_DGQ<dim>(params.fe_degree), dim, FE_DGQ<dim>(params.fe_degree), 1)
-    , dof_handler_local(triangulation)
-    , fe(params.fe_degree)
-    , dof_handler(triangulation)
+    , dof_handler_local(tria_)
     , fe_u_post(params.fe_degree + 1)
-    , dof_handler_u_post(triangulation)
-  {}
+    , dof_handler_u_post(tria_)
+  { }
 
   // @sect4{ConvdiffHDG::setup_system}
   // The system for an HDG solution is setup in an analogous manner to most
@@ -39,31 +40,31 @@ namespace pde {
   // all of our DoFHandler objects.  The @p solution and @p system_matrix
   // objects go with the global skeleton solution.
   template <int dim>
-  void ConvdiffHDG<dim>::setup_system()
+  void ConvdiffHDG<dim>::setup_system(bool)
   {
     dof_handler_local.distribute_dofs(fe_local);
-    dof_handler.distribute_dofs(fe);
+    dof_handler_.distribute_dofs(fe_);
     dof_handler_u_post.distribute_dofs(fe_u_post);
 
-    std::cout << "   Number of degrees of freedom: " << dof_handler.n_dofs()
+    std::cout << "   Number of degrees of freedom: " << dof_handler_.n_dofs()
               << std::endl;
 
-    solution.reinit(dof_handler.n_dofs());
-    system_rhs.reinit(dof_handler.n_dofs());
+    solution_.reinit(dof_handler_.n_dofs());
+    rhs_.reinit(dof_handler_.n_dofs());
 
     solution_local.reinit(dof_handler_local.n_dofs());
     solution_u_post.reinit(dof_handler_u_post.n_dofs());
 
     constraints.clear();
-    DoFTools::make_hanging_node_constraints(dof_handler, constraints);
+    DoFTools::make_hanging_node_constraints(dof_handler_, constraints);
     std::map<types::boundary_id, const Function<dim> *> boundary_functions;
-    for(auto bc : params_.test_case->get_dirichlet_bcs()) {
+    for(auto bc : case_->get_dirichlet_bcs()) {
       boundary_functions[bc.bc_id] = bc.bc_fn.get();
     }
     // Project boundary values to compute nodal values; these are stored in constrains.
-    VectorTools::project_boundary_values(dof_handler,
+    VectorTools::project_boundary_values(dof_handler_,
                                          boundary_functions,
-                                         QGauss<dim - 1>(fe.degree + 1),
+                                         QGauss<dim - 1>(fe_.degree + 1),
                                          constraints);
     constraints.close();
 
@@ -72,12 +73,12 @@ namespace pde {
     // to the number of dofs on a face, when copying this into the final
     // sparsity pattern.
     {
-      DynamicSparsityPattern dsp(dof_handler.n_dofs());
-      DoFTools::make_sparsity_pattern(dof_handler, dsp, constraints, false);
-      //sparsity_pattern.copy_from(dsp, fe.n_dofs_per_face());
-      sparsity_pattern.copy_from(dsp);
+      DynamicSparsityPattern dsp(dof_handler_.n_dofs());
+      DoFTools::make_sparsity_pattern(dof_handler_, dsp, constraints, false);
+      //sparsity_pattern.copy_from(dsp, fe_.n_dofs_per_face());
+      sparsity_pattern_.copy_from(dsp);
     }
-    system_matrix.reinit(sparsity_pattern);
+    system_matrix_.reinit(sparsity_pattern_);
   }
 
 
@@ -290,7 +291,7 @@ namespace pde {
   // The @p assemble_system function is similar to the one on Step-32, where
   // the quadrature formula and the update flags are set up, and then
   // <code>WorkStream</code> is used to do the work in a multi-threaded
-  // manner.  The @p trace_reconstruct input parameter is used to decide
+  // manner.  The @p aopts.reconstruct_from_trace input parameter is used to decide
   // whether we are solving for the global skeleton solution (false) or the
   // local solution (true).
   //
@@ -303,11 +304,10 @@ namespace pde {
   // example, OpenBLAS compiled without multithreading inside the BLAS/LAPACK
   // calls needs to built with a flag called `USE_LOCKING` set to true.
   template <int dim>
-  void ConvdiffHDG<dim>
-  ::assemble_system(const bool trace_reconstruct)
+  void ConvdiffHDG<dim>::assemble_system(const AssemblyOptions aopts)
   {
-    const QGauss<dim>     quadrature_formula(fe.degree + 1);
-    const QGauss<dim - 1> face_quadrature_formula(fe.degree + 1);
+    const QGauss<dim>     quadrature_formula(fe_.degree + 1);
+    const QGauss<dim - 1> face_quadrature_formula(fe_.degree + 1);
 
     const UpdateFlags local_flags(update_values | update_gradients |
                                   update_JxW_values | update_quadrature_points);
@@ -317,9 +317,10 @@ namespace pde {
     const UpdateFlags flags(update_values | update_normal_vectors |
                             update_quadrature_points | update_JxW_values);
 
-    PerTaskData task_data(fe.n_dofs_per_cell(), trace_reconstruct);
-    auto ccase = std::dynamic_pointer_cast<const convdiffcase_verification<dim>>(this->params_.test_case);
-    ScratchData scratch(fe,
+    PerTaskData task_data(fe_.n_dofs_per_cell(), aopts.reconstruct_from_trace);
+    auto ccase = std::dynamic_pointer_cast<const ConvDiffCase<dim>>(case_);
+    auto ecase = std::dynamic_pointer_cast<const HasExactSolution<dim>>(this->case_);
+    ScratchData scratch(fe_,
                         fe_local,
                         quadrature_formula,
                         face_quadrature_formula,
@@ -328,10 +329,10 @@ namespace pde {
                         flags,
                         ccase->get_convection_velocity().get(),
                         ccase->get_right_hand_side().get(),
-                        ccase->get_exact_solution().get());
+                        ecase->get_exact_solution().get());
 
-    WorkStream::run(dof_handler.begin_active(),
-        dof_handler.end(),
+    WorkStream::run(dof_handler_.begin_active(),
+        dof_handler_.end(),
         *this,
         &ConvdiffHDG<dim>::assemble_system_one_cell,
         &ConvdiffHDG<dim>::copy_local_to_global,
@@ -376,7 +377,7 @@ namespace pde {
       }
     scratch.fe_values_local.reinit(loc_cell);
     
-    auto ccase = std::dynamic_pointer_cast<const CaseWithNeumannBC<Case<dim>>>(this->params_.test_case);
+    auto ccase = std::dynamic_pointer_cast<const HasNeumannBC<dim>>(this->case_);
     if(!ccase) {
         throw std::runtime_error("Invalid case for Neumann BCs!");
     }
@@ -427,7 +428,7 @@ namespace pde {
         // The already obtained $\hat{u}$ values are needed when solving for the
         // local variables.
         if (task_data.trace_reconstruct) {
-          scratch.fe_face_values.get_function_values(solution,
+          scratch.fe_face_values.get_function_values(solution_,
                                                      scratch.trace_values);
         }
 
@@ -588,8 +589,8 @@ namespace pde {
       constraints.distribute_local_to_global(data.cell_matrix,
                                              data.cell_vector,
                                              data.dof_indices,
-                                             system_matrix,
-                                             system_rhs);
+                                             system_matrix_,
+                                             rhs_);
     }
   }
 
@@ -597,29 +598,31 @@ namespace pde {
   template <int dim>
   void ConvdiffHDG<dim>::solve()
   {
-    SolverControl                  solver_control(system_matrix.m() * 10,
-                                 1e-11 * system_rhs.l2_norm());
+    SolverControl                  solver_control(system_matrix_.m() * 10,
+                                 1e-11 * rhs_.l2_norm());
     PreconditionSOR<SparseMatrix<double> > precondition;
-    precondition.initialize(system_matrix,
+    precondition.initialize(system_matrix_,
             PreconditionSOR<SparseMatrix<double>>::AdditionalData(.8));
     SolverBicgstab<Vector<double>> solver(solver_control);
-    //solver.solve(system_matrix, solution, system_rhs, PreconditionIdentity());
-    solver.solve(system_matrix, solution, system_rhs, precondition);
+    //solver.solve(system_matrix_, solution, system_rhs, PreconditionIdentity());
+    solver.solve(system_matrix_, solution_, rhs_, precondition);
 
     std::cout << "   Number of BiCGStab iterations: "
               << solver_control.last_step() << std::endl;
 
-    system_matrix.clear();
-    //sparsity_pattern.reinit(0, 0, 0, 1);
-    sparsity_pattern.reinit(0, 0, 0);
+    system_matrix_.clear();
+    //sparsity_pattern_.reinit(0, 0, 0, 1);
+    sparsity_pattern_.reinit(0, 0, 0);
 
-    constraints.distribute(solution);
+    constraints.distribute(solution_);
 
     // Once we have solved for the skeleton solution,
     // we can solve for the local solutions in an element-by-element
     // fashion.  We do this by re-using the same @p assemble_system function
-    // but switching @p trace_reconstruct to true.
-    assemble_system(true);
+    // but switching trace_reconstruct to true.
+    AssemblyOptions aopts;
+    aopts.reconstruct_from_trace = true;
+    assemble_system(aopts);
   }
 
 
@@ -672,11 +675,16 @@ namespace pde {
         0U);
     }
 
-    Vector<float> difference_per_cell(triangulation.n_active_cells());
+    Vector<float> difference_per_cell(tria_.n_active_cells());
 
-    auto ccase = std::dynamic_pointer_cast<const convdiffcase_verification<dim>>(params_.test_case);
+    auto ccase = std::dynamic_pointer_cast<const HasExactSolutionAndGradient<dim>>(
+            case_);
     if(!ccase) {
-        throw std::runtime_error("Invalid case for HDG convergence analysis!");
+        throw TypeNotSupportedError("HDG convergence analysis needs exact soln and grad!");
+    }
+    auto ecase = std::dynamic_pointer_cast<const HasExactSolution<dim>>(this->case_);
+    if(!ecase) {
+        throw TypeNotSupportedError("HDG convergence analysis needs exact soln and grad!");
     }
 
     ComponentSelectFunction<dim> value_select(dim, dim + 1);
@@ -684,11 +692,11 @@ namespace pde {
                                       solution_local,
                                       *ccase->get_exact_solution_and_gradient(),
                                       difference_per_cell,
-                                      QGauss<dim>(fe.degree + 2),
+                                      QGauss<dim>(fe_.degree + 2),
                                       VectorTools::L2_norm,
                                       &value_select);
     const double L2_error =
-      VectorTools::compute_global_error(triangulation,
+      VectorTools::compute_global_error(tria_,
                                         difference_per_cell,
                                         VectorTools::L2_norm);
 
@@ -698,27 +706,27 @@ namespace pde {
                                       solution_local,
                                       *ccase->get_exact_solution_and_gradient(),
                                       difference_per_cell,
-                                      QGauss<dim>(fe.degree + 2),
+                                      QGauss<dim>(fe_.degree + 2),
                                       VectorTools::L2_norm,
                                       &gradient_select);
     const double grad_error =
-      VectorTools::compute_global_error(triangulation,
+      VectorTools::compute_global_error(tria_,
                                         difference_per_cell,
                                         VectorTools::L2_norm);
 
     VectorTools::integrate_difference(dof_handler_u_post,
                                       solution_u_post,
-                                      *ccase->get_exact_solution(),
+                                      *ecase->get_exact_solution(),
                                       difference_per_cell,
-                                      QGauss<dim>(fe.degree + 3),
+                                      QGauss<dim>(fe_.degree + 3),
                                       VectorTools::L2_norm);
     const double post_error =
-      VectorTools::compute_global_error(triangulation,
+      VectorTools::compute_global_error(tria_,
                                         difference_per_cell,
                                         VectorTools::L2_norm);
 
-    convergence_table.add_value("cells", triangulation.n_active_cells());
-    convergence_table.add_value("dofs", dof_handler.n_dofs());
+    convergence_table.add_value("cells", tria_.n_active_cells());
+    convergence_table.add_value("dofs", dof_handler_.n_dofs());
 
     convergence_table.add_value("val L2", L2_error);
     convergence_table.set_scientific("val L2", true);
@@ -845,7 +853,7 @@ namespace pde {
     std::string boundary_out(filename);
     boundary_out += "-boundary";
 
-    filename += "-q" + Utilities::int_to_string(fe.degree, 1);
+    filename += "-q" + Utilities::int_to_string(fe_.degree, 1);
     filename += "-" + Utilities::int_to_string(cycle, 2);
     filename += ".vtk";
     std::ofstream output(filename);
@@ -877,11 +885,11 @@ namespace pde {
                              post_name,
                              post_comp_type);
 
-    data_out.build_patches(fe.degree);
+    data_out.build_patches(fe_.degree);
     data_out.write_vtk(output);
     output.close();
 
-    face_out += "-q" + Utilities::int_to_string(fe.degree, 1);
+    face_out += "-q" + Utilities::int_to_string(fe_.degree, 1);
     face_out += "-" + Utilities::int_to_string(cycle, 2);
     face_out += ".vtk";
     std::ofstream face_output(face_out);
@@ -895,17 +903,17 @@ namespace pde {
     std::vector<DataComponentInterpretation::DataComponentInterpretation>
       face_component_type(1, DataComponentInterpretation::component_is_scalar);
 
-    data_out_face.add_data_vector(dof_handler,
-                                  solution,
+    data_out_face.add_data_vector(dof_handler_,
+                                  solution_,
                                   face_name,
                                   face_component_type);
 
-    data_out_face.build_patches(fe.degree);
+    data_out_face.build_patches(fe_.degree);
     data_out_face.write_vtk(face_output);
     face_output.close();
    
     // Write boundary data 
-    boundary_out += "-q" + Utilities::int_to_string(fe.degree, 1);
+    boundary_out += "-q" + Utilities::int_to_string(fe_.degree, 1);
     boundary_out += "-" + Utilities::int_to_string(cycle, 2);
     boundary_out += ".vtk";
     std::ofstream b_output(boundary_out);
@@ -916,7 +924,7 @@ namespace pde {
                                   face_name,
                                   face_component_type);
 
-    data_out_boundary.build_patches(fe.degree);
+    data_out_boundary.build_patches(fe_.degree);
     data_out_boundary.write_vtk(b_output);
     b_output.close();
   }
@@ -937,19 +945,19 @@ namespace pde {
   void ConvdiffHDG<dim>::refine_grid(const int cycle, const unsigned int initial_resolution)
   {
     if (cycle == 0) {
-      params_.test_case->get_geometry()->generate_grid(triangulation, initial_resolution);
-      triangulation.refine_global(3 - dim);
+      case_->get_geometry()->generate_grid(tria_, initial_resolution);
+      tria_.refine_global(3 - dim);
     }
     else {
       if(params_.is_adaptive) {
         Vector<float> estimated_error_per_cell(
-          triangulation.n_active_cells());
+          tria_.n_active_cells());
 
         const FEValuesExtractors::Scalar scalar(dim);
         std::map<types::boundary_id, const Function<dim> *>
           neumann_boundary;
         KellyErrorEstimator<dim>::estimate(dof_handler_local,
-                                           QGauss<dim - 1>(fe.degree + 1),
+                                           QGauss<dim - 1>(fe_.degree + 1),
                                            neumann_boundary,
                                            solution_local,
                                            estimated_error_per_cell,
@@ -957,15 +965,15 @@ namespace pde {
                                              scalar));
 
         GridRefinement::refine_and_coarsen_fixed_number(
-          triangulation, estimated_error_per_cell, 0.3, 0.);
+          tria_, estimated_error_per_cell, 0.3, 0.);
 
-        triangulation.execute_coarsening_and_refinement();
+        tria_.execute_coarsening_and_refinement();
       } else {
         // global refinement
-        triangulation.clear();
+        tria_.clear();
         const auto resolution = initial_resolution + cycle % 2;
-        params_.test_case->get_geometry()->generate_grid(triangulation, resolution);
-        triangulation.refine_global(3 - dim + cycle / 2);
+        case_->get_geometry()->generate_grid(tria_, resolution);
+        tria_.refine_global(3 - dim + cycle / 2);
       }
     }
 
@@ -974,7 +982,7 @@ namespace pde {
     // conditions. Since we re-create the triangulation every time for global
     // refinement, the flags are set in every refinement step, not just at the
     // beginning.
-    params_.test_case->get_geometry()->set_boundary_ids(triangulation);
+    case_->get_geometry()->set_boundary_ids(tria_);
   }
 
   // @sect4{ConvdiffHDG::run}
@@ -989,8 +997,8 @@ namespace pde {
         std::cout << "Cycle " << cycle << ':' << std::endl;
 
         refine_grid(cycle, params_.initial_resolution);
-        setup_system();
-        assemble_system(false);
+        setup_system(false);
+        assemble_system(AssemblyOptions{false});
         solve();
         postprocess();
         output_results(cycle);
