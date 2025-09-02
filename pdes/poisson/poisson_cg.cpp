@@ -52,7 +52,7 @@ namespace pde {
 template <int dim>
 PoissonCG<dim>::PoissonCG(std::shared_ptr<const Case<dim>> tcase, const PDEParams& params,
                           const SolverParams& sparams)
-  : PDESolver<dim>(tcase, params, sparams), fe_(params.fe_degree)
+  : DiscretePDE<dim>(tcase, params, sparams), fe_(params.fe_degree)
 { }
 
 template <int dim>

@@ -63,7 +63,7 @@ int main(int argc, char *argv[])
                         common_params.is_adaptive, common_params.outpath};
     SolverParams solver_params{common_params.tolerance, common_params.max_outer_its};
 
-    auto pdesolver = create_pde_solver(tcase, pdeparams, solver_params);
+    auto pdesolver = create_discrete_pde(tcase, pdeparams, solver_params);
 
     try
     {

@@ -72,7 +72,7 @@ using namespace dealii;
 template <int dim>
 MinimalSurface<dim>::MinimalSurface(std::shared_ptr<const Case<dim>> tcase, const PDEParams& params,
                                     const SolverParams& s_params)
-: PDESolver<dim>(tcase, params, s_params), fe_(params.fe_degree)
+: DiscretePDE<dim>(tcase, params, s_params), fe_(params.fe_degree)
 {
 }
 

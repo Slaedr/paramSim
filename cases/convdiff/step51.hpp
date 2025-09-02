@@ -4,11 +4,10 @@
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/variables_map.hpp>
 #include <deal.II/grid/grid_generator.h>
+#include <deal.II/lac/vector.h>
 
 #include "../case.hpp"
 #include "convdiffcase.hpp"
-#include "../../pdes/pdebase.hpp"
-#include "../../pdes/convdiff/convdiff_hdg.hpp"
 
 namespace paramsim {
 namespace cases {

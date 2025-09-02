@@ -17,7 +17,7 @@ using namespace dealii;
  * Solves the Poisson equation with non-homogeneous Dirichlet BCs.
  */
 template <int dim>
-class PoissonCG : public PDESolver<dim>
+class PoissonCG : public DiscretePDE<dim>
 {
 public:
     PoissonCG(std::shared_ptr<const Case<dim>> test_case, const PDEParams& params,
@@ -33,16 +33,16 @@ private:
     void solve() override;
     void output_results(int cycle) const;
 
-    using PDESolver<dim>::case_;
-    using PDESolver<dim>::params_;
-    using PDESolver<dim>::solver_params_;
+    using DiscretePDE<dim>::case_;
+    using DiscretePDE<dim>::params_;
+    using DiscretePDE<dim>::solver_params_;
 
-    using PDESolver<dim>::tria_;
-    using PDESolver<dim>::dof_handler_;
-    using PDESolver<dim>::sparsity_pattern_;
-    using PDESolver<dim>::system_matrix_;
-    using PDESolver<dim>::solution_;
-    using PDESolver<dim>::rhs_;
+    using DiscretePDE<dim>::tria_;
+    using DiscretePDE<dim>::dof_handler_;
+    using DiscretePDE<dim>::sparsity_pattern_;
+    using DiscretePDE<dim>::system_matrix_;
+    using DiscretePDE<dim>::solution_;
+    using DiscretePDE<dim>::rhs_;
       
     FE_Q<dim> fe_;
 };

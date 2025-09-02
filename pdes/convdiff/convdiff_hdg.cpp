@@ -27,7 +27,7 @@ namespace pde {
   ConvdiffHDG<dim>
     ::ConvdiffHDG(std::shared_ptr<const Case<dim>> test_case, const PDEParams& params,
                   const SolverParams& sparams)
-    : PDESolver<dim>(test_case, params, sparams), fe_(params.fe_degree)
+    : DiscretePDE<dim>(test_case, params, sparams), fe_(params.fe_degree)
     , fe_local(FE_DGQ<dim>(params.fe_degree), dim, FE_DGQ<dim>(params.fe_degree), 1)
     , dof_handler_local(tria_)
     , fe_u_post(params.fe_degree + 1)

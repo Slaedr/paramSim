@@ -44,36 +44,22 @@ struct AssemblyOptions {
     bool reconstruct_from_trace;
 };
 
-template <int dim>
-class PDESolver
+/// Spatial-dimension-agnostic abstract PDE discretization interface.
+class DiscretePDEBase
 {
 public:
-    PDESolver(std::shared_ptr<const Case<dim>> test_case, const PDEParams& params,
-              const SolverParams& solver_params);
+    DiscretePDEBase(const PDEParams& params, const SolverParams& solver_params);
+    virtual ~DiscretePDEBase() { }
 
-    virtual ~PDESolver() { }
-    
-    void make_grid(unsigned n_cell_dir);
-
+    virtual void make_grid(unsigned n_cell_dir) = 0;
     virtual void setup_system(bool initial_step) = 0;
     virtual void assemble_system(AssemblyOptions opts) = 0;
     virtual void solve() = 0;
-
     virtual void run() = 0;
 
-    const dealii::Triangulation<dim>& get_triangulation() const { return tria_; }
-    dealii::Triangulation<dim>& get_triangulation() { return tria_; }
-    const dealii::DoFHandler<dim>& get_dof_handler() const { return dof_handler_; }
-    const dealii::Vector<double> get_solution() const { return solution_; }
-
 protected:
-    std::shared_ptr<const Case<dim>> case_;
     const PDEParams params_;
     const SolverParams solver_params_;
-
-    dealii::Triangulation<dim> tria_;
-
-    dealii::DoFHandler<dim> dof_handler_;
 
     dealii::SparsityPattern sparsity_pattern_;
     dealii::SparseMatrix<double> system_matrix_;
@@ -83,10 +69,34 @@ protected:
     dealii::Vector<double> rhs_;
 };
 
+/// Parts of the abstract PDE discretization interface that depend on the spatial dimension.
 template <int dim>
-std::unique_ptr<PDESolver<dim>> create_pde_solver(std::shared_ptr<const Case<dim>> test_case,
-                                                  const PDEParams& params,
-                                                  const SolverParams& solver_params);
+class DiscretePDE : public DiscretePDEBase
+{
+public:
+    DiscretePDE(std::shared_ptr<const Case<dim>> test_case, const PDEParams& params,
+              const SolverParams& solver_params);
+
+    virtual ~DiscretePDE() { }
+    
+    void make_grid(unsigned n_cell_dir) override;
+
+    const dealii::Triangulation<dim>& get_triangulation() const { return tria_; }
+    dealii::Triangulation<dim>& get_triangulation() { return tria_; }
+    const dealii::DoFHandler<dim>& get_dof_handler() const { return dof_handler_; }
+    const dealii::Vector<double> get_solution() const { return solution_; }
+
+protected:
+    std::shared_ptr<const Case<dim>> case_;
+
+    dealii::Triangulation<dim> tria_;
+    dealii::DoFHandler<dim> dof_handler_;
+};
+
+template <int dim>
+std::unique_ptr<DiscretePDE<dim>> create_discrete_pde(std::shared_ptr<const Case<dim>> test_case,
+                                                      const PDEParams& params,
+                                                      const SolverParams& solver_params);
 
 }
 

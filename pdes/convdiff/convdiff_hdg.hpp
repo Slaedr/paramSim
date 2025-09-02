@@ -75,7 +75,7 @@ namespace pde {
    * converges at higher order.
    */
   template <int dim>
-  class ConvdiffHDG : public PDESolver<dim>
+  class ConvdiffHDG : public DiscretePDE<dim>
   {
   public:
     ConvdiffHDG(std::shared_ptr<const Case<dim>> test_case, const PDEParams& params,
@@ -113,11 +113,11 @@ namespace pde {
       PostProcessScratchData &                              scratch,
       unsigned int &                                        empty_data);
 
-    using PDESolver<dim>::case_;
-    using PDESolver<dim>::tria_;
-    using PDESolver<dim>::dof_handler_;
-    using PDESolver<dim>::solution_;
-    using PDESolver<dim>::rhs_;
+    using DiscretePDE<dim>::case_;
+    using DiscretePDE<dim>::tria_;
+    using DiscretePDE<dim>::dof_handler_;
+    using DiscretePDE<dim>::solution_;
+    using DiscretePDE<dim>::rhs_;
 
     // The new finite element type and corresponding <code>DoFHandler</code> are
     // used for the global skeleton solution that couples the element-level
@@ -164,12 +164,12 @@ namespace pde {
     // have to additionally pass the size of local blocks.
     //ChunkSparsityPattern      sparsity_pattern;
     //ChunkSparseMatrix<double> system_matrix;
-    using PDESolver<dim>::sparsity_pattern_;
-    using PDESolver<dim>::system_matrix_;
+    using DiscretePDE<dim>::sparsity_pattern_;
+    using DiscretePDE<dim>::system_matrix_;
 
     ConvergenceTable     convergence_table;
 
-    using PDESolver<dim>::params_;
+    using DiscretePDE<dim>::params_;
   };
 
 }

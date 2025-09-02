@@ -12,15 +12,21 @@
 
 namespace paramsim {
 
+
+DiscretePDEBase::DiscretePDEBase(const PDEParams& params, const SolverParams& solver_params)
+    : params_{params}, solver_params_{solver_params}
+{
+}
+
 template <int dim>
-PDESolver<dim>::PDESolver(std::shared_ptr<const Case<dim>> test_case,
+DiscretePDE<dim>::DiscretePDE(std::shared_ptr<const Case<dim>> test_case,
                           const PDEParams& params, const SolverParams& solver_params)
-    : case_{test_case}, params_{params}, solver_params_{solver_params}, dof_handler_(tria_)
+    : DiscretePDEBase(params, solver_params), case_{test_case}, dof_handler_(tria_)
 { 
 }
 
 template <int dim>
-void PDESolver<dim>::make_grid(const unsigned n_cell_dir)
+void DiscretePDE<dim>::make_grid(const unsigned n_cell_dir)
 {
     tria_.clear();
     auto geom = case_->get_geometry();
@@ -34,12 +40,12 @@ void PDESolver<dim>::make_grid(const unsigned n_cell_dir)
               << std::endl;
 }
 
-template class PDESolver<2>;
+template class DiscretePDE<2>;
 
 template <int dim>
-std::unique_ptr<PDESolver<dim>> create_pde_solver(std::shared_ptr<const Case<dim>> test_case,
-                                                  const PDEParams& params,
-                                                  const SolverParams& solver_params)
+std::unique_ptr<DiscretePDE<dim>> create_discrete_pde(std::shared_ptr<const Case<dim>> test_case,
+                                                      const PDEParams& params,
+                                                      const SolverParams& solver_params)
 {
     if(params.pde_solver == "poisson_cg") {
         return std::make_unique<pde::PoissonCG<dim>>(test_case, params, solver_params);
@@ -56,8 +62,7 @@ std::unique_ptr<PDESolver<dim>> create_pde_solver(std::shared_ptr<const Case<dim
     }
 }
 
-template std::unique_ptr<PDESolver<2>> create_pde_solver(std::shared_ptr<const Case<2>>,
-                                                         const PDEParams&,
-                                                         const SolverParams&);
+template std::unique_ptr<DiscretePDE<2>> create_discrete_pde(std::shared_ptr<const Case<2>>,
+                                                             const PDEParams&, const SolverParams&);
 
 }

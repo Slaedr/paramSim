@@ -20,7 +20,7 @@ using namespace dealii;
  * Adapted from DEAL.II's step 15 example.
  */
 template <int dim>
-class MinimalSurface : public PDESolver<dim>
+class MinimalSurface : public DiscretePDE<dim>
 {
 public:
     MinimalSurface(std::shared_ptr<const Case<dim>> test_case, const PDEParams& params,
@@ -81,17 +81,17 @@ protected:
 
     void output_results(int cycle) const;
 
-    using PDESolver<dim>::case_;
-    using PDESolver<dim>::params_;
-    using PDESolver<dim>::solver_params_;
+    using DiscretePDE<dim>::case_;
+    using DiscretePDE<dim>::params_;
+    using DiscretePDE<dim>::solver_params_;
 
-    using PDESolver<dim>::tria_;
-    using PDESolver<dim>::dof_handler_;
-    using PDESolver<dim>::sparsity_pattern_;
-    using PDESolver<dim>::system_matrix_;
-    using PDESolver<dim>::solution_;
-    using PDESolver<dim>::update_;
-    using PDESolver<dim>::rhs_;
+    using DiscretePDE<dim>::tria_;
+    using DiscretePDE<dim>::dof_handler_;
+    using DiscretePDE<dim>::sparsity_pattern_;
+    using DiscretePDE<dim>::system_matrix_;
+    using DiscretePDE<dim>::solution_;
+    using DiscretePDE<dim>::update_;
+    using DiscretePDE<dim>::rhs_;
 
     FE_Q<dim> fe_;
     AffineConstraints<double> hanging_node_constraints;

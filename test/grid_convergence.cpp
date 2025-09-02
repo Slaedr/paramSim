@@ -21,7 +21,7 @@ double test_grid_convergence(std::shared_ptr<const Case<dim>> test_case, const P
     if(params.refine_levels < 2) {
         throw std::runtime_error("Not enough refinement levels to test grid convergence!");
     }
-    auto pde = create_pde_solver<dim>(test_case, params, sparams);
+    auto pde = create_discrete_pde<dim>(test_case, params, sparams);
     auto scase = std::dynamic_pointer_cast<const HasExactSolution<dim>>(test_case);
     if(!scase) {
         throw TypeNotSupportedError("Case must have exact solution for grid convergence!");
