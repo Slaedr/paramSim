@@ -16,6 +16,7 @@ find_package(Boost 1.60.0 COMPONENTS program_options)
 
 add_subdirectory(pdes)
 add_subdirectory(utils)
+add_subdirectory(solvers)
 add_subdirectory(cases)
 
 enable_testing()
@@ -24,4 +25,8 @@ add_subdirectory(test)
 
 add_executable(run_case run_case.cpp)
 deal_ii_setup_target(run_case)
-target_link_libraries(run_case paramsim_solvers paramsim_cases paramsim_utils utils)
+target_link_libraries(run_case paramsim_dpdes paramsim_solvers paramsim_cases paramsim_utils utils)
+
+# Test the main executable
+configure_file(test/run_case_check.sh ${CMAKE_BINARY_DIR}/run_case_check.sh COPYONLY)
+add_test(NAME runcheck COMMAND sh ./run_case_check.sh)

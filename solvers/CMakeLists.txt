@@ -1,0 +1,3 @@
+add_library(paramsim_solvers newton.cpp)
+target_link_libraries(paramsim_solvers paramsim_dpdes paramsim_utils)
+deal_ii_setup_target(paramsim_solvers)

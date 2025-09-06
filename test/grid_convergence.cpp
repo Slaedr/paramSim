@@ -3,16 +3,16 @@
 #include <vector>
 #include <cmath>
 
+#include <deal.II/fe/fe_q.h>
 #include <deal.II/grid/tria.h>
 #include <deal.II/numerics/vector_tools.h>
 #include <deal.II/base/convergence_table.h>
 
 #include "../utils/error_handling.hpp"
+#include "../solvers/newton.hpp"
 
 namespace paramsim {
 namespace testutils {
-
-constexpr double slope_tol = 0.1;
 
 template <int dim>
 double test_grid_convergence(std::shared_ptr<const Case<dim>> test_case, const PDEParams& params,
@@ -21,28 +21,34 @@ double test_grid_convergence(std::shared_ptr<const Case<dim>> test_case, const P
     if(params.refine_levels < 2) {
         throw std::runtime_error("Not enough refinement levels to test grid convergence!");
     }
-    auto pde = create_discrete_pde<dim>(test_case, params, sparams);
+    assert(!params.is_adaptive);
+    std::shared_ptr<DiscretePDEBase> pdeb = create_discrete_pde<dim>(test_case, params, sparams);
+    auto pde = std::dynamic_pointer_cast<DiscretePDE<dim,dealii::FE_Q<dim>>>(pdeb);
     auto scase = std::dynamic_pointer_cast<const HasExactSolution<dim>>(test_case);
     if(!scase) {
         throw TypeNotSupportedError("Case must have exact solution for grid convergence!");
     }
 
+    solver::NewtonSolver solver(pde, sparams);
+    using vector_type = typename DiscretePDEBase::vector_type;
+    vector_type u;
+    pde->allocate_solution_vector(u);
+
     dealii::ConvergenceTable convergence_table;
     std::vector<double> l2_errors;
-    std::vector<double> h; h.reserve(params.refine_levels);
+    std::vector<double> h;
+    h.reserve(params.refine_levels);
     std::vector<double> slopes(params.refine_levels-1);
+    unsigned resolution = params.initial_resolution;
 
-    for(int imesh = 0; imesh < params.refine_levels; imesh++)
+    for(int imesh = 0; imesh < params.refine_levels; imesh++, resolution*=2)
     {
-        const unsigned resolution = params.initial_resolution * (imesh+1);
-        pde->make_grid(resolution);
-        pde->setup_system(imesh==0);
-        pde->assemble_system(AssemblyOptions{false});
-        pde->solve();
+        solver.reinit();
+        solver.solve(u);
 
         const dealii::DoFHandler<dim>& dof_handler = pde->get_dof_handler();
         const dealii::Triangulation<dim>& triangulation = pde->get_triangulation();
-        const dealii::Vector<double>& solution = pde->get_solution();
+        const vector_type& solution = u;
 
         convergence_table.add_value("cells", pde->get_triangulation().n_active_cells());
         convergence_table.add_value("dofs", dof_handler.n_dofs());
@@ -72,6 +78,8 @@ double test_grid_convergence(std::shared_ptr<const Case<dim>> test_case, const P
             slopes[imesh-1] = (std::log10(l2_errors[imesh]) - std::log10(l2_errors[imesh-1])) /
                 (std::log10(h[imesh]) - std::log10(h[imesh-1]));
         }
+
+        pde->refine_mesh_and_interpolate_solution(u);
     }
 
     if(scase && scase->get_exact_solution()) {

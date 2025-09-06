@@ -18,7 +18,7 @@
 #include "../grid_convergence.hpp"
 
 using namespace paramsim;
-namespace bpo = boost::program_options;
+//namespace bpo = boost::program_options;
 
 constexpr int dim = 2;
 
@@ -43,9 +43,9 @@ protected:
 TEST_F(PoissonVerification, ConvergesP1)
 {
     const int nargs = 13;
-    const char args[][100] = {"prog", "--solver", "poisson_cg", "--refine_levels", "4",
+    const char args[][100] = {"prog", "--pde", "poisson_cg", "--refine_levels", "4",
         "--initial_resolution", "4",
-        "--case", "poisson_verify", "--fe_degree", "1", "--max_its", "100"};
+        "--case", "poisson_verify", "--fe_degree", "1", "--max_its", "3"};
     this->set_up(nargs, args);
     this->run_data = get_run_data<dim>(nargs, this->argv);
     const double conv_slope = testutils::test_grid_convergence(
@@ -56,9 +56,9 @@ TEST_F(PoissonVerification, ConvergesP1)
 TEST_F(PoissonVerification, ConvergesP2)
 {
     const int nargs = 13;
-    const char args[][100] = {"prog", "--solver", "poisson_cg", "--refine_levels", "4",
+    const char args[][100] = {"prog", "--pde", "poisson_cg", "--refine_levels", "4",
         "--initial_resolution", "4",
-        "--case", "poisson_verify", "--fe_degree", "2", "--max_its", "100"};
+        "--case", "poisson_verify", "--fe_degree", "2", "--max_its", "5"};
     this->set_up(nargs, args);
     this->run_data = get_run_data<dim>(nargs, this->argv);
     const double conv_slope = testutils::test_grid_convergence(

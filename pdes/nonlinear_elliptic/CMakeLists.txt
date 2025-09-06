@@ -1,2 +1,2 @@
 
-target_sources(paramsim_solvers PRIVATE minimal_surface.cpp)
+target_sources(paramsim_dpdes PRIVATE minimal_surface.cpp)

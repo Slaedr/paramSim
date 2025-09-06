@@ -1,2 +1,2 @@
 
-target_sources(paramsim_solvers PRIVATE poisson_cg.cpp)
+target_sources(paramsim_dpdes PRIVATE poisson_cg.cpp)

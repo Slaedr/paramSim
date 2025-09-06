@@ -15,7 +15,7 @@ TEST(Cases, CanCreateDefaultMinSurfCubeSinusoidalCase)
     bpo::options_description common_desc
         ("Solves one problem given one set of parameters.");
     ps::add_common_options(common_desc, "help!");
-    char args[][100] = {"prog", "--solver", "minimal_surface", "--refine_levels", "4",
+    char args[][100] = {"prog", "--pde", "minimal_surface", "--refine_levels", "4",
         "--case", "minimal_surface_cube_sinusoidal", "--fe_degree", "2", "--max_its", "100"};
     const char **argv = static_cast<const char**>(std::malloc(nargs*sizeof(char**)));
     for(int i = 0; i < nargs; i++) {

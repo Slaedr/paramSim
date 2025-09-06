@@ -24,16 +24,38 @@
 // examples and are not commented on.
 
 #include <iostream>
+#include <memory>
 #include <boost/program_options/options_description.hpp>
 
 #include <deal.II/base/multithread_info.h>
+#include <deal.II/fe/fe_q.h>
 
 #include "utils/cmdparser.hpp"
 #include "cases/case.hpp"
 #include "pdes/pdebase.hpp"
+#include "solvers/newton.hpp"
 
 namespace bpo = boost::program_options;
 using namespace paramsim;
+
+template <int dim>
+void run(const PDEParams& params, const SolverParams& sparams,
+         std::shared_ptr<DiscretePDEBase> pdeb)
+{
+    auto pde = std::dynamic_pointer_cast<DiscretePDE<dim,dealii::FE_Q<dim>>>(pdeb);
+    solver::NewtonSolver solver(pde, sparams);
+    using vector_type = typename DiscretePDEBase::vector_type;
+    vector_type u;
+    pde->allocate_solution_vector(u);
+    unsigned resolution = params.initial_resolution;
+    for(int imesh = 0; imesh < params.refine_levels; imesh++, resolution*=2)
+    {
+        solver.reinit();
+        solver.solve(u);
+        pde->refine_mesh_and_interpolate_solution(u);
+        pde->output_results(imesh, u);
+    }
+}
 
 int main(int argc, char *argv[])
 {
@@ -63,7 +85,7 @@ int main(int argc, char *argv[])
                         common_params.is_adaptive, common_params.outpath};
     SolverParams solver_params{common_params.tolerance, common_params.max_outer_its};
 
-    auto pdesolver = create_discrete_pde(tcase, pdeparams, solver_params);
+    std::shared_ptr<DiscretePDEBase> pdeb = create_discrete_pde(tcase, pdeparams, solver_params);
 
     try
     {
@@ -71,7 +93,7 @@ int main(int argc, char *argv[])
                   << "=======" << std::endl
                   << std::endl;
 
-        pdesolver->run();
+        run<dim>(pdeparams, solver_params, pdeb);
 
         std::cout << std::endl;
     }

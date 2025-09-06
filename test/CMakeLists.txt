@@ -1,5 +1,5 @@
 add_library(testutils grid_convergence.cpp)
-target_link_libraries(testutils paramsim_solvers paramsim_cases)
+target_link_libraries(testutils paramsim_solvers paramsim_dpdes paramsim_cases)
 deal_ii_setup_target(testutils)
 
 find_package(GTest 1.10.0)
@@ -24,9 +24,9 @@ if(NOT GTest_FOUND)
 	FetchContent_MakeAvailable(googletest)
 	# make sure the tests DLLs are placed in the working path for CTest
 	#set_target_properties(gtest gtest_main PROPERTIES
-	#    RUNTIME_OUTPUT_DIRECTORY "${GINKGO_LIBRARY_PATH}"
-	#   ARCHIVE_OUTPUT_DIRECTORY "${GINKGO_LIBRARY_PATH}"
-	#    LIBRARY_OUTPUT_DIRECTORY "${GINKGO_LIBRARY_PATH}")
+	#    RUNTIME_OUTPUT_DIRECTORY "${ParamSim_LIBRARY_PATH}"
+	#   ARCHIVE_OUTPUT_DIRECTORY "${ParamSim_LIBRARY_PATH}"
+	#    LIBRARY_OUTPUT_DIRECTORY "${ParamSim_LIBRARY_PATH}")
 	# If CXX compiler is dpcpp, use -ffp-model=precise
 	# Otherwise, it will throw src/gtest.cc:1583:8: error: comparison with NaN always evaluates to false in fast floating point modes
 	if(CMAKE_CXX_COMPILER MATCHES "dpcpp|icpx")

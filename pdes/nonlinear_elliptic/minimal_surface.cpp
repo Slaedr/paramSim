@@ -30,10 +30,7 @@
 
 #include <deal.II/lac/vector.h>
 #include <deal.II/lac/full_matrix.h>
-#include <deal.II/lac/sparse_matrix.h>
 #include <deal.II/lac/dynamic_sparsity_pattern.h>
-#include <deal.II/lac/solver_cg.h>
-#include <deal.II/lac/precondition.h>
 #include <deal.II/lac/affine_constraints.h>
 
 #include <deal.II/grid/tria.h>
@@ -47,16 +44,8 @@
 #include <deal.II/fe/fe_q.h>
 
 #include <deal.II/numerics/vector_tools.h>
-#include <deal.II/numerics/matrix_tools.h>
 #include <deal.II/numerics/data_out.h>
 #include <deal.II/numerics/data_out_faces.h>
-#include <deal.II/numerics/error_estimator.h>
-
-// We will use adaptive mesh refinement between Newton iterations. To do so,
-// we need to be able to work with a solution on the new mesh, although it was
-// computed on the old one. The SolutionTransfer class transfers the solution
-// from the old to the new mesh:
-#include <deal.II/numerics/solution_transfer.h>
 
 
 #include "../pdebase.hpp"
@@ -72,46 +61,8 @@ using namespace dealii;
 template <int dim>
 MinimalSurface<dim>::MinimalSurface(std::shared_ptr<const Case<dim>> tcase, const PDEParams& params,
                                     const SolverParams& s_params)
-: DiscretePDE<dim>(tcase, params, s_params), fe_(params.fe_degree)
+: DiscretePDE<dim,fe_type>(tcase, params, s_params)
 {
-}
-
-
-// @sect4{MinimalSurface::setup_system}
-
-// As always in the setup-system function, we set up the variables of the
-// finite element method. There are same differences to step-6, because
-// there we start solving the PDE from scratch in every refinement cycle
-// whereas here we need to take the solution from the previous mesh onto the
-// current mesh. Consequently, we can't just reset solution vectors. The
-// argument passed to this function thus indicates whether we can
-// distributed degrees of freedom (plus compute constraints) and set the
-// solution vector to zero or whether this has happened elsewhere already
-// (specifically, in <code>refine_mesh()</code>).
-
-template <int dim>
-void MinimalSurface<dim>::setup_system(const bool initial_step)
-{
-    dof_handler_.distribute_dofs(fe_);
-    if (initial_step)
-    {
-        hanging_node_constraints.clear();
-        DoFTools::make_hanging_node_constraints(dof_handler_,
-                                                hanging_node_constraints);
-        hanging_node_constraints.close();
-    }
-
-    solution_.reinit(dof_handler_.n_dofs());
-    update_.reinit(dof_handler_.n_dofs());
-    rhs_.reinit(dof_handler_.n_dofs());
-
-    DynamicSparsityPattern dsp(dof_handler_.n_dofs());
-    DoFTools::make_sparsity_pattern(dof_handler_, dsp);
-
-    hanging_node_constraints.condense(dsp);
-
-    sparsity_pattern_.copy_from(dsp);
-    system_matrix_.reinit(sparsity_pattern_);
 }
 
 // @sect4{MinimalSurface::assemble_system}
@@ -127,15 +78,17 @@ void MinimalSurface<dim>::setup_system(const bool initial_step)
 // vectors, as well as for the gradients of the previous solution at the
 // quadrature points. We then start the loop over all cells:
 template <int dim>
-void MinimalSurface<dim>::assemble_system(AssemblyOptions)
+void MinimalSurface<dim>::assemble_system(AssemblyOptions, const vector_type& state,
+                                          dealii::SparseMatrix<double>& mat, vector_type& rhs) const
 {
   const QGauss<dim> quadrature_formula(fe_.degree + 1);
 
-  system_matrix_ = 0;
-  rhs_    = 0;
+  mat = 0;
+  rhs = 0;
 
   FEValues<dim> fe_values(fe_, quadrature_formula,
-                          update_gradients | update_quadrature_points | update_JxW_values);
+                          update_values | update_gradients | update_quadrature_points
+                          | update_JxW_values);
 
   const unsigned int dofs_per_cell = fe_.n_dofs_per_cell();
   const unsigned int n_q_points    = quadrature_formula.size();
@@ -163,8 +116,7 @@ void MinimalSurface<dim>::assemble_system(AssemblyOptions)
       // cell with which the FEValues object has last been reinitialized.
       // The values of the gradients at all quadrature points are then written
       // into the second argument:
-      fe_values.get_function_gradients(solution_,
-                                       old_solution_gradients);
+      fe_values.get_function_gradients(state, old_solution_gradients);
 
       // With this, we can then do the integration loop over all quadrature
       // points and shape functions.  Having just computed the gradients of
@@ -194,10 +146,16 @@ void MinimalSurface<dim>::assemble_system(AssemblyOptions)
                      * old_solution_gradients[q]))   //   * \nabla u_n)))
                    * fe_values.JxW(q));              // * dx
 
+              // residual of operator
               cell_rhs(i) -= (fe_values.shape_grad(i, q)  // \nabla \phi_i
                               * coeff                     // * a_n
                               * old_solution_gradients[q] // * \nabla u_n
                               * fe_values.JxW(q));        // * dx
+              // source term
+              const auto &x_q = fe_values.quadrature_point(q);
+              cell_rhs(i) += (fe_values.shape_value(i, q) *          // phi_i(x_q)
+                              case_->get_right_hand_side()->value(x_q) *   // f(x_q)
+                              fe_values.JxW(q));                      // dx
           }
       }
 
@@ -205,182 +163,29 @@ void MinimalSurface<dim>::assemble_system(AssemblyOptions)
       for (unsigned int i = 0; i < dofs_per_cell; ++i)
       {
           for (unsigned int j = 0; j < dofs_per_cell; ++j)
-            system_matrix_.add(local_dof_indices[i],
-                              local_dof_indices[j],
-                              cell_matrix(i, j));
+            mat.add(local_dof_indices[i], local_dof_indices[j], cell_matrix(i, j));
 
-          rhs_(local_dof_indices[i]) += cell_rhs(i);
+          rhs(local_dof_indices[i]) += cell_rhs(i);
       }
   }
 
   // we remove hanging nodes from the system
-  hanging_node_constraints.condense(system_matrix_);
-  hanging_node_constraints.condense(rhs_);
+  affine_constraints_.condense(mat);
+  affine_constraints_.condense(rhs);
 
   // apply zero boundary values to the linear system that defines the Newton updates
   // $\delta u^n$:
-  for(auto bc : case_->get_dirichlet_bcs()) {
-    std::map<types::global_dof_index, double> boundary_values;
-    VectorTools::interpolate_boundary_values(dof_handler_,
-                                             bc.bc_id, Functions::ZeroFunction<dim>(),
-                                             boundary_values);
-    MatrixTools::apply_boundary_values(boundary_values,
-                                       system_matrix_,
-                                       update_,
-                                       rhs_);
-  }
-}
-
-
-template <int dim>
-void MinimalSurface<dim>::solve()
-{
-  SolverControl            solver_control(rhs_.size(),
-                               rhs_.l2_norm() * 1e-6);
-  SolverCG<Vector<double>> solver(solver_control);
-
-  PreconditionSSOR<SparseMatrix<double>> preconditioner;
-  preconditioner.initialize(system_matrix_, 1.2);
-
-  solver.solve(system_matrix_, update_, rhs_, preconditioner);
-
-  hanging_node_constraints.distribute(update_);
-
-  const double alpha = determine_step_length();
-  solution_.add(alpha, update_);
-}
-
-
-// @sect4{MinimalSurface::refine_mesh}
-
-// The first part of this function is the same as in step-6... However,
-// after refining the mesh we have to transfer the old solution to the new
-// one which we do with the help of the SolutionTransfer class. The process
-// is slightly convoluted, so let us describe it in detail:
-template <int dim>
-void MinimalSurface<dim>::refine_mesh()
-{
-  if(params_.is_adaptive) {
-    Vector<float> estimated_error_per_cell(tria_.n_active_cells());
-
-    KellyErrorEstimator<dim>::estimate(
-      dof_handler_,
-      QGauss<dim - 1>(fe_.degree + 1),
-      std::map<types::boundary_id, const Function<dim> *>(),
-      solution_,
-      estimated_error_per_cell);
-
-    GridRefinement::refine_and_coarsen_fixed_number(tria_,
-                                                    estimated_error_per_cell,
-                                                    0.3,
-                                                    0.03);
-
-    // Then we need an additional step: if, for example, you flag a cell that
-    // is once more refined than its neighbor, and that neighbor is not
-    // flagged for refinement, we would end up with a jump of two refinement
-    // levels across a cell interface.  To avoid these situations, the library
-    // will silently also have to refine the neighbor cell once. It does so by
-    // calling the Triangulation::prepare_coarsening_and_refinement function
-    // before actually doing the refinement and coarsening.  This function
-    // flags a set of additional cells for refinement or coarsening, to
-    // enforce rules like the one-hanging-node rule.  The cells that are
-    // flagged for refinement and coarsening after calling this function are
-    // exactly the ones that will actually be refined or coarsened. Usually,
-    // you don't have to do this by hand
-    // (Triangulation::execute_coarsening_and_refinement does this for
-    // you). However, we need to initialize the SolutionTransfer class and it
-    // needs to know the final set of cells that will be coarsened or refined
-    // in order to store the data from the old mesh and transfer to the new
-    // one. Thus, we call the function by hand:
-    tria_.prepare_coarsening_and_refinement();
-
-    // With this out of the way, we initialize a SolutionTransfer object with
-    // the present DoFHandler and attach the solution vector to it, followed
-    // by doing the actual refinement and distribution of degrees of freedom
-    // on the new mesh
-    SolutionTransfer<dim> solution_transfer(dof_handler_);
-    solution_transfer.prepare_for_coarsening_and_refinement(solution_);
-
-    tria_.execute_coarsening_and_refinement();
-
-    dof_handler_.distribute_dofs(fe_);
-
-    // Finally, we retrieve the old solution interpolated to the new
-    // mesh. Since the SolutionTransfer function does not actually store the
-    // values of the old solution, but rather indices, we need to preserve the
-    // old solution vector until we have gotten the new interpolated
-    // values. Thus, we have the new values written into a temporary vector,
-    // and only afterwards write them into the solution vector object:
-    Vector<double> tmp(dof_handler_.n_dofs());
-    // interpolate solution from solution_ into tmp.
-    solution_transfer.interpolate(tmp);
-    // replace solution_ with its interpolation onto the new grid.
-    solution_ = tmp;
-
-    // On the new mesh, there are different hanging nodes, for which we have to
-    // compute constraints again, after throwing away previous content of the
-    // object. To be on the safe side, we should then also make sure that the
-    // current solution's vector entries satisfy the hanging node constraints
-    // (see the discussion in the documentation of the SolutionTransfer class
-    // for why this is necessary). We could do this by calling
-    // `hanging_node_constraints.distribute(solution_)` explicitly; we
-    // omit this step because this will happen at the end of the call to
-    // `set_boundary_values()` below, and it is not necessary to do it twice.
-    hanging_node_constraints.clear();
-
-    DoFTools::make_hanging_node_constraints(dof_handler_,
-                                            hanging_node_constraints);
-    hanging_node_constraints.close();
-  }
-  else {
-    SolutionTransfer<dim> solution_transfer(dof_handler_);
-    solution_transfer.prepare_for_coarsening_and_refinement(solution_);
-
-    tria_.prepare_coarsening_and_refinement();
-    tria_.refine_global(1);
-
-    dof_handler_.distribute_dofs(fe_);
-
-    Vector<double> tmp(dof_handler_.n_dofs());
-    solution_transfer.interpolate(tmp);
-    solution_ = tmp;
-  }
-
-  // Once we have the interpolated solution and all information about
-  // hanging nodes, we have to make sure that the $u^n$ we now have
-  // actually has the correct boundary values. As explained at the end of
-  // the introduction, this is not automatically the case even if the
-  // solution before refinement had the correct boundary values, and so we
-  // have to explicitly make sure that it now has:
-  set_boundary_values();
-
-  // We end the function by updating all the remaining data structures,
-  // indicating to <code>setup_dofs()</code> that this is not the first
-  // go-around and that it needs to preserve the content of the solution
-  // vector:
-  setup_system(false);
-}
-
-
-// There is one issue we have to pay attention to, though: If we have
-// a hanging node right next to a new boundary node, then its value
-// must also be adjusted to make sure that the finite element field
-// remains continuous. This is what the call in the last line of this
-// function does.
-template <int dim>
-void MinimalSurface<dim>::set_boundary_values()
-{
-  for(auto bc : case_->get_dirichlet_bcs()) {
-    std::map<types::global_dof_index, double> boundary_values;
-    VectorTools::interpolate_boundary_values(dof_handler_,
-                                             bc.bc_id, *bc.bc_fn,
-                                             boundary_values);
-    for (auto &boundary_value : boundary_values) {
-      solution_(boundary_value.first) = boundary_value.second;
-    }
-  }
-
-  hanging_node_constraints.distribute(solution_);
+  ////////// MOVED TO PDEBASE
+  //for(auto bc : case_->get_dirichlet_bcs()) {
+  //  std::map<types::global_dof_index, double> boundary_values;
+  //  VectorTools::interpolate_boundary_values(dof_handler_,
+  //                                           bc.bc_id, Functions::ZeroFunction<dim>(),
+  //                                           boundary_values);
+  //  MatrixTools::apply_boundary_values(boundary_values,
+  //                                     mat,
+  //                                     update_,
+  //                                     rhs);
+  //}
 }
 
 
@@ -402,13 +207,14 @@ void MinimalSurface<dim>::set_boundary_values()
 // is followed by the same boilerplate code we use for all integration
 // operations:
 template <int dim>
-double MinimalSurface<dim>::compute_residual(const double alpha) const
+double MinimalSurface<dim>::compute_residual(const double alpha, const vector_type& solution,
+                                             const vector_type& update) const
 {
     Vector<double> residual(dof_handler_.n_dofs());
 
     Vector<double> evaluation_point(dof_handler_.n_dofs());
-    evaluation_point = solution_;
-    evaluation_point.add(alpha, update_);
+    evaluation_point = solution;
+    evaluation_point.add(alpha, update);
 
     const QGauss<dim> quadrature_formula(fe_.degree + 1);
     FEValues<dim>     fe_values(fe_,
@@ -470,7 +276,7 @@ double MinimalSurface<dim>::compute_residual(const double alpha) const
     // those and set the residual entry to zero. This happens in the following
     // lines which we have already seen used in step-11, using the appropriate
     // function from namespace DoFTools:
-    hanging_node_constraints.condense(residual);
+    affine_constraints_.condense(residual);
 
     for (const types::global_dof_index i : DoFTools::extract_boundary_dofs(dof_handler_)) {
         residual(i) = 0;
@@ -481,39 +287,20 @@ double MinimalSurface<dim>::compute_residual(const double alpha) const
 }
 
 
-
-// @sect4{MinimalSurface::determine_step_length}
-
-// As discussed in the introduction, Newton's method frequently does not
-// converge if we always take full steps, i.e., compute $u^{n+1}=u^n+\delta
-// u^n$. Rather, one needs a damping parameter (step length) $\alpha^n$ and
-// set $u^{n+1}=u^n+\alpha^n\delta u^n$. This function is the one called
-// to compute $\alpha^n$.
-//
-// Here, we simply always return 0.1. This is of course a sub-optimal
-// choice: ideally, what one wants is that the step size goes to one as we
-// get closer to the solution, so that we get to enjoy the rapid quadratic
-// convergence of Newton's method. We will discuss better strategies below
-// in the results section, and step-77 also covers this aspect.
-template <int dim>
-double MinimalSurface<dim>::determine_step_length() const
-{
-    return 0.1;
-}
-
 // @sect4{MinimalSurface::output_results}
 
 // This last function to be called from `run()` outputs the current solution
 // (and the Newton update) in graphical form as a VTU file. It is entirely the
 // same as what has been used in previous tutorials.
 template <int dim>
-void MinimalSurface<dim>::output_results(const int refinement_cycle) const
+void MinimalSurface<dim>::output_results(const int refinement_cycle,
+                                         const vector_type& solution) const
 {
     DataOut<dim> data_out;
 
     data_out.attach_dof_handler(dof_handler_);
-    data_out.add_data_vector(solution_, "solution");
-    data_out.add_data_vector(update_, "update");
+    data_out.add_data_vector(solution, "solution");
+    //data_out.add_data_vector(update_, "update");
     data_out.build_patches();
 
     const std::string file_prefix = params_.output_path + "-" +
@@ -528,7 +315,7 @@ void MinimalSurface<dim>::output_results(const int refinement_cycle) const
     std::vector<DataComponentInterpretation::DataComponentInterpretation>
         face_component_type(1, DataComponentInterpretation::component_is_scalar);
     data_out_boundary.add_data_vector(dof_handler_,
-                                      solution_,
+                                      solution,
                                       face_name,
                                       face_component_type);
     data_out_boundary.build_patches(fe_.degree);
@@ -536,7 +323,7 @@ void MinimalSurface<dim>::output_results(const int refinement_cycle) const
     b_output.close();
 }
 
-
+#if 0
 // @sect4{MinimalSurface::run}
 
 // In the run function, we build the first grid and then have the top-level
@@ -554,8 +341,8 @@ template <int dim>
 void MinimalSurface<dim>::run()
 {
     this->make_grid(params_.initial_resolution);
-    setup_system(/*first time=*/true);
-    set_boundary_values();
+    //setup_system(/*first time=*/true);
+    //set_boundary_values();
 
     if(params_.is_adaptive) {
         // The Newton iteration starts next. We iterate until the (norm of the)
@@ -571,7 +358,7 @@ void MinimalSurface<dim>::run()
             std::cout << "Adaptive mesh refinement step " << refinement_cycle << std::endl;
 
             if (refinement_cycle != 0) {
-              refine_mesh();
+              //refine_mesh();
             }
 
             // set up FEValues for residual norm computation
@@ -598,7 +385,7 @@ void MinimalSurface<dim>::run()
 
             for(int inner_it = 0; inner_it < solver_params_.max_its; ++inner_it)
             {
-                assemble_system(AssemblyOptions{false});
+                //assemble_system(AssemblyOptions{false});
                 last_residual_norm = utils::compute_Lp_norm(fe_values, dof_handler_,
                                                             rhs_, 2);
                 solve();
@@ -632,7 +419,7 @@ void MinimalSurface<dim>::run()
 
             for(int inner_it = 0; inner_it < max_its; ++inner_it) {
                 // compute RHS, Jacobian matrix
-                assemble_system(AssemblyOptions{false});
+                //assemble_system(AssemblyOptions{false});
                 // Maybe use function L2 norm for determining convergence
                 last_residual_norm = utils::compute_Lp_norm(fe_values, dof_handler_,
                                                             rhs_, 2);
@@ -652,10 +439,11 @@ void MinimalSurface<dim>::run()
             }
             std::cout << "Relative residual = " << last_residual_norm / init_res << std::endl;
             output_results(imesh);
-            refine_mesh();
+            //refine_mesh();
         }
     }
 }
+#endif
 
 template class MinimalSurface<2>;
 

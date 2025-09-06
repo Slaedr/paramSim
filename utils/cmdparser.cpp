@@ -11,9 +11,9 @@ void add_common_options(bpo::options_description& desc, const std::string help_m
     desc.add_options()
         ("help", help_msg.c_str())
         ("case", bpo::value<std::string>(),
-         "Name of the PDE case to solve: 'poisson_verify', 'poisson_bc_exp', 'convdiff_step51'")
-        ("solver", bpo::value<std::string>(),
-         "Type of PDE solver to use: 'poisson_cg', 'convdiff_hdg'")
+         "Name of the PDE case to solve: 'poisson_verify', 'poisson_bc_exp', 'minimal_surface_exp'")
+        ("pde", bpo::value<std::string>(),
+         "Type of PDE solver to use: 'poisson_cg', 'minimal_surface'")
         ("refine_levels", bpo::value<int>()->default_value(5),
          "Number of times to refine the grid and solve")
         ("initial_resolution", bpo::value<unsigned int>()->default_value(2),
@@ -48,7 +48,7 @@ CommonParams get_common_params(const bpo::variables_map& common_cmdmap)
     // TODO: Use C++20 designated initializers for this
     return CommonParams {
         /*case_str =          */ common_cmdmap["case"].as<std::string>(),
-        /*solver_str =        */ common_cmdmap["solver"].as<std::string>(),
+        /*solver_str =        */ common_cmdmap["pde"].as<std::string>(),
         /*refine_levels =     */ common_cmdmap["refine_levels"].as<int>(),
         /*initial_resolution =*/ common_cmdmap["initial_resolution"].as<unsigned>(),
         /*fe_degree =         */ common_cmdmap["fe_degree"].as<int>(),
