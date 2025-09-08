@@ -22,7 +22,7 @@ double test_grid_convergence(std::shared_ptr<const Case<dim>> test_case, const P
         throw std::runtime_error("Not enough refinement levels to test grid convergence!");
     }
     assert(!params.is_adaptive);
-    std::shared_ptr<DiscretePDEBase> pdeb = create_discrete_pde<dim>(test_case, params, sparams);
+    std::shared_ptr<DiscretePDEBase> pdeb = create_discrete_pde<dim>(test_case, params);
     auto pde = std::dynamic_pointer_cast<DiscretePDE<dim,dealii::FE_Q<dim>>>(pdeb);
     auto scase = std::dynamic_pointer_cast<const HasExactSolution<dim>>(test_case);
     if(!scase) {

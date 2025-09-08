@@ -47,9 +47,8 @@ namespace paramsim {
 namespace pde {
 
 template <int dim>
-PoissonCG<dim>::PoissonCG(std::shared_ptr<const Case<dim>> tcase, const PDEParams& params,
-                          const SolverParams& sparams)
-  : DiscretePDE<dim,fe_type>(tcase, params, sparams)
+PoissonCG<dim>::PoissonCG(std::shared_ptr<const Case<dim>> tcase, const PDEParams& params)
+  : DiscretePDE<dim,fe_type>(tcase, params)
 { }
 
 

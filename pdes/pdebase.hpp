@@ -52,7 +52,8 @@ public:
     using vector_type = dealii::Vector<double>;
 
     /// Sets parameters.
-    DiscretePDEBase(const PDEParams& params, const SolverParams& solver_params);
+    DiscretePDEBase(const PDEParams& params);
+
     virtual ~DiscretePDEBase() { }
 
     /// Returns true if the system matrix is always symmetric and positive definite.
@@ -108,7 +109,6 @@ public:
 
 protected:
     const PDEParams params_;
-    const SolverParams solver_params_;
 
     dealii::AffineConstraints<double> affine_constraints_;
 
@@ -131,8 +131,7 @@ public:
     using DiscretePDEBase::vector_type;
 
     /// Sets parameters, creates basic finite element objects and generates the initial mesh.
-    DiscretePDE(std::shared_ptr<const Case<dim>> test_case, const PDEParams& params,
-              const SolverParams& solver_params);
+    DiscretePDE(std::shared_ptr<const Case<dim>> test_case, const PDEParams& params);
 
     virtual ~DiscretePDE() { }
 
@@ -169,8 +168,7 @@ protected:
 
 template <int dim>
 std::unique_ptr<DiscretePDEBase> create_discrete_pde(std::shared_ptr<const Case<dim>> test_case,
-                                                      const PDEParams& params,
-                                                      const SolverParams& solver_params);
+                                                     const PDEParams& params);
 
 }
 

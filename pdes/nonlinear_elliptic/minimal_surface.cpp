@@ -59,9 +59,8 @@ namespace pde {
 using namespace dealii;
 
 template <int dim>
-MinimalSurface<dim>::MinimalSurface(std::shared_ptr<const Case<dim>> tcase, const PDEParams& params,
-                                    const SolverParams& s_params)
-: DiscretePDE<dim,fe_type>(tcase, params, s_params)
+MinimalSurface<dim>::MinimalSurface(std::shared_ptr<const Case<dim>> tcase, const PDEParams& params)
+: DiscretePDE<dim,fe_type>(tcase, params)
 {
 }
 

@@ -23,8 +23,7 @@ public:
     using fe_type = FE_Q<dim>;
     using vector_type = typename DiscretePDE<dim,fe_type>::vector_type;
 
-    PoissonCG(std::shared_ptr<const Case<dim>> test_case, const PDEParams& params,
-              const SolverParams& solver_params);
+    PoissonCG(std::shared_ptr<const Case<dim>> test_case, const PDEParams& params);
 
     bool is_symm_positive_definite() const override {
         return true;

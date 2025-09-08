@@ -23,8 +23,7 @@ public:
     using fe_type = FE_Q<dim>;
     using vector_type = typename DiscretePDE<dim,fe_type>::vector_type;
 
-    MinimalSurface(std::shared_ptr<const Case<dim>> test_case, const PDEParams& params,
-                   const SolverParams& solver_params);
+    MinimalSurface(std::shared_ptr<const Case<dim>> test_case, const PDEParams& params);
 
     bool is_symm_positive_definite() const override {
         return true;
@@ -50,7 +49,6 @@ protected:
 
     using DiscretePDE<dim,fe_type>::case_;
     using DiscretePDE<dim,fe_type>::params_;
-    using DiscretePDE<dim,fe_type>::solver_params_;
 
     using DiscretePDE<dim,fe_type>::tria_;
     using DiscretePDE<dim,fe_type>::dof_handler_;

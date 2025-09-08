@@ -23,8 +23,8 @@
 namespace paramsim {
 
 
-DiscretePDEBase::DiscretePDEBase(const PDEParams& params, const SolverParams& solver_params)
-    : params_{params}, solver_params_{solver_params}
+DiscretePDEBase::DiscretePDEBase(const PDEParams& params)
+    : params_{params}
 {
 }
 
@@ -35,8 +35,8 @@ void DiscretePDEBase::impose_constraints(vector_type& solution) const
 
 template <int dim, typename FE_t>
 DiscretePDE<dim,FE_t>::DiscretePDE(std::shared_ptr<const Case<dim>> test_case,
-                          const PDEParams& params, const SolverParams& solver_params)
-    : DiscretePDEBase(params, solver_params), case_{test_case}, dof_handler_(tria_),
+                                   const PDEParams& params)
+    : DiscretePDEBase(params), case_{test_case}, dof_handler_(tria_),
       fe_(params.fe_degree)
 {
     this->make_grid(params.initial_resolution);
@@ -237,13 +237,12 @@ template class DiscretePDE<2, dealii::FE_Q<2>>;
 
 template <int dim>
 std::unique_ptr<DiscretePDEBase> create_discrete_pde(std::shared_ptr<const Case<dim>> test_case,
-                                                     const PDEParams& params,
-                                                     const SolverParams& solver_params)
+                                                     const PDEParams& params)
 {
     if(params.pde_solver == "poisson_cg") {
-        return std::make_unique<pde::PoissonCG<dim>>(test_case, params, solver_params);
+        return std::make_unique<pde::PoissonCG<dim>>(test_case, params);
     } else if(params.pde_solver == "minimal_surface") {
-        return std::make_unique<pde::MinimalSurface<dim>>(test_case, params, solver_params);
+        return std::make_unique<pde::MinimalSurface<dim>>(test_case, params);
     } else {
         throw std::runtime_error("Unsupported PDE solver!");
     }
@@ -251,6 +250,6 @@ std::unique_ptr<DiscretePDEBase> create_discrete_pde(std::shared_ptr<const Case<
 
 template
 std::unique_ptr<DiscretePDEBase> create_discrete_pde(std::shared_ptr<const Case<2>>,
-                                                     const PDEParams&, const SolverParams&);
+                                                     const PDEParams&);
 
 }
