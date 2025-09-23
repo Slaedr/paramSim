@@ -13,9 +13,8 @@ template <typename scalar, int dim>
 scalar compute_Lp_norm(dealii::FEValues<dim>& fe_values, const dealii::DoFHandler<dim>& dof_handler,
                        const dealii::Vector<scalar>& u, const int p)
 {
-    auto update_flags = fe_values.get_update_flags();
-    assert(update_flags & dealii::update_values);
-    assert(update_flags & dealii::update_JxW_values);
+    assert(fe_values.get_update_flags() & dealii::update_values);
+    assert(fe_values.get_update_flags() & dealii::update_JxW_values);
     auto& fe = fe_values.get_fe();
     const auto dofs_per_cell = fe.n_dofs_per_cell();
     const auto n_q_points = fe_values.get_quadrature().size();

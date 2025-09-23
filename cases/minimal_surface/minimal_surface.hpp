@@ -11,12 +11,13 @@
 namespace paramsim {
 namespace cases {
 
+
 namespace minsurf_sin {
 
-  using namespace dealii;
+using namespace dealii;
 
-  template <int dim>
-  struct Params {
+template <int dim>
+struct Params {
     static constexpr int n_modes = 2;
 
     std::array<double, n_modes> ac{{1.0, 1.0}};  //< TODO: Remove
@@ -31,14 +32,14 @@ namespace minsurf_sin {
            const double a0_coeff, const double fundamental_wavelength)
         : ac{acoeffs}, bc{bcoeffs}, a0{a0_coeff}, f_wavelength{fundamental_wavelength}
     { }
-  };
+};
 
 
-  /// Right hand side for the manufactured solution.
-  template <int dim>
-  class RightHandSide : public Function<dim>
-  {
-  public:
+/// Right hand side for the manufactured solution.
+template <int dim>
+class RightHandSide : public Function<dim>
+{
+public:
     RightHandSide()
     { }
 
@@ -47,16 +48,16 @@ namespace minsurf_sin {
     {
         return 0.0;
     }
-  };
+};
 
 
-  /**
-   * Sinusoidal function on a boundary with zero values at the ends -1 and 1.
-   */
-  template <int dim>
-  class Dirichlet : public Function<dim>
-  {
-  public:
+/**
+ * Sinusoidal function on a boundary with zero values at the ends -1 and 1.
+ */
+template <int dim>
+class Dirichlet : public Function<dim>
+{
+public:
     Dirichlet()
     { }
 
@@ -81,10 +82,10 @@ namespace minsurf_sin {
     }
 
     const Params<dim> params_;
-  };
+};
 
-  template <int dim>
-  using DirichletConstant = cases::DirichletConstant<dim>;
+template <int dim>
+using DirichletConstant = cases::DirichletConstant<dim>;
 
 } // namespace minsurf_sin
 
@@ -123,16 +124,16 @@ namespace minsurf_poly {
 
 template <int dim>
 struct Params {
-  static constexpr int n_indep_coeffs = 4;
+    static constexpr int n_indep_coeffs = 4;
 
-  std::array<double, n_indep_coeffs> ac{{1.0, 1.0, 1.0, 1.0}};
-  double center{0.0};
+    std::array<double, n_indep_coeffs> ac{{1.0, 1.0, 1.0, 1.0}};
+    double center{0.0};
 
-  Params() { }
+    Params() { }
 
-  Params(const std::array<double, n_indep_coeffs>& acoeffs, const double center_y)
-      : ac{acoeffs}, center{center_y}
-  { }
+    Params(const std::array<double, n_indep_coeffs>& acoeffs, const double center_y)
+        : ac{acoeffs}, center{center_y}
+    { }
 };
 
 /**
@@ -192,7 +193,7 @@ protected:
     }
 };
 
-}
+} // namespace minsurf_poly
 
 template <int dim>
 class MinSurfCubePolynomial final : public MinSurfCubeLeft<dim>
