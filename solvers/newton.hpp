@@ -54,8 +54,8 @@ protected:
     // Solve linear system at a given nonlinear iteration.
     void linear_solve(int i_iter);
 
-    // Determine nonlinear update step length
-    double determine_step_length() const;
+    // Determine nonlinear update step length, given the current residual norm.
+    double determine_step_length(double orig_norm_2) const;
 };
 
 

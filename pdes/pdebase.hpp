@@ -16,6 +16,7 @@
 namespace paramsim {
 
 using gl_int_t = dealii::types::global_dof_index;
+using scalar_type = double;
  
 //enum class MeshRefineMode
 //{
@@ -49,7 +50,7 @@ struct AssemblyOptions {
 class DiscretePDEBase
 {
 public:
-    using vector_type = dealii::Vector<double>;
+    using vector_type = dealii::Vector<scalar_type>;
 
     /// Sets parameters.
     DiscretePDEBase(const PDEParams& params);
@@ -112,10 +113,6 @@ protected:
 
     dealii::AffineConstraints<double> affine_constraints_;
 
-    // vector_type solution_;
-    // vector_type update_;
-    // vector_type rhs_;
-
     /// Create the grid internally with the given 1D resolution.
     virtual void make_grid(unsigned n_cell_dir) = 0;
 };
@@ -149,7 +146,7 @@ public:
 
     void set_boundary_values(vector_type& solution) const override;
 
-    double compute_lp_norm(const vector_type& u, int p) const override;
+    scalar_type compute_lp_norm(const vector_type& u, int p) const override;
 
     const dealii::Triangulation<dim>& get_triangulation() const { return tria_; }
     dealii::Triangulation<dim>& get_triangulation() { return tria_; }

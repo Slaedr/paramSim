@@ -54,22 +54,33 @@ void NewtonSolver::reinit()
 
 void NewtonSolver::solve(vector_type& u)
 {
+    double cur_norm = 1.0;
     pde_->set_boundary_values(u);
 
     for(int i_iter = 0; i_iter < sparams_.max_its; i_iter++) {
         std::cout << "  Newton: iteration " << i_iter << std::endl;
         pde_->assemble_system(AssemblyOptions{false}, u, system_matrix_, rhs_);
         pde_->apply_zero_boundary_values(du_, system_matrix_, rhs_);
+        cur_norm = pde_->compute_lp_norm(rhs_, 2);
+        if(cur_norm < sparams_.tolerance) {
+            std::cout << "  Newton: converged." << std::endl;
+            break;
+        }
         linear_solve(i_iter);
         pde_->impose_constraints(du_);
-        const double alpha = determine_step_length();
+        const double alpha = determine_step_length(cur_norm);
         u.add(alpha, du_);
     }
 }
 
-double NewtonSolver::determine_step_length() const
+double NewtonSolver::determine_step_length(const double rnorm_0) const
 {
-    return 1.0;
+    constexpr int max_its = 10;
+    double steplen = 1.0;
+    for(int i = 0; i < max_its; i++) {
+        //
+    }
+    return steplen;
 }
 
 }

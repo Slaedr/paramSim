@@ -6,6 +6,6 @@ else()
     target_link_libraries(utils "/usr/lib/x86_64-linux-gnu/libboost_program_options.so")
 endif()
 
-add_library(paramsim_utils function_norms.cpp run_handler.cpp)
+add_library(paramsim_utils run_handler.cpp)
 deal_ii_setup_target(paramsim_utils)
 target_link_libraries(paramsim_utils utils)

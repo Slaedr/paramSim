@@ -16,7 +16,6 @@
 #include <deal.II/lac/dynamic_sparsity_pattern.h>
 
 #include "../utils/error_handling.hpp"
-#include "../utils/function_norms.hpp"
 #include "poisson/poisson_cg.hpp"
 #include "nonlinear_elliptic/minimal_surface.hpp"
 
@@ -224,13 +223,32 @@ void DiscretePDE<dim,FE_t>::set_boundary_values(vector_type& solution) const
 }
 
 template <int dim, typename FE_t>
-double DiscretePDE<dim, FE_t>::compute_lp_norm(const vector_type& u, const int p) const
+scalar_type DiscretePDE<dim, FE_t>::compute_lp_norm(const vector_type& u, const int p) const
 {
     // set up FEValues for residual norm computation
     const dealii::QGauss<dim> quadrature_formula(fe_.degree + 1);
     dealii::FEValues<dim> fe_values(fe_, quadrature_formula,
                                     dealii::update_JxW_values | dealii::update_values);
-    return utils::compute_Lp_norm(fe_values, dof_handler_, u, p);
+    const auto dofs_per_cell = fe_.n_dofs_per_cell();
+    const auto n_q_points = fe_values.get_quadrature().size();
+    std::vector<scalar_type> u_quadrature_values(n_q_points);
+    std::vector<dealii::types::global_dof_index> local_dof_indices(dofs_per_cell);
+
+    scalar_type normp = 0;
+
+    for (const auto &cell : dof_handler_.active_cell_iterators())
+    {
+        fe_values.reinit(cell);
+        fe_values.get_function_values(u, u_quadrature_values);
+        for (unsigned int q = 0; q < n_q_points; ++q) {
+            cell->get_dof_indices(local_dof_indices);
+            for (unsigned int i = 0; i < dofs_per_cell; ++i) {
+                normp += std::pow(u_quadrature_values[i], p) * fe_values.JxW(q);
+            }
+        }
+    }
+
+    return std::pow(normp, 1.0/p);
 }
 
 template class DiscretePDE<2, dealii::FE_Q<2>>;

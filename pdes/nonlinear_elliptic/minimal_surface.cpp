@@ -40,7 +40,6 @@
 #include <deal.II/dofs/dof_handler.h>
 #include <deal.II/dofs/dof_tools.h>
 
-#include <deal.II/fe/fe_values.h>
 #include <deal.II/fe/fe_q.h>
 
 #include <deal.II/numerics/vector_tools.h>
@@ -49,7 +48,6 @@
 
 
 #include "../pdebase.hpp"
-#include "../../utils/function_norms.hpp"
 #include "../../cases/case.hpp"
 
 
@@ -133,6 +131,7 @@ void MinimalSurface<dim>::assemble_system(AssemblyOptions, const vector_type& st
           for (unsigned int i = 0; i < dofs_per_cell; ++i)
           {
               for (unsigned int j = 0; j < dofs_per_cell; ++j)
+              {
                 cell_matrix(i, j) +=
                   (((fe_values.shape_grad(i, q)      // ((\nabla \phi_i
                      * coeff                         //   * a_n
@@ -144,18 +143,11 @@ void MinimalSurface<dim>::assemble_system(AssemblyOptions, const vector_type& st
                         * old_solution_gradients[q]) //      * \nabla u_n)
                      * old_solution_gradients[q]))   //   * \nabla u_n)))
                    * fe_values.JxW(q));              // * dx
-
-              // residual of operator
-              cell_rhs(i) -= (fe_values.shape_grad(i, q)  // \nabla \phi_i
-                              * coeff                     // * a_n
-                              * old_solution_gradients[q] // * \nabla u_n
-                              * fe_values.JxW(q));        // * dx
-              // source term
-              const auto &x_q = fe_values.quadrature_point(q);
-              cell_rhs(i) += (fe_values.shape_value(i, q) *          // phi_i(x_q)
-                              case_->get_right_hand_side()->value(x_q) *   // f(x_q)
-                              fe_values.JxW(q));                      // dx
+              }
           }
+
+          // residual of operator
+          evaluate_point_residual(fe_values, old_solution_gradients, q, cell_rhs);
       }
 
       cell->get_dof_indices(local_dof_indices);
@@ -185,6 +177,65 @@ void MinimalSurface<dim>::assemble_system(AssemblyOptions, const vector_type& st
   //                                     update_,
   //                                     rhs);
   //}
+}
+
+
+template <int dim>
+void MinimalSurface<dim>::evaluate_residual(const vector_type& state, vector_type& rhs) const
+{
+    const QGauss<dim> quadrature_formula(fe_.degree + 1);
+
+    rhs = 0;
+
+    FEValues<dim> fe_values(fe_, quadrature_formula,
+                            update_values | update_gradients | update_quadrature_points
+                            | update_JxW_values);
+
+    const unsigned int dofs_per_cell = fe_.n_dofs_per_cell();
+    const unsigned int n_q_points    = quadrature_formula.size();
+
+    Vector<double> cell_rhs(dofs_per_cell);
+    std::vector<Tensor<1, dim>> old_solution_gradients(n_q_points);
+    std::vector<types::global_dof_index> local_dof_indices(dofs_per_cell);
+
+    for (const auto &cell : dof_handler_.active_cell_iterators())
+    {
+        cell_rhs = 0;
+
+        fe_values.reinit(cell);
+
+        // For the assembly of the linear system, we have to obtain the values
+        // of the previous solution's gradients at the quadrature
+        // points. There is a standard way of doing this: the
+        // FEValues::get_function_gradients function takes a vector that
+        // represents a finite element field defined on a DoFHandler, and
+        // evaluates the gradients of this field at the quadrature points of the
+        // cell with which the FEValues object has last been reinitialized.
+        // The values of the gradients at all quadrature points are then written
+        // into the second argument:
+        fe_values.get_function_gradients(state, old_solution_gradients);
+
+        // With this, we can then do the integration loop over all quadrature
+        // points and shape functions.  Having just computed the gradients of
+        // the old solution in the quadrature points, we are able to compute
+        // the coefficients $a_{n}$ in these points.  The assembly of the
+        // system itself then looks similar to what we always do with the
+        // exception of the nonlinear terms, as does copying the results from
+        // the local objects into the global ones:
+        for (unsigned int q = 0; q < n_q_points; ++q)
+        {
+            evaluate_point_residual(fe_values, old_solution_gradients, q, cell_rhs);
+        }
+
+        cell->get_dof_indices(local_dof_indices);
+        for (unsigned int i = 0; i < dofs_per_cell; ++i)
+        {
+            rhs(local_dof_indices[i]) += cell_rhs(i);
+        }
+    }
+
+    // we remove hanging nodes from the system
+    affine_constraints_.condense(rhs);
 }
 
 
