@@ -86,6 +86,9 @@ public:
     virtual void assemble_system(AssemblyOptions opts, const vector_type& state,
                                  dealii::SparseMatrix<double>& mat, vector_type& rhs) const = 0;
 
+    /// Evaluates the nonlinear residual at a given state.
+    virtual void evaluate_residual(const vector_type& state, vector_type& rhs) const = 0;
+
     /// Apply boundary values on the nonlinear update vector.
     virtual void apply_zero_boundary_values(vector_type& update,
                                             dealii::SparseMatrix<double>& mat,

@@ -51,6 +51,64 @@ PoissonCG<dim>::PoissonCG(std::shared_ptr<const Case<dim>> tcase, const PDEParam
   : DiscretePDE<dim,fe_type>(tcase, params)
 { }
 
+template <int dim>
+void PoissonCG<dim>::evaluate_residual(const vector_type& state, vector_type& rhs) const
+{
+    rhs = 0;
+
+    QGauss<dim> quadrature_formula(fe_.degree + 1);
+    const unsigned int n_q_points    = quadrature_formula.size();
+
+    // In order to evaluate the non-constant
+    // right hand side function we now also need the quadrature points on the
+    // cell we are presently on in addition to values and
+    // gradients of the shape function from the FEValues object, as well as the
+    // quadrature weights, FEValues::JxW(). We can tell the FEValues object to
+    // do for us by also giving it the #update_quadrature_points flag:
+    FEValues<dim> fe_values(fe_,
+                            quadrature_formula,
+                            update_values | update_gradients |
+                              update_quadrature_points | update_JxW_values);
+
+    // We then again define the same abbreviation as in the previous program.
+    // The value of this variable of course depends on the dimension which we
+    // are presently using, but the FiniteElement class does all the necessary
+    // work for you and you don't have to care about the dimension dependent
+    // parts:
+    const unsigned int dofs_per_cell = fe_.n_dofs_per_cell();
+
+    Vector<double>     cell_rhs(dofs_per_cell);
+    std::vector<Tensor<1, dim>> solution_gradients(n_q_points);
+
+    std::vector<types::global_dof_index> local_dof_indices(dofs_per_cell);
+
+    // Next, we again have to loop over all cells and assemble local
+    // contributions.  Note, that a cell is a quadrilateral in two space
+    // dimensions, but a hexahedron in 3d. In fact, the
+    // <code>active_cell_iterator</code> data type is something different,
+    // depending on the dimension we are in, but to the outside world they look
+    // alike and you will probably never see a difference. In any case, the real
+    // type is hidden by using `auto`:
+    for (const auto &cell : dof_handler_.active_cell_iterators())
+    {
+        fe_values.reinit(cell);
+        cell_rhs    = 0;
+
+        fe_values.get_function_gradients(state, solution_gradients);
+
+        for (const unsigned int q_index : fe_values.quadrature_point_indices()) {
+            evaluate_point_residual(fe_values, solution_gradients, q_index, cell_rhs);
+        }
+
+        cell->get_dof_indices(local_dof_indices);
+        for (const unsigned int i : fe_values.dof_indices())
+        {
+            rhs(local_dof_indices[i]) += cell_rhs(i);
+        }
+
+        affine_constraints_.condense(rhs);
+    }
+}
 
 // The assembly is in error-correction form, so even though this is a linear problem,
 // it's supposed to be solved by a Newton-like approach.
@@ -113,7 +171,7 @@ void PoissonCG<dim>::assemble_system(AssemblyOptions, const vector_type& state,
         // difference to how we did things in step-3: Instead of using a
         // constant right hand side with value 1, we use the object representing
         // the right hand side and evaluate it at the quadrature points:
-        for (const unsigned int q_index : fe_values.quadrature_point_indices())
+        for (const unsigned int q_index : fe_values.quadrature_point_indices()) {
             for (const unsigned int i : fe_values.dof_indices())
             {
                 for (const unsigned int j : fe_values.dof_indices())
@@ -121,17 +179,9 @@ void PoissonCG<dim>::assemble_system(AssemblyOptions, const vector_type& state,
                     (fe_values.shape_grad(i, q_index) * // grad phi_i(x_q)
                      fe_values.shape_grad(j, q_index) * // grad phi_j(x_q)
                      fe_values.JxW(q_index));           // dx
-
-                // residual of operator
-                cell_rhs(i) -= (fe_values.shape_grad(i, q_index)  // \nabla \phi_i
-                                * solution_gradients[q_index] // * \nabla u_n
-                                * fe_values.JxW(q_index));        // * dx
-                // source term
-                const auto &x_q = fe_values.quadrature_point(q_index);
-                cell_rhs(i) += (fe_values.shape_value(i, q_index) *          // phi_i(x_q)
-                                case_->get_right_hand_side()->value(x_q) *   // f(x_q)
-                                fe_values.JxW(q_index));                      // dx
             }
+            evaluate_point_residual(fe_values, solution_gradients, q_index, cell_rhs);
+        }
 
         affine_constraints_.condense(mat);
         affine_constraints_.condense(rhs);
