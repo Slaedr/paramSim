@@ -17,7 +17,7 @@ void NewtonSolver::linear_solve(const int i_iter)
 {
     const auto max_its = std::min(1000, static_cast<int>(i_max_its_*std::pow(r_base_, i_iter)));
     const double i_tol_exp = std::log10(i_tol_);
-    const double tol = std::max(1e-12, std::pow(10, i_tol_exp*std::pow(r_base_, i_iter)));
+    const double tol = std::max(1e-10, std::pow(10, i_tol_exp*std::pow(r_base_, i_iter)));
 
     dealii::SolverControl solver_control (max_its, tol);
     if(lstype_ == lin_sys_type::spd) {
@@ -32,6 +32,8 @@ void NewtonSolver::linear_solve(const int i_iter)
         prec.initialize(system_matrix_, 1.0);
         solver.solve(system_matrix_, du_, rhs_, prec);
     }
+    std::cout << "  Newton: linear solver: converged in " << solver_control.last_step()
+              << " iterations." << std::endl;
 }
 
 
@@ -58,29 +60,59 @@ void NewtonSolver::solve(vector_type& u)
     pde_->set_boundary_values(u);
 
     for(int i_iter = 0; i_iter < sparams_.max_its; i_iter++) {
-        std::cout << "  Newton: iteration " << i_iter << std::endl;
+        std::cout << "  Newton: iteration " << i_iter << ", ";
         pde_->assemble_system(AssemblyOptions{false}, u, system_matrix_, rhs_);
-        pde_->apply_zero_boundary_values(du_, system_matrix_, rhs_);
-        cur_norm = pde_->compute_lp_norm(rhs_, 2);
+        //cur_norm = pde_->compute_lp_norm(rhs_, 2);
+        cur_norm = rhs_.l2_norm();
+        std::cout << "current norm = " << cur_norm << std::endl;
+        if(i_iter == 0) {
+            std::cout << "  Newton: Initial residual function norm = "
+                      << pde_->compute_lp_norm(rhs_, 2) << std::endl;
+        }
         if(cur_norm < sparams_.tolerance) {
             std::cout << "  Newton: converged." << std::endl;
             break;
         }
+
+        pde_->apply_zero_boundary_values(du_, system_matrix_, rhs_);
         linear_solve(i_iter);
         pde_->impose_constraints(du_);
-        const double alpha = determine_step_length(cur_norm);
+        const double alpha = determine_step_length(u, cur_norm);
         u.add(alpha, du_);
     }
+    std::cout << " Newton: Final residual function norm = " << pde_->compute_lp_norm(rhs_, 2)
+              << std::endl;
 }
 
-double NewtonSolver::determine_step_length(const double rnorm_0) const
+double NewtonSolver::determine_step_length(const vector_type& u, const double rnorm_0)
 {
-    constexpr int max_its = 10;
-    double steplen = 1.0;
+    /* For now, this is a very simple monotone line search.
+     * Can use CP line search from Brune et al., SIAM Review, 2025.
+     */
+    const int max_its = 5;
+    double lambda = 1.0;
+    double final_norm = 1.0;
+    dealii::Vector<scalar_type> y(u.size());
     for(int i = 0; i < max_its; i++) {
-        //
+        // compute new point: y <- du
+        y = du_;
+        // y <- u + ly
+        y.sadd(lambda, u);
+        pde_->evaluate_residual(y, rhs_);
+        //final_norm = pde_->compute_lp_norm(rhs_, 2);
+        final_norm = rhs_.l2_norm();
+        std::cout << "  Newton:     line search: current norm = " << final_norm << std::endl;
+        if(final_norm < rnorm_0) {
+            break;
+        } else {
+            lambda *= 0.66;
+        }
     }
-    return steplen;
+    std::cout << "  Newton:   step length: " << lambda << std::endl;
+    if(final_norm > rnorm_0) {
+        std::cout << "  Newton: Line search failed!" << std::endl;
+    }
+    return lambda;
 }
 
 }

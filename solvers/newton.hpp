@@ -42,8 +42,8 @@ protected:
     std::shared_ptr<const DiscretePDEBase> pde_;
     SolverParams sparams_;
     int i_max_its_{500};
-    double i_tol_{1e-8};
-    double r_base_{1.1};
+    double i_tol_{1e-4};
+    double r_base_{1.2};
     lin_sys_type lstype_;
 
     vector_type du_;
@@ -55,7 +55,7 @@ protected:
     void linear_solve(int i_iter);
 
     // Determine nonlinear update step length, given the current residual norm.
-    double determine_step_length(double orig_norm_2) const;
+    double determine_step_length(const vector_type& state, double orig_norm_2);
 };
 
 

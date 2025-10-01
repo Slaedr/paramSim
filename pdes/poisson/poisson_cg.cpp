@@ -59,36 +59,15 @@ void PoissonCG<dim>::evaluate_residual(const vector_type& state, vector_type& rh
     QGauss<dim> quadrature_formula(fe_.degree + 1);
     const unsigned int n_q_points    = quadrature_formula.size();
 
-    // In order to evaluate the non-constant
-    // right hand side function we now also need the quadrature points on the
-    // cell we are presently on in addition to values and
-    // gradients of the shape function from the FEValues object, as well as the
-    // quadrature weights, FEValues::JxW(). We can tell the FEValues object to
-    // do for us by also giving it the #update_quadrature_points flag:
     FEValues<dim> fe_values(fe_,
                             quadrature_formula,
                             update_values | update_gradients |
                               update_quadrature_points | update_JxW_values);
-
-    // We then again define the same abbreviation as in the previous program.
-    // The value of this variable of course depends on the dimension which we
-    // are presently using, but the FiniteElement class does all the necessary
-    // work for you and you don't have to care about the dimension dependent
-    // parts:
     const unsigned int dofs_per_cell = fe_.n_dofs_per_cell();
-
-    Vector<double>     cell_rhs(dofs_per_cell);
     std::vector<Tensor<1, dim>> solution_gradients(n_q_points);
-
     std::vector<types::global_dof_index> local_dof_indices(dofs_per_cell);
+    Vector<double>     cell_rhs(dofs_per_cell);
 
-    // Next, we again have to loop over all cells and assemble local
-    // contributions.  Note, that a cell is a quadrilateral in two space
-    // dimensions, but a hexahedron in 3d. In fact, the
-    // <code>active_cell_iterator</code> data type is something different,
-    // depending on the dimension we are in, but to the outside world they look
-    // alike and you will probably never see a difference. In any case, the real
-    // type is hidden by using `auto`:
     for (const auto &cell : dof_handler_.active_cell_iterators())
     {
         fe_values.reinit(cell);
@@ -105,9 +84,9 @@ void PoissonCG<dim>::evaluate_residual(const vector_type& state, vector_type& rh
         {
             rhs(local_dof_indices[i]) += cell_rhs(i);
         }
-
-        affine_constraints_.condense(rhs);
     }
+
+    affine_constraints_.condense(rhs);
 }
 
 // The assembly is in error-correction form, so even though this is a linear problem,
@@ -183,9 +162,6 @@ void PoissonCG<dim>::assemble_system(AssemblyOptions, const vector_type& state,
             evaluate_point_residual(fe_values, solution_gradients, q_index, cell_rhs);
         }
 
-        affine_constraints_.condense(mat);
-        affine_constraints_.condense(rhs);
-
         // As a final remark to these loops: when we assemble the local
         // contributions into <code>cell_matrix(i,j)</code>, we have to multiply
         // the gradients of shape functions $i$ and $j$ at point number
@@ -219,6 +195,9 @@ void PoissonCG<dim>::assemble_system(AssemblyOptions, const vector_type& state,
             rhs(local_dof_indices[i]) += cell_rhs(i);
         }
     }
+
+    affine_constraints_.condense(mat);
+    affine_constraints_.condense(rhs);
 
     // As the final step in this function, we wanted to have non-homogeneous
     // boundary values in this example, unlike the one before. This is a simple
