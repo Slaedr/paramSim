@@ -89,10 +89,13 @@ public:
     /// Evaluates the nonlinear residual at a given state.
     virtual void evaluate_residual(const vector_type& state, vector_type& rhs) const = 0;
 
-    /// Apply boundary values on the nonlinear update vector.
+    /// Apply boundary values on the linear system for a  nonlinear update.
     virtual void apply_zero_boundary_values(vector_type& update,
                                             dealii::SparseMatrix<double>& mat,
                                             vector_type& rhs) const = 0;
+
+    /// Apply boundary values on the residual for a nonlinear update.
+    virtual void apply_zero_boundary_values(vector_type& residual) const = 0;
 
     /** @brief Sets the boundary values on the solution vector.
      *
@@ -146,6 +149,8 @@ public:
     void apply_zero_boundary_values(vector_type& update,
                                     dealii::SparseMatrix<double>& mat,
                                     vector_type& rhs) const override;
+
+    void apply_zero_boundary_values(vector_type& residual) const override;
 
     void set_boundary_values(vector_type& solution) const override;
 

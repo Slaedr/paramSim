@@ -61,27 +61,32 @@ void NewtonSolver::solve(vector_type& u)
 
     for(int i_iter = 0; i_iter < sparams_.max_its; i_iter++) {
         std::cout << "  Newton: iteration " << i_iter << ", ";
+
+        // assemble Jacobian and residual
         pde_->assemble_system(AssemblyOptions{false}, u, system_matrix_, rhs_);
-        //cur_norm = pde_->compute_lp_norm(rhs_, 2);
-        cur_norm = rhs_.l2_norm();
+
+        // apply boundary conditions to system before norm computation and linear solve
+        pde_->apply_zero_boundary_values(du_, system_matrix_, rhs_);
+
+        // compute and report residual norm
+        cur_norm = pde_->compute_lp_norm(rhs_, 2);
         std::cout << "current norm = " << cur_norm << std::endl;
-        if(i_iter == 0) {
-            std::cout << "  Newton: Initial residual function norm = "
-                      << pde_->compute_lp_norm(rhs_, 2) << std::endl;
-        }
+
+        // check convergence
         if(cur_norm < sparams_.tolerance) {
             std::cout << "  Newton: converged." << std::endl;
             break;
         }
 
-        pde_->apply_zero_boundary_values(du_, system_matrix_, rhs_);
+        // linear solve
         linear_solve(i_iter);
         pde_->impose_constraints(du_);
+
+        // update
         const double alpha = determine_step_length(u, cur_norm);
+        //const double alpha = 1.0;
         u.add(alpha, du_);
     }
-    std::cout << " Newton: Final residual function norm = " << pde_->compute_lp_norm(rhs_, 2)
-              << std::endl;
 }
 
 double NewtonSolver::determine_step_length(const vector_type& u, const double rnorm_0)
@@ -91,16 +96,19 @@ double NewtonSolver::determine_step_length(const vector_type& u, const double rn
      */
     const int max_its = 5;
     double lambda = 1.0;
-    double final_norm = 1.0;
+    double final_norm = 100.0;
     dealii::Vector<scalar_type> y(u.size());
     for(int i = 0; i < max_its; i++) {
         // compute new point: y <- du
         y = du_;
         // y <- u + ly
         y.sadd(lambda, u);
+
         pde_->evaluate_residual(y, rhs_);
-        //final_norm = pde_->compute_lp_norm(rhs_, 2);
-        final_norm = rhs_.l2_norm();
+        pde_->apply_zero_boundary_values(rhs_);
+
+        final_norm = pde_->compute_lp_norm(rhs_, 2);
+        //final_norm = rhs_.l2_norm();
         std::cout << "  Newton:     line search: current norm = " << final_norm << std::endl;
         if(final_norm < rnorm_0) {
             break;

@@ -202,6 +202,20 @@ void DiscretePDE<dim,FE_t>::apply_zero_boundary_values(vector_type& update,
     }
 }
 
+template <int dim, typename FE_t>
+void DiscretePDE<dim,FE_t>::apply_zero_boundary_values(vector_type& rhs) const
+{
+    // apply zero boundary values to the residual that defines the Newton updates
+    for(auto bc : case_->get_dirichlet_bcs()) {
+        std::map<dealii::types::global_dof_index, double> boundary_values;
+        dealii::VectorTools::interpolate_boundary_values(
+            dof_handler_, bc.bc_id, dealii::Functions::ZeroFunction<dim>(), boundary_values);
+        for(auto ibdof = boundary_values.begin(); ibdof != boundary_values.end(); ++ibdof) {
+            rhs[ibdof->first] = 0.0;
+        }
+    }
+}
+
 // If we have a hanging node right next to a new boundary node, then its value
 // must also be adjusted to make sure that the finite element field
 // remains continuous.
