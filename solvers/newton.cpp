@@ -84,7 +84,6 @@ void NewtonSolver::solve(vector_type& u)
 
         // update
         const double alpha = determine_step_length(u, cur_norm);
-        //const double alpha = 1.0;
         u.add(alpha, du_);
     }
 }
@@ -108,7 +107,6 @@ double NewtonSolver::determine_step_length(const vector_type& u, const double rn
         pde_->apply_zero_boundary_values(rhs_);
 
         final_norm = pde_->compute_lp_norm(rhs_, 2);
-        //final_norm = rhs_.l2_norm();
         std::cout << "  Newton:     line search: current norm = " << final_norm << std::endl;
         if(final_norm < rnorm_0) {
             break;
