@@ -36,8 +36,6 @@ public:
     /// Evaluates the nonlinear residual at a given state.
     void evaluate_residual(const vector_type& state, vector_type& rhs) const override;
 
-    void output_results(int mesh_number, const vector_type& solution) const override;
-
 private:
 
     using DiscretePDE<dim,fe_type>::case_;

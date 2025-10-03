@@ -33,10 +33,6 @@
 #include <deal.II/numerics/matrix_tools.h>
 #include <deal.II/lac/full_matrix.h>
 #include <deal.II/lac/dynamic_sparsity_pattern.h>
-#include <deal.II/base/convergence_table.h>
-
-#include <deal.II/numerics/data_out.h>
-#include <deal.II/numerics/data_out_faces.h>
 
 //#include <deal.II/base/logstream.h>
 
@@ -220,34 +216,6 @@ void PoissonCG<dim>::assemble_system(AssemblyOptions, const vector_type& state,
     //                                             boundary_values);
     //    MatrixTools::apply_boundary_values(boundary_values, mat, state, rhs);
     //}
-}
-
-template <int dim>
-void PoissonCG<dim>::output_results(const int cycle, const vector_type& solution) const
-{
-  DataOut<dim> data_out;
-
-  data_out.attach_dof_handler(dof_handler_);
-  data_out.add_data_vector(solution, "solution");
-
-  data_out.build_patches();
-
-  const std::string file_prefix = params_.output_path + "-" + std::to_string(cycle);
-  std::ofstream output(file_prefix + ".vtk");
-  data_out.write_vtk(output);
-   
-  std::ofstream b_output(file_prefix + "-boundary.vtk");
-  DataOutFaces<dim> data_out_boundary(true);
-  std::vector<std::string> face_name(1, "solution");
-  std::vector<DataComponentInterpretation::DataComponentInterpretation>
-      face_component_type(1, DataComponentInterpretation::component_is_scalar);
-  data_out_boundary.add_data_vector(dof_handler_,
-                                    solution,
-                                    face_name,
-                                    face_component_type);
-  data_out_boundary.build_patches(fe_.degree);
-  data_out_boundary.write_vtk(b_output);
-  b_output.close();
 }
 
 template class PoissonCG<2>;

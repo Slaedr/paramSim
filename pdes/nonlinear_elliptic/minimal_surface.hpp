@@ -36,21 +36,7 @@ public:
     /// Evaluates the nonlinear residual at a given state.
     void evaluate_residual(const vector_type& state, vector_type& rhs) const override;
 
-    void output_results(int mesh_number, const vector_type& solution) const override;
-
 protected:
-
-    /* Computes the norm of the nonlinear (discrete) residual.
-     *
-     * We use this function to
-     * monitor convergence of the Newton iteration. The function takes a step
-     * length $\alpha^n$ as argument to compute the residual of $u^n + \alpha^n
-     * \; \delta u^n$. This is something one typically needs for step length
-     * control, although we will not use this feature here.
-     */
-    [[deprecated("Outdated; incorrect residual")]]
-    double compute_residual(const double alpha, const vector_type& solution,
-                            const vector_type& update) const;
 
     using DiscretePDE<dim,fe_type>::case_;
     using DiscretePDE<dim,fe_type>::params_;

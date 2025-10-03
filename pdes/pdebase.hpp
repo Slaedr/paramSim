@@ -156,6 +156,8 @@ public:
 
     scalar_type compute_lp_norm(const vector_type& u, int p) const override;
 
+    void output_results(int mesh_number, const vector_type& solution) const override;
+
     const dealii::Triangulation<dim>& get_triangulation() const { return tria_; }
     dealii::Triangulation<dim>& get_triangulation() { return tria_; }
     const dealii::DoFHandler<dim>& get_dof_handler() const { return dof_handler_; }

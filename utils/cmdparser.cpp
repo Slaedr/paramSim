@@ -26,7 +26,7 @@ void add_common_options(bpo::options_description& desc, const std::string help_m
          "Maximum solver iterations")
         ("tolerance", bpo::value<double>()->default_value(1e-6),
          "Tolerance for solver convergence")
-        ("output_prefix,o", bpo::value<std::string>()->default_value("./case-"),
+        ("output_prefix,o", bpo::value<std::string>()->default_value("_"),
          "Output location along with filename prefix for vtk output")
         ;
 }

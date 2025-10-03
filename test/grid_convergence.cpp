@@ -87,6 +87,9 @@ double test_grid_convergence(std::shared_ptr<const Case<dim>> test_case, const P
                 "val L2", "cells", dealii::ConvergenceTable::reduction_rate_log2, dim);
         convergence_table.write_text(std::cout);
     }
+    if(params.output_path != "_") {
+        pde->output_results(params.refine_levels-1, u);
+    }
     return slopes.back();
 }
 

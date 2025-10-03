@@ -43,8 +43,6 @@
 #include <deal.II/fe/fe_q.h>
 
 #include <deal.II/numerics/vector_tools.h>
-#include <deal.II/numerics/data_out.h>
-#include <deal.II/numerics/data_out_faces.h>
 
 
 #include "../pdebase.hpp"
@@ -78,105 +76,91 @@ template <int dim>
 void MinimalSurface<dim>::assemble_system(AssemblyOptions, const vector_type& state,
                                           dealii::SparseMatrix<double>& mat, vector_type& rhs) const
 {
-  const QGauss<dim> quadrature_formula(fe_.degree + 1);
+    const QGauss<dim> quadrature_formula(fe_.degree + 1);
 
-  mat = 0;
-  rhs = 0;
+    mat = 0;
+    rhs = 0;
 
-  FEValues<dim> fe_values(fe_, quadrature_formula,
-                          update_values | update_gradients | update_quadrature_points
-                          | update_JxW_values);
+    FEValues<dim> fe_values(fe_, quadrature_formula,
+                            update_values | update_gradients | update_quadrature_points
+                            | update_JxW_values);
 
-  const unsigned int dofs_per_cell = fe_.n_dofs_per_cell();
-  const unsigned int n_q_points    = quadrature_formula.size();
+    const unsigned int dofs_per_cell = fe_.n_dofs_per_cell();
+    const unsigned int n_q_points    = quadrature_formula.size();
 
-  FullMatrix<double> cell_matrix(dofs_per_cell, dofs_per_cell);
-  Vector<double>     cell_rhs(dofs_per_cell);
+    FullMatrix<double> cell_matrix(dofs_per_cell, dofs_per_cell);
+    Vector<double>     cell_rhs(dofs_per_cell);
 
-  std::vector<Tensor<1, dim>> old_solution_gradients(n_q_points);
+    std::vector<Tensor<1, dim>> old_solution_gradients(n_q_points);
 
-  std::vector<types::global_dof_index> local_dof_indices(dofs_per_cell);
+    std::vector<types::global_dof_index> local_dof_indices(dofs_per_cell);
 
-  for (const auto &cell : dof_handler_.active_cell_iterators())
-  {
-      cell_matrix = 0;
-      cell_rhs    = 0;
+    for (const auto &cell : dof_handler_.active_cell_iterators())
+    {
+        cell_matrix = 0;
+        cell_rhs    = 0;
 
-      fe_values.reinit(cell);
+        fe_values.reinit(cell);
 
-      // For the assembly of the linear system, we have to obtain the values
-      // of the previous solution's gradients at the quadrature
-      // points. There is a standard way of doing this: the
-      // FEValues::get_function_gradients function takes a vector that
-      // represents a finite element field defined on a DoFHandler, and
-      // evaluates the gradients of this field at the quadrature points of the
-      // cell with which the FEValues object has last been reinitialized.
-      // The values of the gradients at all quadrature points are then written
-      // into the second argument:
-      fe_values.get_function_gradients(state, old_solution_gradients);
+        // For the assembly of the linear system, we have to obtain the values
+        // of the previous solution's gradients at the quadrature
+        // points. There is a standard way of doing this: the
+        // FEValues::get_function_gradients function takes a vector that
+        // represents a finite element field defined on a DoFHandler, and
+        // evaluates the gradients of this field at the quadrature points of the
+        // cell with which the FEValues object has last been reinitialized.
+        // The values of the gradients at all quadrature points are then written
+        // into the second argument:
+        fe_values.get_function_gradients(state, old_solution_gradients);
 
-      // With this, we can then do the integration loop over all quadrature
-      // points and shape functions.  Having just computed the gradients of
-      // the old solution in the quadrature points, we are able to compute
-      // the coefficients $a_{n}$ in these points.  The assembly of the
-      // system itself then looks similar to what we always do with the
-      // exception of the nonlinear terms, as does copying the results from
-      // the local objects into the global ones:
-      for (unsigned int q = 0; q < n_q_points; ++q)
-      {
-          const double coeff =
-            1.0 / std::sqrt(1 + old_solution_gradients[q] *
-                                  old_solution_gradients[q]);
+        // With this, we can then do the integration loop over all quadrature
+        // points and shape functions.  Having just computed the gradients of
+        // the old solution in the quadrature points, we are able to compute
+        // the coefficients $a_{n}$ in these points.  The assembly of the
+        // system itself then looks similar to what we always do with the
+        // exception of the nonlinear terms, as does copying the results from
+        // the local objects into the global ones:
+        for (unsigned int q = 0; q < n_q_points; ++q)
+        {
+            const double coeff =
+              1.0 / std::sqrt(1 + old_solution_gradients[q] *
+                                    old_solution_gradients[q]);
 
-          for (unsigned int i = 0; i < dofs_per_cell; ++i)
-          {
-              for (unsigned int j = 0; j < dofs_per_cell; ++j)
-              {
-                cell_matrix(i, j) +=
-                  (((fe_values.shape_grad(i, q)      // ((\nabla \phi_i
-                     * coeff                         //   * a_n
-                     * fe_values.shape_grad(j, q))   //   * \nabla \phi_j)
-                    -                                //  -
-                    (fe_values.shape_grad(i, q)      //  (\nabla \phi_i
-                     * coeff * coeff * coeff         //   * a_n^3
-                     * (fe_values.shape_grad(j, q)   //   * (\nabla \phi_j
-                        * old_solution_gradients[q]) //      * \nabla u_n)
-                     * old_solution_gradients[q]))   //   * \nabla u_n)))
-                   * fe_values.JxW(q));              // * dx
-              }
-          }
+            for (unsigned int i = 0; i < dofs_per_cell; ++i)
+            {
+                for (unsigned int j = 0; j < dofs_per_cell; ++j)
+                {
+                  cell_matrix(i, j) +=
+                    (((fe_values.shape_grad(i, q)      // ((\nabla \phi_i
+                       * coeff                         //   * a_n
+                       * fe_values.shape_grad(j, q))   //   * \nabla \phi_j)
+                      -                                //  -
+                      (fe_values.shape_grad(i, q)      //  (\nabla \phi_i
+                       * coeff * coeff * coeff         //   * a_n^3
+                       * (fe_values.shape_grad(j, q)   //   * (\nabla \phi_j
+                          * old_solution_gradients[q]) //      * \nabla u_n)
+                       * old_solution_gradients[q]))   //   * \nabla u_n)))
+                     * fe_values.JxW(q));              // * dx
+                }
+            }
 
-          // residual of operator
-          evaluate_point_residual(fe_values, old_solution_gradients, q, cell_rhs);
-      }
+            // residual of operator
+            evaluate_point_residual(fe_values, old_solution_gradients, q, cell_rhs);
+        }
 
-      cell->get_dof_indices(local_dof_indices);
-      for (unsigned int i = 0; i < dofs_per_cell; ++i)
-      {
-          for (unsigned int j = 0; j < dofs_per_cell; ++j)
-            mat.add(local_dof_indices[i], local_dof_indices[j], cell_matrix(i, j));
+        cell->get_dof_indices(local_dof_indices);
+        for (unsigned int i = 0; i < dofs_per_cell; ++i)
+        {
+            for (unsigned int j = 0; j < dofs_per_cell; ++j)
+              mat.add(local_dof_indices[i], local_dof_indices[j], cell_matrix(i, j));
 
-          rhs(local_dof_indices[i]) += cell_rhs(i);
-      }
-  }
+            rhs(local_dof_indices[i]) += cell_rhs(i);
+        }
+    }
 
-  // we remove hanging nodes from the system
-  affine_constraints_.condense(mat);
-  affine_constraints_.condense(rhs);
-
-  // apply zero boundary values to the linear system that defines the Newton updates
-  // $\delta u^n$:
-  ////////// MOVED TO PDEBASE
-  //for(auto bc : case_->get_dirichlet_bcs()) {
-  //  std::map<types::global_dof_index, double> boundary_values;
-  //  VectorTools::interpolate_boundary_values(dof_handler_,
-  //                                           bc.bc_id, Functions::ZeroFunction<dim>(),
-  //                                           boundary_values);
-  //  MatrixTools::apply_boundary_values(boundary_values,
-  //                                     mat,
-  //                                     update_,
-  //                                     rhs);
-  //}
+    // we remove hanging nodes from the system
+    affine_constraints_.condense(mat);
+    affine_constraints_.condense(rhs);
 }
 
 
@@ -239,141 +223,8 @@ void MinimalSurface<dim>::evaluate_residual(const vector_type& state, vector_typ
 }
 
 
-// @sect4{MinimalSurface::compute_residual}
-
-// In order to monitor convergence, we need a way to compute the norm of the
-// (discrete) residual, i.e., the norm of the vector
-// $\left<F(u^n),\varphi_i\right>$ with $F(u)=-\nabla \cdot \left(
-// \frac{1}{\sqrt{1+|\nabla u|^{2}}}\nabla u \right)$ as discussed in the
-// introduction. It turns out that (although we don't use this feature in
-// the current version of the program) one needs to compute the residual
-// $\left<F(u^n+\alpha^n\;\delta u^n),\varphi_i\right>$ when determining
-// optimal step lengths, and so this is what we implement here: the function
-// takes the step length $\alpha^n$ as an argument. The original
-// functionality is of course obtained by passing a zero as argument.
-//
-// In the function below, we first set up a vector for the residual, and
-// then a vector for the evaluation point $u^n+\alpha^n\;\delta u^n$. This
-// is followed by the same boilerplate code we use for all integration
-// operations:
-template <int dim>
-double MinimalSurface<dim>::compute_residual(const double alpha, const vector_type& solution,
-                                             const vector_type& update) const
-{
-    Vector<double> residual(dof_handler_.n_dofs());
-
-    Vector<double> evaluation_point(dof_handler_.n_dofs());
-    evaluation_point = solution;
-    evaluation_point.add(alpha, update);
-
-    const QGauss<dim> quadrature_formula(fe_.degree + 1);
-    FEValues<dim>     fe_values(fe_,
-                            quadrature_formula,
-                            update_gradients | update_quadrature_points |
-                              update_JxW_values);
-
-    const unsigned int dofs_per_cell = fe_.n_dofs_per_cell();
-    const unsigned int n_q_points    = quadrature_formula.size();
-
-    Vector<double>              cell_residual(dofs_per_cell);
-    std::vector<Tensor<1, dim>> gradients(n_q_points);
-
-    std::vector<types::global_dof_index> local_dof_indices(dofs_per_cell);
-
-    for (const auto &cell : dof_handler_.active_cell_iterators())
-    {
-        cell_residual = 0;
-        fe_values.reinit(cell);
-
-        // The actual computation is much as in
-        // <code>assemble_system()</code>. We first evaluate the gradients of
-        // $u^n+\alpha^n\,\delta u^n$ at the quadrature points, then compute
-        // the coefficient $a_n$, and then plug it all into the formula for
-        // the residual:
-        fe_values.get_function_gradients(evaluation_point, gradients);
-
-        for (unsigned int q = 0; q < n_q_points; ++q)
-        {
-            const double coeff =
-                1. / std::sqrt(1 + gradients[q] * gradients[q]);
-
-            for (unsigned int i = 0; i < dofs_per_cell; ++i) {
-                cell_residual(i) -= (fe_values.shape_grad(i, q) // \nabla \phi_i
-                                     * coeff                    // * a_n
-                                     * gradients[q]             // * \nabla u_n
-                                     * fe_values.JxW(q));       // * dx
-            }
-        }
-        cell->get_dof_indices(local_dof_indices);
-        for (unsigned int i = 0; i < dofs_per_cell; ++i) {
-            residual(local_dof_indices[i]) += cell_residual(i);
-        }
-    }
-
-    // At the end of this function we also have to deal with the hanging node
-    // constraints and with the issue of boundary values. With regard to the
-    // latter, we have to set to zero the elements of the residual vector for
-    // all entries that correspond to degrees of freedom that sit at the
-    // boundary. The reason is that because the value of the solution there is
-    // fixed, they are of course no "real" degrees of freedom and so, strictly
-    // speaking, we shouldn't have assembled entries in the residual vector
-    // for them. However, as we always do, we want to do exactly the same
-    // thing on every cell and so we didn't want to deal with the question
-    // of whether a particular degree of freedom sits at the boundary in the
-    // integration above. Rather, we will simply set to zero these entries
-    // after the fact. To this end, we need to determine which degrees
-    // of freedom do in fact belong to the boundary and then loop over all of
-    // those and set the residual entry to zero. This happens in the following
-    // lines which we have already seen used in step-11, using the appropriate
-    // function from namespace DoFTools:
-    affine_constraints_.condense(residual);
-
-    for (const types::global_dof_index i : DoFTools::extract_boundary_dofs(dof_handler_)) {
-        residual(i) = 0;
-    }
-
-    // At the end of the function, we return the norm of the residual:
-    return residual.l2_norm();
-}
-
-
-// @sect4{MinimalSurface::output_results}
-
-// This last function to be called from `run()` outputs the current solution
-// (and the Newton update) in graphical form as a VTU file. It is entirely the
-// same as what has been used in previous tutorials.
-template <int dim>
-void MinimalSurface<dim>::output_results(const int refinement_cycle,
-                                         const vector_type& solution) const
-{
-    DataOut<dim> data_out;
-
-    data_out.attach_dof_handler(dof_handler_);
-    data_out.add_data_vector(solution, "solution");
-    //data_out.add_data_vector(update_, "update");
-    data_out.build_patches();
-
-    const std::string file_prefix = params_.output_path + "-" +
-        Utilities::int_to_string(refinement_cycle, 2);
-    const std::string filename = file_prefix + ".vtu";
-    std::ofstream output(filename);
-    data_out.write_vtu(output);
-
-    std::ofstream b_output(file_prefix + "-boundary.vtk");
-    DataOutFaces<dim> data_out_boundary(true);
-    std::vector<std::string> face_name(1, "solution");
-    std::vector<DataComponentInterpretation::DataComponentInterpretation>
-        face_component_type(1, DataComponentInterpretation::component_is_scalar);
-    data_out_boundary.add_data_vector(dof_handler_,
-                                      solution,
-                                      face_name,
-                                      face_component_type);
-    data_out_boundary.build_patches(fe_.degree);
-    data_out_boundary.write_vtk(b_output);
-    b_output.close();
-}
-
 #if 0
+
 // @sect4{MinimalSurface::run}
 
 // In the run function, we build the first grid and then have the top-level

@@ -14,6 +14,8 @@
 #include <deal.II/numerics/solution_transfer.h>
 #include <deal.II/numerics/error_estimator.h>
 #include <deal.II/lac/dynamic_sparsity_pattern.h>
+#include <deal.II/numerics/data_out.h>
+#include <deal.II/numerics/data_out_faces.h>
 
 #include "../utils/error_handling.hpp"
 #include "poisson/poisson_cg.hpp"
@@ -263,6 +265,36 @@ scalar_type DiscretePDE<dim, FE_t>::compute_lp_norm(const vector_type& u, const 
     }
 
     return std::pow(normp, 1.0/p);
+}
+
+template <int dim, typename FE_t>
+void DiscretePDE<dim, FE_t>::output_results(const int refinement_cycle,
+                                            const vector_type& solution) const
+{
+    dealii::DataOut<dim> data_out;
+
+    data_out.attach_dof_handler(dof_handler_);
+    data_out.add_data_vector(solution, "solution");
+    //data_out.add_data_vector(update_, "update");
+    data_out.build_patches();
+
+    const std::string file_prefix = params_.output_path + "-" + std::to_string(refinement_cycle);
+    const std::string filename = file_prefix + ".vtk";
+    std::ofstream output(filename);
+    data_out.write_vtk(output);
+
+    std::ofstream b_output(file_prefix + "-boundary.vtk");
+    dealii::DataOutFaces<dim> data_out_boundary(true);
+    std::vector<std::string> face_name(1, "solution");
+    std::vector<dealii::DataComponentInterpretation::DataComponentInterpretation>
+        face_component_type(1, dealii::DataComponentInterpretation::component_is_scalar);
+    data_out_boundary.add_data_vector(dof_handler_,
+                                      solution,
+                                      face_name,
+                                      face_component_type);
+    data_out_boundary.build_patches(fe_.degree);
+    data_out_boundary.write_vtk(b_output);
+    b_output.close();
 }
 
 template class DiscretePDE<2, dealii::FE_Q<2>>;
