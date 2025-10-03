@@ -63,6 +63,15 @@ public:
     void add_case_cmd_args(bpo::options_description&) const override;
 };
 
+/// Verification test case for minimal surface problem on a square domain.
+template <int dim>
+class MinSurfCubeVerify final : public Case<dim>, public HasExactSolution<dim>
+{
+public:
+    void initialize(const bpo::variables_map&) override;
+    void add_case_cmd_args(bpo::options_description&) const override;
+};
+
 
 }
 }

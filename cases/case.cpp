@@ -28,6 +28,8 @@ std::unique_ptr<Case<dim>> create_case(const CommonParams& params, const int n_a
         tcase = std::make_unique<cases::PoissonBCPolynomial<dim>>();
     } else if(params.case_str == "minimal_surface_verify") {
         tcase = std::make_unique<cases::MinSurfVerify<dim>>();
+    } else if(params.case_str == "minimal_surface_cube_verify") {
+        tcase = std::make_unique<cases::MinSurfCubeVerify<dim>>();
     } else if(params.case_str == "minimal_surface_disk_sinusoidal") {
         tcase = std::make_unique<cases::MinSurfDiskSinusoidal<dim>>();
     } else if(params.case_str == "minimal_surface_cube_sinusoidal") {
