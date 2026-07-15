@@ -5,7 +5,6 @@
 #SBATCH -N 1
 #SBATCH -t 01:00:00
 #SBATCH -o %x-%j.out
-#SBATCH -e %x-%j.err
 
 # Production launcher: one Slurm job step for the entire ensemble.
 set -euo pipefail
