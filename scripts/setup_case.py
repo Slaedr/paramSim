@@ -1,6 +1,11 @@
 import json
 import numpy as np
 
+def get_common_args_str(case_data : dict) -> str:
+    return "--pde " + case_data["pde"] + " --case " + case_data["case_type"] \
+        + " --refine_levels 1 --initial_resolution " + str(case_data["resolution"]) \
+        + " --output_prefix field"
+
 #TODO: Replace the if-blocks in this file with a set of classes
 
 def setup_case(case_data : dict, gen_specs : dict, sim_specs : dict):

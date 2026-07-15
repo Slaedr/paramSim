@@ -7,7 +7,7 @@ from libensemble.executors import Executor
 from libensemble.libE import libE
 import libensemble.tools
 
-from setup_case import setup_case, get_args_str
+from setup_case import setup_case, get_args_str, get_common_args_str
 
 def gen_random_samples(H_in, persis_info, gen_specs):
 
@@ -58,8 +58,7 @@ def run_ensemble(case_file_path):
     # Register simulation executable with executor
     exctr.register_app(full_path=case_data["simulation_exec_path"], app_name="run_fem_case")
 
-    common_arg_str = "--solver " + case_data["solver_type"] + " --case " + case_data["case_type"] \
-        + " --refine_levels 1 --initial_resolution " + str(case_data["resolution"])
+    common_arg_str = get_common_arg_str(case_data)
 
     gen_specs = {
         "gen_f" : gen_random_samples,
