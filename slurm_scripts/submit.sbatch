@@ -65,6 +65,8 @@ python3 -m pip freeze >"$RUN_ROOT/python-freeze.txt"
 export PARAMSIM_OUTPUT_DIR="$RUN_ROOT/ensemble"
 cd "$RUN_ROOT"
 
+SECONDS=0
+
 set +e
 srun --unbuffered \
   -N "$SLURM_NNODES" \
@@ -78,8 +80,15 @@ srun --unbuffered \
     --comms mpi \
     -e "$RUN_ROOT/case.json"
 
+duration=$SECONDS
+hours=$(($duration / 3600))
+rem_seconds=$(($duration % 3600))
+minutes=$(($rem_seconds / 60))
+seconds=$(($rem_seconds % 60))
+
 rc=$?
 set -e
 echo "end_utc=$(date -u +%FT%TZ)" >>"$RUN_ROOT/run-metadata.txt"
+echo Elapsed time = $hours:$minutes:$seconds hours,minutes,seconds >> "$RUN_ROOT/run-metadata.txt"
 echo "exit_code=$rc" >>"$RUN_ROOT/run-metadata.txt"
 exit "$rc"
