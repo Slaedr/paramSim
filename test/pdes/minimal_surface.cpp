@@ -42,8 +42,8 @@ protected:
 
 TEST_F(MinimalSurfaceVerification, BallConvergesP1)
 {
-    const int nargs = 15;
-    const char args[][100] = {"prog", "--pde", "minimal_surface",
+    const int nargs = 17;
+    const char args[][100] = {"prog", "--dimension", "2", "--pde", "minimal_surface",
         "--refine_levels", "4", "--initial_resolution", "4",
         "--case", "minimal_surface_ball_verify", "--fe_degree", "1",
         "--max_its", "10", "--tolerance", "1e-6"};
@@ -56,8 +56,8 @@ TEST_F(MinimalSurfaceVerification, BallConvergesP1)
 
 TEST_F(MinimalSurfaceVerification, BallConvergesP2)
 {
-    const int nargs = 15;
-    const char args[][100] = {"prog", "--pde", "minimal_surface",
+    const int nargs = 17;
+    const char args[][100] = {"prog", "--dimension", "2", "--pde", "minimal_surface",
         "--refine_levels", "4",
         "--initial_resolution", "4",
         "--case", "minimal_surface_ball_verify", "--fe_degree", "2", "--max_its", "12",
@@ -71,8 +71,8 @@ TEST_F(MinimalSurfaceVerification, BallConvergesP2)
 
 TEST_F(MinimalSurfaceVerification, CubeConvergesP1)
 {
-    const int nargs = 15;
-    const char args[][100] = {"prog", "--pde", "minimal_surface",
+    const int nargs = 17;
+    const char args[][100] = {"prog", "--dimension", "2", "--pde", "minimal_surface",
         "--refine_levels", "4",
         "--initial_resolution", "4",
         "--case", "minimal_surface_cube_verify", "--fe_degree", "1", "--max_its", "10",
@@ -86,8 +86,8 @@ TEST_F(MinimalSurfaceVerification, CubeConvergesP1)
 
 TEST_F(MinimalSurfaceVerification, CubeConvergesP2)
 {
-    const int nargs = 15;
-    const char args[][100] = {"prog", "--pde", "minimal_surface",
+    const int nargs = 17;
+    const char args[][100] = {"prog", "--dimension", "2", "--pde", "minimal_surface",
         "--refine_levels", "4",
         "--initial_resolution", "4",
         "--case", "minimal_surface_cube_verify", "--fe_degree", "2", "--max_its", "12",

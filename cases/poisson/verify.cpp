@@ -102,6 +102,7 @@ void PoissonVerify<dim>::add_case_cmd_args(bpo::options_description& desc) const
 }
 
 template class PoissonVerify<2>;
+template class PoissonVerify<3>;
 
 }
 }

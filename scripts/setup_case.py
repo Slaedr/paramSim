@@ -2,9 +2,22 @@ import json
 import numpy as np
 
 def get_common_args_str(case_data : dict) -> str:
-    return "--pde " + case_data["pde"] + " --case " + case_data["case_type"] \
-        + " --refine_levels 1 --initial_resolution " + str(case_data["resolution"]) \
+    if "dimension" not in case_data:
+        raise ValueError("The case JSON must define dimension as 2 or 3")
+
+    dimension = case_data["dimension"]
+    if type(dimension) is not int or dimension not in (2, 3):
+        raise ValueError("dimension must be the integer 2 or 3")
+
+    refine_levels = case_data.get("refine_levels", 1)
+    return (
+        "--dimension " + str(dimension)
+        + " --pde " + case_data["pde"]
+        + " --case " + case_data["case_type"]
+        + " --refine_levels " + str(refine_levels)
+        + " --initial_resolution " + str(case_data["resolution"])
         + " --output_prefix field"
+    )
 
 #TODO: Replace the if-blocks in this file with a set of classes
 

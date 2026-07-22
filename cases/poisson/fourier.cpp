@@ -92,6 +92,7 @@ void PoissonBCFourier<dim>::add_case_cmd_args(bpo::options_description& desc) co
 }
 
 template class PoissonBCFourier<2>;
+template class PoissonBCFourier<3>;
 
 }
 }

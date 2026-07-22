@@ -4,6 +4,7 @@
   "random_seed": 20260713,
   "checkpoint_every": 128,
   "ensemble_dir_path": "ensemble",
+  "dimension": 2,
   "resolution": 63,
   "refine_levels": 1,
   "pde": "poisson_cg",

@@ -98,6 +98,7 @@ void PoissonBCExp<dim>::add_case_cmd_args(bpo::options_description& desc) const
 }
 
 template class PoissonBCExp<2>;
+template class PoissonBCExp<3>;
 
 }
 }

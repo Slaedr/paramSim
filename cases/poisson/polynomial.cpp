@@ -81,6 +81,7 @@ void PoissonBCPolynomial<dim>::add_case_cmd_args(bpo::options_description& desc)
 }
 
 template class PoissonBCPolynomial<2>;
+template class PoissonBCPolynomial<3>;
 
 }
 }

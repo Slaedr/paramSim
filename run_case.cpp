@@ -57,43 +57,61 @@ void run(const PDEParams& params, const SolverParams& sparams,
     }
 }
 
-int main(int argc, char *argv[])
+template <int dim>
+void run_dimension(const CommonParams& common_params,
+                   const int argc,
+                   char *argv[])
 {
-    // Reads DEAL_II_NUM_THREADS env var
-    dealii::MultithreadInfo::set_thread_limit();
-
-    constexpr unsigned int dim = 2;
-
-    // Common options description//
-    bpo::options_description common_desc
-        ("Solves one problem given one set of parameters.");
-    add_common_options(common_desc, "");
-
-    // complete all options addition before calling the following line
-    const bpo::variables_map common_cmdmap = get_cmd_args(argc, argv, common_desc);
-    if(common_cmdmap.count("help")) {
-        std::cout << common_desc << std::endl;
-        return 0;
-    }
-
-    const auto common_params = get_common_params(common_cmdmap);
-
-    std::shared_ptr<const Case<dim>> tcase = create_case<dim>(common_params, argc, argv);
+    std::shared_ptr<const Case<dim>> tcase =
+        create_case<dim>(common_params, argc, argv);
 
     PDEParams pdeparams{common_params.solver_str, common_params.fe_degree,
                         common_params.initial_resolution, common_params.refine_levels,
                         common_params.is_adaptive, common_params.outpath};
     SolverParams solver_params{common_params.tolerance, common_params.max_outer_its};
 
-    std::shared_ptr<DiscretePDEBase> pdeb = create_discrete_pde(tcase, pdeparams);
+    std::shared_ptr<DiscretePDEBase> pdeb =
+        create_discrete_pde(tcase, pdeparams);
+
+    run<dim>(pdeparams, solver_params, pdeb);
+}
+
+int main(int argc, char *argv[])
+{
+    // Reads DEAL_II_NUM_THREADS env var
+    dealii::MultithreadInfo::set_thread_limit();
+
+    // Common options description//
+    bpo::options_description common_desc
+        ("Solves one problem given one set of parameters.");
+    add_common_options(common_desc, "");
 
     try
     {
+        // Complete all option additions before parsing.
+        const bpo::variables_map common_cmdmap =
+            get_cmd_args(argc, argv, common_desc);
+        if(common_cmdmap.count("help")) {
+            std::cout << common_desc << std::endl;
+            return 0;
+        }
+
+        const auto common_params = get_common_params(common_cmdmap);
+
         std::cout << "Solving" << std::endl
                   << "=======" << std::endl
                   << std::endl;
 
-        run<dim>(pdeparams, solver_params, pdeb);
+        switch(common_params.dimension) {
+        case 2:
+            run_dimension<2>(common_params, argc, argv);
+            break;
+        case 3:
+            run_dimension<3>(common_params, argc, argv);
+            break;
+        default:
+            throw std::logic_error("Validated dimension was not dispatchable.");
+        }
 
         std::cout << std::endl;
     }

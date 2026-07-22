@@ -27,9 +27,21 @@ std::unique_ptr<Case<dim>> create_case(const CommonParams& params, const int n_a
     } else if(params.case_str == "poisson_bc_polynomial") {
         tcase = std::make_unique<cases::PoissonBCPolynomial<dim>>();
     } else if(params.case_str == "minimal_surface_ball_verify") {
-        tcase = std::make_unique<cases::MinSurfBallVerify<dim>>();
+        if constexpr(dim == 2) {
+            tcase = std::make_unique<cases::MinSurfBallVerify<dim>>();
+        } else {
+            throw std::runtime_error(
+                "Case 'minimal_surface_ball_verify' does not support "
+                "spatial dimension " + std::to_string(dim) + ".");
+        }
     } else if(params.case_str == "minimal_surface_cube_verify") {
-        tcase = std::make_unique<cases::MinSurfCubeVerify<dim>>();
+        if constexpr(dim == 2) {
+            tcase = std::make_unique<cases::MinSurfCubeVerify<dim>>();
+        } else {
+            throw std::runtime_error(
+                "Case 'minimal_surface_cube_verify' does not support "
+                "spatial dimension " + std::to_string(dim) + ".");
+        }
     } else if(params.case_str == "minimal_surface_disk_sinusoidal") {
         tcase = std::make_unique<cases::MinSurfDiskSinusoidal<dim>>();
     } else if(params.case_str == "minimal_surface_cube_sinusoidal") {
@@ -50,5 +62,6 @@ std::unique_ptr<Case<dim>> create_case(const CommonParams& params, const int n_a
 }
 
 template std::unique_ptr<Case<2>> create_case(const CommonParams&, int, const char *const[]);
+template std::unique_ptr<Case<3>> create_case(const CommonParams&, int, const char *const[]);
 
 }

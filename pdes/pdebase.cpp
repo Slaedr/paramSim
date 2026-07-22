@@ -15,7 +15,6 @@
 #include <deal.II/numerics/error_estimator.h>
 #include <deal.II/lac/dynamic_sparsity_pattern.h>
 #include <deal.II/numerics/data_out.h>
-#include <deal.II/numerics/data_out_faces.h>
 
 #include "../utils/error_handling.hpp"
 #include "poisson/poisson_cg.hpp"
@@ -283,21 +282,10 @@ void DiscretePDE<dim, FE_t>::output_results(const int refinement_cycle,
     std::ofstream output(filename);
     data_out.write_vtk(output);
 
-    std::ofstream b_output(file_prefix + "-boundary.vtk");
-    dealii::DataOutFaces<dim> data_out_boundary(true);
-    std::vector<std::string> face_name(1, "solution");
-    std::vector<dealii::DataComponentInterpretation::DataComponentInterpretation>
-        face_component_type(1, dealii::DataComponentInterpretation::component_is_scalar);
-    data_out_boundary.add_data_vector(dof_handler_,
-                                      solution,
-                                      face_name,
-                                      face_component_type);
-    data_out_boundary.build_patches(fe_.degree);
-    data_out_boundary.write_vtk(b_output);
-    b_output.close();
 }
 
 template class DiscretePDE<2, dealii::FE_Q<2>>;
+template class DiscretePDE<3, dealii::FE_Q<3>>;
 
 template <int dim>
 std::unique_ptr<DiscretePDEBase> create_discrete_pde(std::shared_ptr<const Case<dim>> test_case,
@@ -314,6 +302,9 @@ std::unique_ptr<DiscretePDEBase> create_discrete_pde(std::shared_ptr<const Case<
 
 template
 std::unique_ptr<DiscretePDEBase> create_discrete_pde(std::shared_ptr<const Case<2>>,
+                                                     const PDEParams&);
+template
+std::unique_ptr<DiscretePDEBase> create_discrete_pde(std::shared_ptr<const Case<3>>,
                                                      const PDEParams&);
 
 }

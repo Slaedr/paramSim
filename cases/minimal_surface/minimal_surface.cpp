@@ -78,6 +78,7 @@ void MinSurfDiskSinusoidal<dim>::add_case_cmd_args(bpo::options_description& des
 }
 
 template class MinSurfDiskSinusoidal<2>;
+template class MinSurfDiskSinusoidal<3>;
 
 template <int dim>
 void MinSurfCubeLeft<dim>::set_geometry_and_boundary(
@@ -155,6 +156,7 @@ void MinSurfCubeSinusoidal<dim>::add_case_cmd_args(bpo::options_description& des
 }
 
 template class MinSurfCubeSinusoidal<2>;
+template class MinSurfCubeSinusoidal<3>;
 
 template <int dim>
 void MinSurfCubePolynomial<dim>::initialize(const bpo::variables_map& params)
@@ -202,6 +204,7 @@ void MinSurfCubePolynomial<dim>::add_case_cmd_args(bpo::options_description& des
 }
 
 template class MinSurfCubePolynomial<2>;
+template class MinSurfCubePolynomial<3>;
 
 }
 }

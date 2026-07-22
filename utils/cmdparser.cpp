@@ -1,5 +1,6 @@
 #include "cmdparser.hpp"
 
+#include <stdexcept>
 #include <boost/program_options/cmdline.hpp>
 #include <boost/program_options/parsers.hpp>
 
@@ -14,6 +15,8 @@ void add_common_options(bpo::options_description& desc, const std::string help_m
          "Name of the PDE case to solve: 'poisson_verify', 'poisson_bc_exp', 'minimal_surface_exp'")
         ("pde", bpo::value<std::string>(),
          "Type of PDE solver to use: 'poisson_cg', 'minimal_surface'")
+        ("dimension", bpo::value<unsigned int>(),
+         "Spatial dimension of the problem (required; supported values: 2, 3)")
         ("refine_levels", bpo::value<int>()->default_value(5),
          "Number of times to refine the grid and solve")
         ("initial_resolution", bpo::value<unsigned int>()->default_value(2),
@@ -45,10 +48,24 @@ bpo::variables_map get_cmd_args(const int argc, const char *const argv[],
 
 CommonParams get_common_params(const bpo::variables_map& common_cmdmap)
 {
+    if(!common_cmdmap.count("dimension")) {
+        throw std::invalid_argument(
+            "Missing required option '--dimension'. Supported values are 2 and 3.");
+    }
+
+    const unsigned int dimension =
+        common_cmdmap["dimension"].as<unsigned int>();
+    if(dimension != 2 && dimension != 3) {
+        throw std::invalid_argument(
+            "Unsupported spatial dimension " + std::to_string(dimension) +
+            ". Supported values are 2 and 3.");
+    }
+
     // TODO: Use C++20 designated initializers for this
     return CommonParams {
         /*case_str =          */ common_cmdmap["case"].as<std::string>(),
         /*solver_str =        */ common_cmdmap["pde"].as<std::string>(),
+        /*dimension =         */ dimension,
         /*refine_levels =     */ common_cmdmap["refine_levels"].as<int>(),
         /*initial_resolution =*/ common_cmdmap["initial_resolution"].as<unsigned>(),
         /*fe_degree =         */ common_cmdmap["fe_degree"].as<int>(),

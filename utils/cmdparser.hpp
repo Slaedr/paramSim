@@ -14,6 +14,7 @@ namespace paramsim {
 struct CommonParams {
     std::string case_str;
     std::string solver_str;
+    unsigned int dimension;
     int refine_levels;
     unsigned initial_resolution;
     int fe_degree;

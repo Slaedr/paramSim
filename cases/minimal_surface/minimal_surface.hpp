@@ -60,7 +60,8 @@ public:
                          const unsigned int /*component*/ = 0) const override
     {
         double sum = 0;
-        for (int i = 0; i < dim; i++) {
+        constexpr int profile_dim = 2;
+        for (int i = 0; i < profile_dim; i++) {
             sum += p[i];
         }
         // return std::sin(2*pi/params_.f_wavelength*sum);

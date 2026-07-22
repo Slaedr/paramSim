@@ -95,6 +95,8 @@ double test_grid_convergence(std::shared_ptr<const Case<dim>> test_case, const P
 
 template double test_grid_convergence(std::shared_ptr<const Case<2>>, const PDEParams&,
                                       SolverParams);
+template double test_grid_convergence(std::shared_ptr<const Case<3>>, const PDEParams&,
+                                      SolverParams);
 
 }
 }

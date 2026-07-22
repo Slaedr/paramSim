@@ -58,7 +58,7 @@ def run_ensemble(case_file_path):
     # Register simulation executable with executor
     exctr.register_app(full_path=case_data["simulation_exec_path"], app_name="run_fem_case")
 
-    common_arg_str = get_common_arg_str(case_data)
+    common_arg_str = get_common_args_str(case_data)
 
     gen_specs = {
         "gen_f" : gen_random_samples,
@@ -96,4 +96,3 @@ def run_ensemble(case_file_path):
 
     if is_manager:
         libe.tools.save_libE_output(H, persis_info, __file__, nworkers)
-

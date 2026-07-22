@@ -219,6 +219,7 @@ void PoissonCG<dim>::assemble_system(AssemblyOptions, const vector_type& state,
 }
 
 template class PoissonCG<2>;
+template class PoissonCG<3>;
 
 }
 }

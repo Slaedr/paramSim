@@ -63,6 +63,7 @@ void MinSurfCubeGaussians<dim>::add_case_cmd_args(bpo::options_description& desc
 }
 
 template class MinSurfCubeGaussians<2>;
+template class MinSurfCubeGaussians<3>;
 
 
 }
