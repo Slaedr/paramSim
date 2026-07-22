@@ -38,8 +38,8 @@ public:
     {
         static_assert(dim == 2, "Not yet defined for 3D!");
         const double b = std::sqrt(1.0 +
-                                   std::cos(p[0])*std::cos(p[0])*std::sin(p[1])*std::sin(p[1]) +
-                                   std::sin(p[0])*std::sin(p[0])*std::cos(p[1])*std::cos(p[1]));
+            std::cos(p[0])*std::cos(p[0])*std::sin(p[1])*std::sin(p[1]) +
+            std::sin(p[0])*std::sin(p[0])*std::cos(p[1])*std::cos(p[1]));
         double f1 = 1.0/std::pow(b, 3);
         double f2 = 2.0*std::sin(p[0])*std::sin(p[1])*b*b;
         f2 += 0.5*(std::cos(p[0])*std::sin(p[1])*std::sin(2*p[0])*std::cos(2*p[1]) +
@@ -56,7 +56,7 @@ namespace bpo = boost::program_options;
 
 /// Verification test case for minimal surface problem on a ball domain.
 template <int dim>
-class MinSurfVerify final : public Case<dim>, public HasExactSolution<dim>
+class MinSurfBallVerify final : public Case<dim>, public HasExactSolution<dim>
 {
 public:
     void initialize(const bpo::variables_map&) override;

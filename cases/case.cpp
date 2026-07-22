@@ -26,8 +26,8 @@ std::unique_ptr<Case<dim>> create_case(const CommonParams& params, const int n_a
         tcase = std::make_unique<cases::PoissonBCFourier<dim>>();
     } else if(params.case_str == "poisson_bc_polynomial") {
         tcase = std::make_unique<cases::PoissonBCPolynomial<dim>>();
-    } else if(params.case_str == "minimal_surface_verify") {
-        tcase = std::make_unique<cases::MinSurfVerify<dim>>();
+    } else if(params.case_str == "minimal_surface_ball_verify") {
+        tcase = std::make_unique<cases::MinSurfBallVerify<dim>>();
     } else if(params.case_str == "minimal_surface_cube_verify") {
         tcase = std::make_unique<cases::MinSurfCubeVerify<dim>>();
     } else if(params.case_str == "minimal_surface_disk_sinusoidal") {
