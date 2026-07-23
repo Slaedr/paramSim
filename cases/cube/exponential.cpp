@@ -1,21 +1,22 @@
-#include "exps.hpp"
+#include "exponential.hpp"
 
 #include <limits>
 
 namespace paramsim {
 namespace cases {
+namespace cube {
 
 using namespace dealii;
    
 template <int dim>
-const std::array<std::string, 3> PoissonBCExp<dim>::dimnames{{"x","y","z"}};
+const std::array<std::string, 3> CubeExponential<dim>::dimnames{{"x","y","z"}};
 
 template <int dim>
-void PoissonBCExp<dim>::initialize(const bpo::variables_map& params)
+void CubeExponential<dim>::initialize(const bpo::variables_map& params)
 {
-    std::shared_ptr<poisson_exp::DirichletIn<dim>> dirichlet1;
+    std::shared_ptr<exponential::DirichletIn<dim>> dirichlet1;
     if(params.count("width")) {
-        constexpr int n_centers = poisson_exp::Params<dim>::n_centers;
+        constexpr int n_centers = exponential::Params<dim>::n_centers;
         std::array<Point<dim>, n_centers> centers;
         std::array<double, n_centers> coeffs;
         for(int ic = 0; ic < n_centers; ic++) {
@@ -29,12 +30,12 @@ void PoissonBCExp<dim>::initialize(const bpo::variables_map& params)
             coeffs[ic] = params[coflag.c_str()].as<double>();
         }
         const double width_sigma = params["width"].as<double>();
-        poisson_exp::Params<dim> params(centers, coeffs, width_sigma);
-        this->rhs_ = std::make_shared<poisson_exp::RightHandSide<dim>>();
-        dirichlet1 = std::make_shared<poisson_exp::DirichletIn<dim>>(params);
+        exponential::Params<dim> params(centers, coeffs, width_sigma);
+        this->rhs_ = std::make_shared<exponential::RightHandSide<dim>>();
+        dirichlet1 = std::make_shared<exponential::DirichletIn<dim>>(params);
 
         // Write out params to confirm
-        std::cout << "Case 'bc_exp' for Poisson: read parameters:\n";
+        std::cout << "Case 'cube_exponential': read parameters:\n";
         std::cout << "  Width = " << width_sigma << std::endl;
         for(int ic = 0; ic < n_centers; ic++) {
             std::cout << "  Center " << ic << ": (";
@@ -44,12 +45,12 @@ void PoissonBCExp<dim>::initialize(const bpo::variables_map& params)
             std::cout << "), coeff = " << coeffs[ic] << std::endl;
         }
     } else {
-        this->rhs_ = std::make_shared<poisson_exp::RightHandSide<dim>>();
-        dirichlet1 = std::make_shared<poisson_exp::DirichletIn<dim>>();
-        std::cout << "Case 'bc_exp' for Poisson: default parameters.\n";
+        this->rhs_ = std::make_shared<exponential::RightHandSide<dim>>();
+        dirichlet1 = std::make_shared<exponential::DirichletIn<dim>>();
+        std::cout << "Case 'cube_exponential': default parameters.\n";
     }
         
-    auto dirichlet2 = std::make_shared<poisson_exp::DirichletConstant<dim>>(1.0);
+    auto dirichlet2 = std::make_shared<exponential::DirichletConstant<dim>>(1.0);
 
     this->bc_dirichlet_.push_back(dirichlet_bc<dim>{1, dirichlet1});
     this->bc_dirichlet_.push_back(dirichlet_bc<dim>{2, dirichlet2});
@@ -76,11 +77,11 @@ void PoissonBCExp<dim>::initialize(const bpo::variables_map& params)
 }
 
 template <int dim>
-void PoissonBCExp<dim>::add_case_cmd_args(bpo::options_description& desc) const
+void CubeExponential<dim>::add_case_cmd_args(bpo::options_description& desc) const
 {
 	desc.add_options()
         ("width", bpo::value<double>(), "Width of each hill");
-    constexpr int n_centers = poisson_exp::Params<dim>::n_centers;
+    constexpr int n_centers = exponential::Params<dim>::n_centers;
     for(int ic = 0; ic < n_centers; ic++) {
         const std::string flag =
             std::string("center") + std::to_string(ic) + "_y";
@@ -97,8 +98,9 @@ void PoissonBCExp<dim>::add_case_cmd_args(bpo::options_description& desc) const
     }
 }
 
-template class PoissonBCExp<2>;
-template class PoissonBCExp<3>;
+template class CubeExponential<2>;
+template class CubeExponential<3>;
 
-}
-}
+} // namespace cube
+} // namespace cases
+} // namespace paramsim

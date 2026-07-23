@@ -25,7 +25,7 @@ def setup_case(case_data : dict, gen_specs : dict, sim_specs : dict):
     """ Depending on the case type, adds case-specific ensemble run parameters to
         libensemble dicts.
         
-        For the case poisson_bc_exp, this needs an array "centers" of length 3, each having
+        For the case cube_exponential, this needs an array "centers" of length 3, each having
         dict "coords_bounds" (lower and upper bounds for y-coordinates, so array of length 2),
         dict "coeff_bounds" (lower and upper bounds for coefficients, so array of length 2).
         In addition, a key "width_bounds" with a 2-array as value, having lower and upper bounds
@@ -34,7 +34,7 @@ def setup_case(case_data : dict, gen_specs : dict, sim_specs : dict):
         @param[in] case_data  Dict of ensemble options supplied in the ensemble settings JSON.
         @param[in,out] gen_specs  Parameter bounds are populated in this libEnsemble dict.
     """
-    if case_data["case_type"] == "poisson_bc_exp":
+    if case_data["case_type"] == "cube_exponential":
         ncenters = 3
         ndim = 1
         # Output of generator include 2 centers, each with x-coord, y-coord and coefficient
@@ -60,7 +60,7 @@ def setup_case(case_data : dict, gen_specs : dict, sim_specs : dict):
         gen_specs["user"]["lower"]["width"] = np.array([l_wbound], dtype=np.float32)
         gen_specs["user"]["upper"]["width"] = np.array([u_wbound], dtype=np.float32)
 
-    elif case_data["case_type"] == "poisson_bc_polynomial":
+    elif case_data["case_type"] == "cube_polynomial":
         nterms = 4
         ndim = 1
         gen_specs["out"].append( ("coeffs", np.float32, (nterms,)) )
@@ -82,7 +82,7 @@ def setup_case(case_data : dict, gen_specs : dict, sim_specs : dict):
         gen_specs["user"]["lower"]["center_y"] = np.array([l_ybound], dtype=np.float32)
         gen_specs["user"]["upper"]["center_y"] = np.array([u_ybound], dtype=np.float32)
 
-    elif case_data["case_type"] == "poisson_bc_fourier":
+    elif case_data["case_type"] == "cube_fourier":
         nmodes = 2
         ndim = 1
         # Output of generator include 2 centers, each with x-coord, y-coord and coefficient
@@ -124,18 +124,18 @@ def get_args_str(case_type : str, args):
         @param args  Arguments to `run_case`.
     """
     argstr = " "
-    if case_type == "poisson_bc_exp":
+    if case_type == "cube_exponential":
         ncenters = 3
         for icenter in range(ncenters):
             argstr += " --center" + str(icenter) + "_y=" + str(args["centers"][icenter][0])
             argstr += " --center" + str(icenter) + "_coeff=" + str(args["centers"][icenter][1])
         argstr += " --width=" + str(args["width"][0])
-    elif case_type == "poisson_bc_polynomial":
+    elif case_type == "cube_polynomial":
         nterms = 4
         for it in range(nterms):
             argstr += " --a" + str(it) + "=" + str(args["coeffs"][it])
         argstr += " --center_y=" + str(args["center_y"][0])
-    elif case_type == "poisson_bc_fourier":
+    elif case_type == "cube_fourier":
         nmodes = 2
         argstr += " --wavelength=" + str(args["wavelength"][0]) + " --a0=" + \
             str(args["constant"][0])

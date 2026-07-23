@@ -29,4 +29,4 @@ The `minimal_surface_ball_verify` and `minimal_surface_cube_verify` cases remain
 2D-only because their manufactured right-hand side has not yet been derived in
 3D. Existing parameterized boundary profiles are extruded in the third
 direction; true two-coordinate B2D parameterizations, beginning with
-`poisson_bc_exp`, are future work.
+`cube_exponential`, are future work.

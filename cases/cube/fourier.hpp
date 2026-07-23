@@ -1,23 +1,20 @@
-#ifndef PARAMSIM_CASES_POISSON_FOURIER_HPP_
-#define PARAMSIM_CASES_POISSON_FOURIER_HPP_
+#ifndef PARAMSIM_CASES_CUBE_FOURIER_HPP_
+#define PARAMSIM_CASES_CUBE_FOURIER_HPP_
 
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/variables_map.hpp>
 #include <deal.II/grid/grid_generator.h>
 
 #include "../case.hpp"
-#include "exps.hpp"
-#include "verify.hpp"
+#include "exponential.hpp"
 
 namespace paramsim {
 namespace cases {
 
-namespace poisson_fourier {
+namespace cube {
+namespace fourier {
 
 using namespace dealii;
-
-// template <int dim>
-// using Cube = paramsim::cases::poisson_verify::Cube<dim>;
 
 template <int dim>
 struct Params {
@@ -64,22 +61,23 @@ public:
 };
 
 template <int dim>
-using RightHandSide = paramsim::cases::poisson_exp::RightHandSide<dim>;
+using RightHandSide = exponential::RightHandSide<dim>;
 
 template <int dim>
 using DirichletConstant = cases::DirichletConstant<dim>;
 
-} // namespace poisson_fourier
+} // namespace fourier
 
 namespace bpo = boost::program_options;
 
 template <int dim>
-class PoissonBCFourier final : public Case<dim> {
+class CubeFourier final : public Case<dim> {
 public:
     void initialize(const bpo::variables_map &) override;
     void add_case_cmd_args(bpo::options_description &) const override;
 };
 
+} // namespace cube
 } // namespace cases
 } // namespace paramsim
 

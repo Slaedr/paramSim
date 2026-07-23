@@ -8,7 +8,7 @@
   "resolution": 63,
   "refine_levels": 1,
   "pde": "poisson_cg",
-  "case_type": "poisson_bc_exp",
+  "case_type": "cube_exponential",
   "centers": [
     {
       "coords_bounds": [-0.8, 0.1],

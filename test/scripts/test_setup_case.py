@@ -14,7 +14,7 @@ class CommonArgsTests(unittest.TestCase):
         return {
             "dimension": 3,
             "pde": "poisson_cg",
-            "case_type": "poisson_bc_exp",
+            "case_type": "cube_exponential",
             "refine_levels": 2,
             "resolution": 8,
         }
@@ -22,7 +22,7 @@ class CommonArgsTests(unittest.TestCase):
     def test_dimension_is_forwarded(self):
         self.assertEqual(
             get_common_args_str(self.base_case()),
-            "--dimension 3 --pde poisson_cg --case poisson_bc_exp "
+            "--dimension 3 --pde poisson_cg --case cube_exponential "
             "--refine_levels 2 --initial_resolution 8 --output_prefix field",
         )
 

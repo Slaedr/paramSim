@@ -5,7 +5,7 @@
   "dimension" : 2,
   "resolution" : 63,
   "pde" : "poisson_cg",
-  "case_type" : "poisson_bc_fourier",
+  "case_type" : "cube_fourier",
   "amplitudes" : [
       {
           "a_bounds" : [-1.0, 1.0],

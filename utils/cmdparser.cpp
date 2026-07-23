@@ -12,7 +12,7 @@ void add_common_options(bpo::options_description& desc, const std::string help_m
     desc.add_options()
         ("help", help_msg.c_str())
         ("case", bpo::value<std::string>(),
-         "Name of the PDE case to solve: 'poisson_verify', 'poisson_bc_exp', 'minimal_surface_exp'")
+         "Name of the PDE case to solve: 'poisson_verify', 'cube_exponential', 'minimal_surface_exp'")
         ("pde", bpo::value<std::string>(),
          "Type of PDE solver to use: 'poisson_cg', 'minimal_surface'")
         ("dimension", bpo::value<unsigned int>(),

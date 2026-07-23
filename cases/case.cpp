@@ -5,9 +5,9 @@
 #include "minimal_surface/gaussians.hpp"
 #include "minimal_surface/minimal_surface.hpp"
 #include "minimal_surface/verify.hpp"
-#include "poisson/exps.hpp"
-#include "poisson/fourier.hpp"
-#include "poisson/polynomial.hpp"
+#include "cube/exponential.hpp"
+#include "cube/fourier.hpp"
+#include "cube/polynomial.hpp"
 #include "poisson/verify.hpp"
 
 namespace paramsim {
@@ -20,12 +20,12 @@ std::unique_ptr<Case<dim>> create_case(const CommonParams &params,
     std::unique_ptr<Case<dim>> tcase;
     if (params.case_str == "poisson_verify") {
         tcase = std::make_unique<cases::PoissonVerify<dim>>();
-    } else if (params.case_str == "poisson_bc_exp") {
-        tcase = std::make_unique<cases::PoissonBCExp<dim>>();
-    } else if (params.case_str == "poisson_bc_fourier") {
-        tcase = std::make_unique<cases::PoissonBCFourier<dim>>();
-    } else if (params.case_str == "poisson_bc_polynomial") {
-        tcase = std::make_unique<cases::PoissonBCPolynomial<dim>>();
+    } else if (params.case_str == "cube_exponential") {
+        tcase = std::make_unique<cases::cube::CubeExponential<dim>>();
+    } else if (params.case_str == "cube_fourier") {
+        tcase = std::make_unique<cases::cube::CubeFourier<dim>>();
+    } else if (params.case_str == "cube_polynomial") {
+        tcase = std::make_unique<cases::cube::CubePolynomial<dim>>();
     } else if (params.case_str == "minimal_surface_ball_verify") {
         if constexpr (dim == 2) {
             tcase = std::make_unique<cases::MinSurfBallVerify<dim>>();

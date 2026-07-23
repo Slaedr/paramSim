@@ -5,7 +5,7 @@
   "dimension" : 2,
   "resolution" : 63,
   "pde" : "poisson_cg",
-  "case_type" : "poisson_bc_exp",
+  "case_type" : "cube_exponential",
   "centers" : [
       {
           "coords_bounds" : [-0.8, 0.1],

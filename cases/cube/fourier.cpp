@@ -4,15 +4,16 @@
 
 namespace paramsim {
 namespace cases {
+namespace cube {
 
 using namespace dealii;
 
 template <int dim>
-void PoissonBCFourier<dim>::initialize(const bpo::variables_map& params)
+void CubeFourier<dim>::initialize(const bpo::variables_map& params)
 {
-    std::shared_ptr<poisson_fourier::DirichletIn<dim>> dirichlet1;
+    std::shared_ptr<fourier::DirichletIn<dim>> dirichlet1;
     if(params.count("wavelength")) {
-        constexpr int n_modes = poisson_fourier::Params<dim>::n_modes;
+        constexpr int n_modes = fourier::Params<dim>::n_modes;
         std::array<double, n_modes> as;
         std::array<double, n_modes> bs;
         for(int ic = 1; ic < n_modes+1; ic++) {
@@ -25,11 +26,11 @@ void PoissonBCFourier<dim>::initialize(const bpo::variables_map& params)
         }
         const double wavelength = params["wavelength"].as<double>();
         const double a0 = params["a0"].as<double>();
-        poisson_fourier::Params<dim> params(as, bs, a0, wavelength);
-        dirichlet1 = std::make_shared<poisson_fourier::DirichletIn<dim>>(params);
+        fourier::Params<dim> params(as, bs, a0, wavelength);
+        dirichlet1 = std::make_shared<fourier::DirichletIn<dim>>(params);
 
         // Write out params to confirm
-        std::cout << "Case 'bc_fourier' for Poisson: read parameters:\n";
+        std::cout << "Case 'cube_fourier': read parameters:\n";
         std::cout << "  Fundamental wavelength = " << params.f_wavelength << std::endl;
         std::cout << "  Constant term = " << params.a0 << std::endl;
         for(int ic = 0; ic < n_modes; ic++) {
@@ -37,13 +38,13 @@ void PoissonBCFourier<dim>::initialize(const bpo::variables_map& params)
             std::cout << as[ic] << ", " << bs[ic] << ")" << std::endl;
         }
     } else {
-        dirichlet1 = std::make_shared<poisson_fourier::DirichletIn<dim>>();
-        std::cout << "Case 'bc_fourier' for Poisson: default parameters.\n";
+        dirichlet1 = std::make_shared<fourier::DirichletIn<dim>>();
+        std::cout << "Case 'cube_fourier': default parameters.\n";
     }
 
-    this->rhs_ = std::make_shared<poisson_fourier::RightHandSide<dim>>();
+    this->rhs_ = std::make_shared<fourier::RightHandSide<dim>>();
 
-    auto dirichlet2 = std::make_shared<poisson_fourier::DirichletConstant<dim>>(1.0);
+    auto dirichlet2 = std::make_shared<fourier::DirichletConstant<dim>>(1.0);
 
     this->bc_dirichlet_.push_back(dirichlet_bc<dim>{1, dirichlet1});
     this->bc_dirichlet_.push_back(dirichlet_bc<dim>{2, dirichlet2});
@@ -70,12 +71,12 @@ void PoissonBCFourier<dim>::initialize(const bpo::variables_map& params)
 }
     
 template <int dim>
-void PoissonBCFourier<dim>::add_case_cmd_args(bpo::options_description& desc) const
+void CubeFourier<dim>::add_case_cmd_args(bpo::options_description& desc) const
 {
     desc.add_options()
         ("wavelength", bpo::value<double>(), "The fundamental wavelength for zeroth mode");
     desc.add_options() ("a0", bpo::value<double>(), "Constant term");
-    constexpr int n_modes = poisson_fourier::Params<dim>::n_modes;
+    constexpr int n_modes = fourier::Params<dim>::n_modes;
     for(int ic = 1; ic < n_modes+1; ic++) {
         const std::string coflag =
             std::string("a") + std::to_string(ic);
@@ -91,8 +92,9 @@ void PoissonBCFourier<dim>::add_case_cmd_args(bpo::options_description& desc) co
     }
 }
 
-template class PoissonBCFourier<2>;
-template class PoissonBCFourier<3>;
+template class CubeFourier<2>;
+template class CubeFourier<3>;
 
-}
-}
+} // namespace cube
+} // namespace cases
+} // namespace paramsim

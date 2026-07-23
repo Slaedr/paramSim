@@ -1,18 +1,18 @@
-#ifndef PARAMSIM_CASES_POISSON_POLYNOMIAL_HPP_
-#define PARAMSIM_CASES_POISSON_POLYNOMIAL_HPP_
+#ifndef PARAMSIM_CASES_CUBE_POLYNOMIAL_HPP_
+#define PARAMSIM_CASES_CUBE_POLYNOMIAL_HPP_
 
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/variables_map.hpp>
 #include <deal.II/grid/grid_generator.h>
 
 #include "../case.hpp"
-#include "exps.hpp"
-#include "verify.hpp"
+#include "exponential.hpp"
 
 namespace paramsim {
 namespace cases {
 
-namespace poisson_poly {
+namespace cube {
+namespace polynomial {
 
 using namespace dealii;
 
@@ -53,22 +53,23 @@ public:
 };
 
 template <int dim>
-using RightHandSide = paramsim::cases::poisson_exp::RightHandSide<dim>;
+using RightHandSide = exponential::RightHandSide<dim>;
 
 template <int dim>
-using DirichletConstant = poisson_exp::DirichletConstant<dim>;
+using DirichletConstant = exponential::DirichletConstant<dim>;
 
-} // namespace poisson_poly
+} // namespace polynomial
 
 namespace bpo = boost::program_options;
 
 template <int dim>
-class PoissonBCPolynomial final : public Case<dim> {
+class CubePolynomial final : public Case<dim> {
 public:
     void initialize(const bpo::variables_map &) override;
     void add_case_cmd_args(bpo::options_description &) const override;
 };
 
+} // namespace cube
 } // namespace cases
 } // namespace paramsim
 

@@ -5,7 +5,7 @@
   "dimension" : 2,
   "resolution" : 63,
   "pde" : "poisson_cg",
-  "case_type" : "poisson_bc_polynomial",
+  "case_type" : "cube_polynomial",
   "coeffs_bounds" : [ [-1.0, 1.0], [-0.67, 0.66], [-0.5, 0.5], [-0.33, 0.33] ],
   "center_y_bounds" : [-0.5, 0.5]
 }
