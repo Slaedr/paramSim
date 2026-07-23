@@ -52,6 +52,11 @@ struct Params {
         : centers{centerss}, coeffs{coefficients}, width{hill_width},
           gamma{get_multiplier()}
     {
+        if constexpr (dim == 3) {
+            centers[0][2] = -1;
+            centers[1][2] = -1;
+            centers[2][2] = 1;
+        }
     }
 };
 
