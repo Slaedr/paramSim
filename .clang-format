@@ -19,3 +19,5 @@ IndentAccessModifiers: false
 AccessModifierOffset: -4
 
 AllowShortFunctionsOnASingleLine: Empty
+
+ReferenceAlignment: Left

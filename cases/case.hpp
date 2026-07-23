@@ -25,8 +25,7 @@ struct dirichlet_bc {
 
 /// Abstract class gathering all testcase-specific data and descriptions
 template <int dimension>
-class Case
-{
+class Case {
 public:
     static constexpr int dim = dimension;
 
@@ -34,17 +33,20 @@ public:
 
     virtual void initialize(const bpo::variables_map&) = 0;
 
-    std::shared_ptr<const DomainGeometry<dim>> get_geometry() const {
+    std::shared_ptr<const DomainGeometry<dim>> get_geometry() const
+    {
         return geom_;
     }
 
-    std::shared_ptr<const dealii::Function<dim>> get_right_hand_side() const {
+    std::shared_ptr<const dealii::Function<dim>> get_right_hand_side() const
+    {
         return rhs_;
     }
 
     /** Get dirichlet boundary conditions.
      */
-    const std::vector<dirichlet_bc<dim>>& get_dirichlet_bcs() const {
+    const std::vector<dirichlet_bc<dim>>& get_dirichlet_bcs() const
+    {
         return bc_dirichlet_;
     }
 
@@ -57,22 +59,26 @@ protected:
 /** Generates a case given a string description.
  */
 template <int dim>
-std::unique_ptr<Case<dim>> create_case(const CommonParams& params, int n_args, const char *const args[]);
+std::unique_ptr<Case<dim>> create_case(const CommonParams& params, int n_args,
+                                       const char *const args[]);
 
 /* Are mixins really the right approach to use here (below)?
- * Dynamic-casting a Case<dim>* to a more specialized type is essentially impossible
- * without knowing the derivation order for the concrete type.
+ * Dynamic-casting a Case<dim>* to a more specialized type is essentially
+ * impossible without knowing the derivation order for the concrete type.
  */
 
 template <int dim>
-class HasNeumannBC
-{
+class HasNeumannBC {
 public:
-    std::shared_ptr<const FaceFunction<dim>> get_neumann_bc() const {
+    std::shared_ptr<const FaceFunction<dim>> get_neumann_bc() const
+    {
         return neumann_;
     }
 
-    dealii::types::boundary_id get_neumann_marker() const { return bcid_neumann_; }
+    dealii::types::boundary_id get_neumann_marker() const
+    {
+        return bcid_neumann_;
+    }
 
 protected:
     std::shared_ptr<FaceFunction<dim>> neumann_;
@@ -80,53 +86,52 @@ protected:
 };
 
 template <int dim>
-class HasExactSolution
-{
+class HasExactSolution {
 public:
-    std::shared_ptr<const dealii::Function<dim>> get_exact_solution() const {
+    std::shared_ptr<const dealii::Function<dim>> get_exact_solution() const
+    {
         return exact_soln_;
     }
+
 protected:
     std::shared_ptr<dealii::Function<dim>> exact_soln_;
 };
 
 template <int dim>
-class HasExactSolutionAndGradient
-{
+class HasExactSolutionAndGradient {
 public:
-    std::shared_ptr<const dealii::Function<dim>> get_exact_solution_and_gradient() const {
+    std::shared_ptr<const dealii::Function<dim>>
+    get_exact_solution_and_gradient() const
+    {
         return exact_soln_and_grad_;
     }
+
 protected:
     std::shared_ptr<dealii::Function<dim>> exact_soln_and_grad_;
 };
 
 namespace cases {
 
-
 template <int dim>
-class DirichletConstant : public dealii::Function<dim>
-{
+class DirichletConstant : public dealii::Function<dim> {
 public:
-  DirichletConstant()
-  { }
+    DirichletConstant() {}
 
-  DirichletConstant(const double boundary_value) : value_{boundary_value}
-  { }
+    DirichletConstant(const double boundary_value) : value_{boundary_value} {}
 
-  virtual double value(const dealii::Point<dim>& = 0,
-                       const unsigned int /*component*/ = 0) const override
-  {
-      return value_;
-  }
+    virtual double value(const dealii::Point<dim>& = 0,
+                         const unsigned int /*component*/ = 0) const override
+    {
+        return value_;
+    }
 
-  const double value_{0.0};
+    const double value_{0.0};
 };
 
+} // namespace cases
 
-}
+const std::array<std::string, 3> dimnames{{"x", "y", "z"}};
 
-
-}
+} // namespace paramsim
 
 #endif

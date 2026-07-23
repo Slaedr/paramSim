@@ -46,8 +46,8 @@ struct Params {
 
     Params() {}
 
-    Params(const std::array<Point<dim>, n_centers> &centerss,
-           const std::array<double, n_centers> &coefficients,
+    Params(const std::array<Point<dim>, n_centers>& centerss,
+           const std::array<double, n_centers>& coefficients,
            const double hill_width)
         : centers{centerss}, coeffs{coefficients}, width{hill_width},
           gamma{get_multiplier()}
@@ -67,7 +67,7 @@ class RightHandSide : public Function<dim> {
 public:
     static constexpr int n_centers = 1;
 
-    virtual double value(const Point<dim> &p,
+    virtual double value(const Point<dim>& p,
                          const unsigned int /*component*/ = 0) const override
     {
         double sum = -0.0625;
@@ -104,9 +104,9 @@ class DirichletIn : public Function<dim> {
 public:
     DirichletIn() {}
 
-    DirichletIn(const Params<dim> &params) : params_{params} {}
+    DirichletIn(const Params<dim>& params) : params_{params} {}
 
-    virtual double value(const Point<dim> &p,
+    virtual double value(const Point<dim>& p,
                          const unsigned int /*component*/ = 0) const override
     {
         double sum = 0;
@@ -140,11 +140,8 @@ namespace bpo = boost::program_options;
 template <int dim>
 class CubeExponential final : public Case<dim> {
 public:
-    void initialize(const bpo::variables_map &) override;
-    void add_case_cmd_args(bpo::options_description &) const override;
-
-private:
-    static const std::array<std::string, 3> dimnames;
+    void initialize(const bpo::variables_map&) override;
+    void add_case_cmd_args(bpo::options_description&) const override;
 };
 
 } // namespace cube
