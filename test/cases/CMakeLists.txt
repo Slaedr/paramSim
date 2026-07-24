@@ -7,3 +7,8 @@ add_executable(cases_test case.cpp)
 deal_ii_setup_target(cases_test)
 target_link_libraries(cases_test paramsim_cases utils GTest::gtest_main)
 gtest_discover_tests(cases_test)
+
+add_executable(cube_parameters_test cube_parameters.cpp)
+deal_ii_setup_target(cube_parameters_test)
+target_link_libraries(cube_parameters_test paramsim_cases GTest::gtest_main)
+gtest_discover_tests(cube_parameters_test)
