@@ -1,11 +1,18 @@
 #ifndef PARAMSIM_CASES_CUBE_POLYNOMIAL_HPP_
 #define PARAMSIM_CASES_CUBE_POLYNOMIAL_HPP_
 
+#include <array>
+#include <cmath>
+#include <cstddef>
+#include <string>
+#include <vector>
+
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/variables_map.hpp>
 #include <deal.II/grid/grid_generator.h>
 
 #include "../case.hpp"
+#include "case_parameters.hpp"
 #include "exponential.hpp"
 
 namespace paramsim {
@@ -16,36 +23,105 @@ namespace polynomial {
 
 using namespace dealii;
 
+/**
+ * @brief Runtime-sized multidimensional polynomial parameters.
+ *
+ * Coefficients are grouped by total degree and follow the ordering returned by
+ * `degree_exponents`. The built-in default represents
+ * `1 + Y + Y^2 + Y^3`.
+ *
+ * @tparam dim Active spatial dimension; must be 2 or 3.
+ */
 template <int dim>
 struct Params {
-    static constexpr int n_terms = 4;
+    static_assert(dim == 2 || dim == 3,
+                  "Polynomial parameters require dimension 2 or 3.");
 
-    std::array<double, n_terms> ac{{1.0, 1.0, 1.0, 1.0}};
-    double center{0.0};
-
-    Params() {}
-
-    Params(const std::array<double, n_terms> &acoeffs, const double center_y)
-        : ac{acoeffs}, center{center_y}
-    {
-    }
+    std::array<double, dim> center{};
+    std::vector<std::vector<double>> coefficients_by_degree = [] {
+        constexpr unsigned default_degree_levels = 4;
+        std::vector<std::vector<double>> coefficients;
+        coefficients.reserve(default_degree_levels);
+        for (unsigned degree = 0; degree < default_degree_levels; ++degree) {
+            const auto exponents = degree_exponents<dim>(degree);
+            std::vector<double> degree_coefficients(exponents.size(), 0.0);
+            for (std::size_t index = 0; index < exponents.size(); ++index) {
+                if (exponents[index][1] == degree) {
+                    degree_coefficients[index] = 1.0;
+                }
+            }
+            coefficients.push_back(std::move(degree_coefficients));
+        }
+        return coefficients;
+    }();
 };
 
+/**
+ * @brief Reads runtime-sized polynomial parameters from a file.
+ *
+ * The file always supplies three center coordinates. Only the first `dim`
+ * coordinates are retained.
+ *
+ * @tparam dim Active spatial dimension; must be 2 or 3.
+ * @param filename Parameter-file path.
+ * @return Parsed center and coefficients grouped by total degree.
+ * @throws std::runtime_error if the file is malformed.
+ */
+template <int dim>
+Params<dim> read_parameters(const std::string& filename);
+
+/**
+ * @brief Evaluates a total-degree polynomial about a configurable center.
+ *
+ * @tparam dim Active spatial dimension; must be 2 or 3.
+ */
 template <int dim>
 class DirichletIn : public Function<dim> {
 public:
-    DirichletIn() {}
+    /** @brief Uses the built-in four-degree-level polynomial. */
+    DirichletIn() = default;
 
-    DirichletIn(const Params<dim> &params) : params_{params} {}
+    /**
+     * @brief Uses supplied runtime-sized polynomial parameters.
+     *
+     * @param params Center and coefficients to evaluate.
+     */
+    explicit DirichletIn(const Params<dim>& params) : params_{params} {}
 
-    virtual double value(const Point<dim> &p,
-                         const unsigned int /*component*/ = 0) const override
+    /**
+     * @brief Evaluates every configured monomial at a point.
+     *
+     * @param p Evaluation point.
+     * @param component Ignored scalar component.
+     * @return Polynomial value.
+     */
+    double value(const Point<dim>& p,
+                 const unsigned int /*component*/ = 0) const override
     {
-        double sum = 0;
-        for (int i = 0; i < Params<dim>::n_terms; ++i) {
-            sum += params_.ac[i] * std::pow(p[1] - params_.center, i);
+        std::array<double, dim> shifted_coordinates{};
+        for (std::size_t coordinate = 0; coordinate < dim; ++coordinate) {
+            shifted_coordinates[coordinate] =
+                p[coordinate] - params_.center[coordinate];
         }
 
+        double sum = 0.0;
+        for (std::size_t degree = 0;
+             degree < params_.coefficients_by_degree.size(); ++degree) {
+            const auto exponents =
+                degree_exponents<dim>(static_cast<unsigned>(degree));
+            const auto& coefficients =
+                params_.coefficients_by_degree[degree];
+            for (std::size_t term = 0; term < exponents.size(); ++term) {
+                double monomial = 1.0;
+                for (std::size_t coordinate = 0; coordinate < dim;
+                     ++coordinate) {
+                    monomial *=
+                        std::pow(shifted_coordinates[coordinate],
+                                 exponents[term][coordinate]);
+                }
+                sum += coefficients[term] * monomial;
+            }
+        }
         return sum;
     }
 
@@ -62,11 +138,27 @@ using DirichletConstant = exponential::DirichletConstant<dim>;
 
 namespace bpo = boost::program_options;
 
+/**
+ * @brief Cube case with a polynomial input-face boundary profile.
+ *
+ * @tparam dim Active spatial dimension; must be 2 or 3.
+ */
 template <int dim>
 class CubePolynomial final : public Case<dim> {
 public:
-    void initialize(const bpo::variables_map &) override;
-    void add_case_cmd_args(bpo::options_description &) const override;
+    /**
+     * @brief Initializes the polynomial cube case.
+     *
+     * @param params Parsed command-line parameters.
+     */
+    void initialize(const bpo::variables_map& params) override;
+
+    /**
+     * @brief Adds the legacy polynomial command-line options.
+     *
+     * @param desc Options collection to extend.
+     */
+    void add_case_cmd_args(bpo::options_description& desc) const override;
 };
 
 } // namespace cube

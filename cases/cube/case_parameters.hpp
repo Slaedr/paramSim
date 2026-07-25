@@ -31,10 +31,10 @@ public:
      * @brief Reads a strictly positive integer from the next line.
      *
      * @param description Human-readable name of the count.
-     * @return The parsed count.
+     * @return The parsed count as an unsigned integer.
      * @throws std::runtime_error if the line is missing or malformed.
      */
-    std::size_t read_count(const std::string& description);
+    unsigned read_count(const std::string& description);
 
     /**
      * @brief Reads an exact number of finite values from the next line.
@@ -44,8 +44,17 @@ public:
      * @return Parsed values in input order.
      * @throws std::runtime_error for missing, extra, or non-finite values.
      */
-    std::vector<double> read_finite_values(
-        std::size_t expected_count, const std::string& description);
+    std::vector<double> read_finite_values(std::size_t expected_count,
+                                           const std::string& description);
+
+    /**
+     * @brief Throws a consistently formatted parsing error.
+     *
+     * @param line_number One-based source line associated with the error.
+     * @param message Description of the parsing failure.
+     */
+    [[noreturn]] void fail(std::size_t line_number,
+                           const std::string& message) const;
 
     /**
      * @brief Verifies that no non-whitespace input remains.
@@ -63,15 +72,6 @@ private:
      * @throws std::runtime_error if the line is missing or unreadable.
      */
     std::string read_required_line(const std::string& description);
-
-    /**
-     * @brief Throws a consistently formatted parsing error.
-     *
-     * @param line_number One-based source line associated with the error.
-     * @param message Description of the parsing failure.
-     */
-    [[noreturn]] void fail(std::size_t line_number,
-                           const std::string& message) const;
 
     std::string case_name_;
     std::string filename_;
@@ -98,22 +98,7 @@ using MonomialExponent = std::array<unsigned int, dim>;
  * @return Exponents in deterministic coefficient order.
  */
 template <int dim>
-std::vector<MonomialExponent<dim>>
-degree_exponents(unsigned int degree);
-
-/**
- * @brief Returns the number of coefficients at one total degree.
- *
- * The total degree of a monomial is the sum of its nonnegative coordinate
- * exponents. For example, `X^2 Y Z^3` has total degree
- * `2 + 1 + 3 = 6`.
- *
- * @tparam dim Active spatial dimension; must be 2 or 3.
- * @param degree Requested total degree.
- * @return Number of monomials at the requested degree.
- */
-template <int dim>
-std::size_t degree_coefficient_count(unsigned int degree);
+std::vector<MonomialExponent<dim>> degree_exponents(unsigned int degree);
 
 /**
  * @brief Returns the coefficient count across several degree levels.

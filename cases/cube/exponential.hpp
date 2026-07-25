@@ -1,6 +1,11 @@
 #ifndef PARAMSIM_CASES_CUBE_EXPONENTIAL_HPP_
 #define PARAMSIM_CASES_CUBE_EXPONENTIAL_HPP_
 
+#include <array>
+#include <cstddef>
+#include <string>
+#include <vector>
+
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/variables_map.hpp>
 #include <deal.II/grid/grid_generator.h>
@@ -15,50 +20,51 @@ namespace exponential {
 
 using namespace dealii;
 
+/**
+ * @brief Parameters for one Gaussian center in the boundary profile.
+ *
+ * @tparam dim Active spatial dimension; must be 2 or 3.
+ */
+template <int dim>
+struct GaussianCenter {
+    static_assert(dim == 2 || dim == 3,
+                  "Gaussian centers require dimension 2 or 3.");
+
+    std::array<double, dim> coordinates{};
+    double coefficient{0.0};
+    double width{1.0};
+};
+
+/**
+ * @brief Runtime-sized Gaussian boundary-profile parameters.
+ *
+ * @tparam dim Active spatial dimension; must be 2 or 3.
+ */
 template <int dim>
 struct Params {
-    static constexpr int n_centers = 3;
+    static_assert(dim == 2 || dim == 3,
+                  "Exponential parameters require dimension 2 or 3.");
 
-    std::array<Point<dim>, n_centers> centers = [] {
-        std::array<Point<dim>, n_centers> values{};
-        values[0][0] = -1.0;
-        values[0][1] = -0.67;
-        values[1][0] = -1.0;
-        values[1][1] = -0.01;
-        values[2][0] = -1.0;
-        values[2][1] = 0.66;
-        return values;
-    }();
-
-    std::array<double, n_centers> coeffs{{0.27, 0.35, -0.34}};
-
-    /// Same width for all three hills
-    double width{0.4};
-
-    double gamma{get_multiplier()};
-
-    double get_multiplier() const
-    {
-        constexpr int profile_dim = 2;
-        return 1.0 /
-               std::pow(2. * numbers::PI * width * width, profile_dim / 2.);
-    }
-
-    Params() {}
-
-    Params(const std::array<Point<dim>, n_centers>& centerss,
-           const std::array<double, n_centers>& coefficients,
-           const double hill_width)
-        : centers{centerss}, coeffs{coefficients}, width{hill_width},
-          gamma{get_multiplier()}
-    {
-        if constexpr (dim == 3) {
-            centers[0][2] = -1;
-            centers[1][2] = -1;
-            centers[2][2] = 1;
-        }
-    }
+    // Supplying two coordinates initializes z to zero when dim is three.
+    std::vector<GaussianCenter<dim>> centers{
+        {{{-1.0, -0.67}}, 0.27, 0.4},
+        {{{-1.0, -0.01}}, 0.35, 0.4},
+        {{{-1.0, 0.66}}, -0.34, 0.4}};
 };
+
+/**
+ * @brief Reads runtime-sized exponential parameters from a file.
+ *
+ * All three schema coordinates are validated. Only the first `dim`
+ * coordinates are retained.
+ *
+ * @tparam dim Active spatial dimension; must be 2 or 3.
+ * @param filename Parameter-file path.
+ * @return Parsed centers in file order.
+ * @throws std::runtime_error if the file is malformed.
+ */
+template <int dim>
+Params<dim> read_parameters(const std::string& filename);
 
 // The last function we implement is the right hand side for the
 // manufactured solution.
@@ -99,33 +105,52 @@ private:
     }
 };
 
+/**
+ * @brief Evaluates the Gaussian boundary profile on the cube input face.
+ *
+ * The current profile uses x and y in both supported dimensions.
+ *
+ * @tparam dim Active spatial dimension; must be 2 or 3.
+ */
 template <int dim>
 class DirichletIn : public Function<dim> {
 public:
-    DirichletIn() {}
+    /** @brief Uses the built-in three-center defaults. */
+    DirichletIn() = default;
 
-    DirichletIn(const Params<dim>& params) : params_{params} {}
+    /**
+     * @brief Uses supplied runtime-sized parameters.
+     *
+     * @param params Gaussian centers to evaluate.
+     */
+    explicit DirichletIn(const Params<dim>& params) : params_{params} {}
 
-    virtual double value(const Point<dim>& p,
-                         const unsigned int /*component*/ = 0) const override
+    /**
+     * @brief Evaluates the normalized sum of Gaussian centers.
+     *
+     * @param p Evaluation point.
+     * @param component Ignored scalar component.
+     * @return Boundary-profile value.
+     */
+    double value(const Point<dim>& p,
+                 const unsigned int /*component*/ = 0) const override
     {
-        double sum = 0;
-        for (int i = 0; i < Params<dim>::n_centers; ++i) {
-            // const Tensor<1, dim> x_minus_xi = p - params_.centers[i];
+        constexpr std::size_t profile_dim = 2;
+        double sum = 0.0;
+        for (const auto& center : params_.centers) {
             double distance_square = 0.0;
-            constexpr int profile_dim = 2;
-            for (int idim = 0; idim < profile_dim; ++idim) {
+            for (std::size_t idim = 0; idim < profile_dim; ++idim) {
                 distance_square +=
-                    std::pow(p[idim] - params_.centers[i][idim], 2);
+                    std::pow(p[idim] - center.coordinates[idim], 2);
             }
-            // sum += params_.coeffs[i] *
-            //   std::exp(-x_minus_xi.norm_square() /
-            //            (params_.width * params_.width));
-            sum += params_.coeffs[i] *
-                   std::exp(-distance_square / (params_.width * params_.width));
+            const double width_square = center.width * center.width;
+            const double multiplier =
+                1.0 / std::pow(2.0 * numbers::PI * width_square,
+                               profile_dim / 2.0);
+            sum += center.coefficient *
+                   std::exp(-distance_square / width_square) * multiplier;
         }
-
-        return sum * params_.gamma;
+        return sum;
     }
 
     const Params<dim> params_;

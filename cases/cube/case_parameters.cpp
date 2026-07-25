@@ -22,7 +22,7 @@ ParameterFileReader::ParameterFileReader(std::string case_name,
     }
 }
 
-std::size_t
+unsigned
 ParameterFileReader::read_count(const std::string& description)
 {
     const std::string line = read_required_line(description);
@@ -42,10 +42,10 @@ ParameterFileReader::read_count(const std::string& description)
     }
 
     const auto unsigned_count = static_cast<unsigned long long>(count);
-    if (unsigned_count > std::numeric_limits<std::size_t>::max()) {
+    if (unsigned_count > std::numeric_limits<unsigned>::max()) {
         fail(line_number_, description + " is too large");
     }
-    return static_cast<std::size_t>(unsigned_count);
+    return static_cast<unsigned>(unsigned_count);
 }
 
 std::vector<double> ParameterFileReader::read_finite_values(
@@ -144,6 +144,7 @@ degree_exponents(const unsigned int degree)
 }
 
 template <int dim>
+static
 std::size_t degree_coefficient_count(const unsigned int degree)
 {
     static_assert(dim == 2 || dim == 3,
@@ -172,9 +173,6 @@ template std::vector<MonomialExponent<2>>
 degree_exponents<2>(unsigned int);
 template std::vector<MonomialExponent<3>>
 degree_exponents<3>(unsigned int);
-
-template std::size_t degree_coefficient_count<2>(unsigned int);
-template std::size_t degree_coefficient_count<3>(unsigned int);
 
 template std::size_t total_coefficient_count<2>(unsigned int);
 template std::size_t total_coefficient_count<3>(unsigned int);

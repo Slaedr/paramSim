@@ -1,5 +1,7 @@
 #include "fourier.hpp"
 
+#include "case_parameters.hpp"
+
 #include <limits>
 
 namespace paramsim {
@@ -8,34 +10,69 @@ namespace cube {
 
 using namespace dealii;
 
+namespace fourier {
+
+template <int dim>
+Params<dim> read_parameters(const std::string& filename)
+{
+    ParameterFileReader reader("cube_fourier", filename);
+    const unsigned mode_count = reader.read_count("number of modes");
+    const auto header = reader.read_finite_values(
+        2, "constant and fundamental wavelength");
+    if (header[1] <= 0.0) {
+        reader.fail(2, "fundamental wavelength must be positive");
+    }
+
+    Params<dim> params;
+    params.modes.clear();
+    params.modes.reserve(mode_count);
+    params.constant = header[0];
+    params.fundamental_wavelength = header[1];
+    for (unsigned index = 0; index < mode_count; ++index) {
+        const auto coefficients = reader.read_finite_values(
+            2, "mode " + std::to_string(index + 1));
+        params.modes.push_back({coefficients[0], coefficients[1]});
+    }
+    reader.require_end();
+    return params;
+}
+
+template Params<2> read_parameters<2>(const std::string&);
+template Params<3> read_parameters<3>(const std::string&);
+
+} // namespace fourier
+
 template <int dim>
 void CubeFourier<dim>::initialize(const bpo::variables_map& params)
 {
     std::shared_ptr<fourier::DirichletIn<dim>> dirichlet1;
-    if(params.count("wavelength")) {
-        constexpr int n_modes = fourier::Params<dim>::n_modes;
-        std::array<double, n_modes> as;
-        std::array<double, n_modes> bs;
-        for(int ic = 1; ic < n_modes+1; ic++) {
-            const std::string coflag =
-                std::string("a") + std::to_string(ic);
-            as[ic-1] = params[coflag.c_str()].as<double>();
-            //eg. --a1=0.6 --b1=0.4
-            const std::string sflag = std::string("b") + std::to_string(ic);
-            bs[ic-1] = params[sflag.c_str()].as<double>();
+    if (params.count("wavelength")) {
+        constexpr std::size_t legacy_mode_count = 2;
+        fourier::Params<dim> case_params;
+        case_params.modes.clear();
+        for (std::size_t index = 0; index < legacy_mode_count; ++index) {
+            const std::size_t frequency = index + 1;
+            const std::string cosine_flag = "a" + std::to_string(frequency);
+            const std::string sine_flag = "b" + std::to_string(frequency);
+            case_params.modes.push_back(
+                {params[cosine_flag].as<double>(),
+                 params[sine_flag].as<double>()});
         }
-        const double wavelength = params["wavelength"].as<double>();
-        const double a0 = params["a0"].as<double>();
-        fourier::Params<dim> params(as, bs, a0, wavelength);
-        dirichlet1 = std::make_shared<fourier::DirichletIn<dim>>(params);
+        case_params.constant = params["a0"].as<double>();
+        case_params.fundamental_wavelength =
+            params["wavelength"].as<double>();
+        dirichlet1 =
+            std::make_shared<fourier::DirichletIn<dim>>(case_params);
 
-        // Write out params to confirm
         std::cout << "Case 'cube_fourier': read parameters:\n";
-        std::cout << "  Fundamental wavelength = " << params.f_wavelength << std::endl;
-        std::cout << "  Constant term = " << params.a0 << std::endl;
-        for(int ic = 0; ic < n_modes; ic++) {
-            std::cout << "  Modes " << ic << ": (";
-            std::cout << as[ic] << ", " << bs[ic] << ")" << std::endl;
+        std::cout << "  Fundamental wavelength = "
+                  << case_params.fundamental_wavelength << std::endl;
+        std::cout << "  Constant term = " << case_params.constant << std::endl;
+        for (std::size_t index = 0; index < case_params.modes.size(); ++index) {
+            const auto& mode = case_params.modes[index];
+            std::cout << "  Mode " << index + 1 << ": ("
+                      << mode.cosine_coefficient << ", "
+                      << mode.sine_coefficient << ")" << std::endl;
         }
     } else {
         dirichlet1 = std::make_shared<fourier::DirichletIn<dim>>();
@@ -73,22 +110,21 @@ void CubeFourier<dim>::initialize(const bpo::variables_map& params)
 template <int dim>
 void CubeFourier<dim>::add_case_cmd_args(bpo::options_description& desc) const
 {
-    desc.add_options()
-        ("wavelength", bpo::value<double>(), "The fundamental wavelength for zeroth mode");
-    desc.add_options() ("a0", bpo::value<double>(), "Constant term");
-    constexpr int n_modes = fourier::Params<dim>::n_modes;
-    for(int ic = 1; ic < n_modes+1; ic++) {
-        const std::string coflag =
-            std::string("a") + std::to_string(ic);
-        const std::string descstr = "Cosine coefficient of " + std::to_string(ic) + "th mode";
-        desc.add_options()
-            (coflag.c_str(), bpo::value<double>(), descstr.c_str());
-        //eg. centers[0][1] = params["center0_y"].as<double>();
-        const std::string sflag = std::string("b") + std::to_string(ic);
-        // eg. "center1_coeff"
-        const std::string sdescstr = "Sine coefficient of " + std::to_string(ic) + "th mode";
-        desc.add_options()
-            (sflag.c_str(), bpo::value<double>(), sdescstr.c_str());
+    desc.add_options()("wavelength", bpo::value<double>(),
+                       "The fundamental wavelength");
+    desc.add_options()("a0", bpo::value<double>(), "Constant term");
+    constexpr int legacy_mode_count = 2;
+    for (int frequency = 1; frequency <= legacy_mode_count; ++frequency) {
+        const std::string cosine_flag = "a" + std::to_string(frequency);
+        const std::string cosine_description =
+            "Cosine coefficient of mode " + std::to_string(frequency);
+        desc.add_options()(cosine_flag.c_str(), bpo::value<double>(),
+                           cosine_description.c_str());
+        const std::string sine_flag = "b" + std::to_string(frequency);
+        const std::string sine_description =
+            "Sine coefficient of mode " + std::to_string(frequency);
+        desc.add_options()(sine_flag.c_str(), bpo::value<double>(),
+                           sine_description.c_str());
     }
 }
 
