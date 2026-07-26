@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import numpy as np
 import libensemble as libe
@@ -7,7 +8,14 @@ from libensemble.executors import Executor
 from libensemble.libE import libE
 import libensemble.tools
 
-from setup_case import setup_case, get_args_str, get_common_args_str
+from setup_case import (
+    get_case_parameter_args,
+    get_common_args_str,
+    load_case_parameter_ranges,
+    sample_parameter_values,
+    setup_case,
+    write_case_parameter_file,
+)
 
 def gen_random_samples(H_in, persis_info, gen_specs):
 
@@ -19,23 +27,31 @@ def gen_random_samples(H_in, persis_info, gen_specs):
     # Iterate over types of parameters to generate
     for paramset in gen_specs["out"]:
         paramname = paramset[0]
-        paramtype = paramset[1]
-        paramsizes = paramset[2]
         lower = user_specs["lower"][paramname]
         upper = user_specs["upper"][paramname]
-        assert(lower.shape == upper.shape)
-
-        # Set the "x" output field to contain random numbers, using random stream
-        out[paramname] = persis_info["rand_stream"].uniform(lower, upper,
-                                                            (batch_size,) + lower.shape)
+        integer = paramname in user_specs.get("integer_parameters", ())
+        out[paramname] = sample_parameter_values(
+            persis_info["rand_stream"],
+            lower,
+            upper,
+            batch_size,
+            integer=integer,
+        )
 
     # Send back our output and persis_info
     return out, persis_info
 
 def run_case(H_in, persis_info, sim_specs, libE_info):
     for ibatch in range(len(H_in)):
-        case_argstr = get_args_str(sim_specs["user"]["case_type"], H_in[ibatch])
-        all_args = sim_specs["user"]["common_args"] + case_argstr
+        parameter_file = write_case_parameter_file(
+            sim_specs["user"]["case_type"],
+            sim_specs["user"]["dimension"],
+            H_in[ibatch],
+        )
+        all_args = (
+            sim_specs["user"]["common_args"]
+            + get_case_parameter_args(parameter_file)
+        )
 
         # Submit our app for execution
         exctr = Executor.executor
@@ -51,9 +67,12 @@ def run_ensemble(case_file_path):
     exctr = Executor()
 
     # Read params for this ensemble-case
-    with open(case_file_path, 'r') as f:
-        casefilecontents = f.read()
-    case_data = json.loads(casefilecontents)
+    case_path = Path(case_file_path).expanduser().resolve()
+    with case_path.open("r", encoding="utf-8") as case_file:
+        case_data = json.load(case_file)
+    case_parameter_ranges = load_case_parameter_ranges(
+        case_data, case_path
+    )
 
     # Register simulation executable with executor
     exctr.register_app(full_path=case_data["simulation_exec_path"], app_name="run_fem_case")
@@ -75,12 +94,13 @@ def run_ensemble(case_file_path):
         "out" : [("success", int)],
         "user" : {
             "case_type" : case_data["case_type"],
+            "dimension" : case_data["dimension"],
             "common_args" : common_arg_str,
             "batch_size" : case_data["batch_size"]
         }
     }
 
-    setup_case(case_data, gen_specs, sim_specs)
+    setup_case(case_data, gen_specs, sim_specs, case_parameter_ranges)
 
     # Create and work inside separate per-simulation directories
     libE_specs["sim_dirs_make"] = True

@@ -17,8 +17,8 @@ Params<dim> read_parameters(const std::string& filename)
 {
     ParameterFileReader reader("cube_fourier", filename);
     const unsigned mode_count = reader.read_count("number of modes");
-    const auto header = reader.read_finite_values(
-        2, "constant and fundamental wavelength");
+    const auto header =
+        reader.read_finite_values(2, "constant and fundamental wavelength");
     if (header[1] <= 0.0) {
         reader.fail(2, "fundamental wavelength must be positive");
     }
@@ -29,8 +29,8 @@ Params<dim> read_parameters(const std::string& filename)
     params.constant = header[0];
     params.fundamental_wavelength = header[1];
     for (unsigned index = 0; index < mode_count; ++index) {
-        const auto coefficients = reader.read_finite_values(
-            2, "mode " + std::to_string(index + 1));
+        const auto coefficients =
+            reader.read_finite_values(2, "mode " + std::to_string(index + 1));
         params.modes.push_back({coefficients[0], coefficients[1]});
     }
     reader.require_end();
@@ -46,23 +46,10 @@ template <int dim>
 void CubeFourier<dim>::initialize(const bpo::variables_map& params)
 {
     std::shared_ptr<fourier::DirichletIn<dim>> dirichlet1;
-    if (params.count("wavelength")) {
-        constexpr std::size_t legacy_mode_count = 2;
-        fourier::Params<dim> case_params;
-        case_params.modes.clear();
-        for (std::size_t index = 0; index < legacy_mode_count; ++index) {
-            const std::size_t frequency = index + 1;
-            const std::string cosine_flag = "a" + std::to_string(frequency);
-            const std::string sine_flag = "b" + std::to_string(frequency);
-            case_params.modes.push_back(
-                {params[cosine_flag].as<double>(),
-                 params[sine_flag].as<double>()});
-        }
-        case_params.constant = params["a0"].as<double>();
-        case_params.fundamental_wavelength =
-            params["wavelength"].as<double>();
-        dirichlet1 =
-            std::make_shared<fourier::DirichletIn<dim>>(case_params);
+    if (params.count("case_params_file")) {
+        const auto case_params = fourier::read_parameters<dim>(
+            params["case_params_file"].as<std::string>());
+        dirichlet1 = std::make_shared<fourier::DirichletIn<dim>>(case_params);
 
         std::cout << "Case 'cube_fourier': read parameters:\n";
         std::cout << "  Fundamental wavelength = "
@@ -86,46 +73,32 @@ void CubeFourier<dim>::initialize(const bpo::variables_map& params)
     this->bc_dirichlet_.push_back(dirichlet_bc<dim>{1, dirichlet1});
     this->bc_dirichlet_.push_back(dirichlet_bc<dim>{2, dirichlet2});
 
-    constexpr double tol = 1000*std::numeric_limits<double>::epsilon();
+    constexpr double tol = 1000 * std::numeric_limits<double>::epsilon();
     std::vector<typename DomainGeometry<dim>::bc_mark_desc> bcmarks;
-    bcmarks.push_back(std::make_pair(this->bc_dirichlet_[1].bc_id, 
-        [](const dealii::Point<dim>& p) {
-        if(std::abs(p[0] - (-1.0)) > tol) {
-            return true;
-        } else {
-            return false;
-        }
-        }));
-    bcmarks.push_back(std::make_pair(this->bc_dirichlet_[0].bc_id, 
-        [](const dealii::Point<dim>& p) {
-        if(std::abs(p[0] - (-1.0)) <= tol) {
-            return true;
-        } else {
-            return false;
-        }
-        }));
+    bcmarks.push_back(std::make_pair(this->bc_dirichlet_[1].bc_id,
+                                     [](const dealii::Point<dim>& p) {
+                                         if (std::abs(p[0] - (-1.0)) > tol) {
+                                             return true;
+                                         } else {
+                                             return false;
+                                         }
+                                     }));
+    bcmarks.push_back(std::make_pair(this->bc_dirichlet_[0].bc_id,
+                                     [](const dealii::Point<dim>& p) {
+                                         if (std::abs(p[0] - (-1.0)) <= tol) {
+                                             return true;
+                                         } else {
+                                             return false;
+                                         }
+                                     }));
     this->geom_ = std::make_shared<geom::Cube<dim>>(bcmarks);
 }
-    
+
 template <int dim>
 void CubeFourier<dim>::add_case_cmd_args(bpo::options_description& desc) const
 {
-    desc.add_options()("wavelength", bpo::value<double>(),
-                       "The fundamental wavelength");
-    desc.add_options()("a0", bpo::value<double>(), "Constant term");
-    constexpr int legacy_mode_count = 2;
-    for (int frequency = 1; frequency <= legacy_mode_count; ++frequency) {
-        const std::string cosine_flag = "a" + std::to_string(frequency);
-        const std::string cosine_description =
-            "Cosine coefficient of mode " + std::to_string(frequency);
-        desc.add_options()(cosine_flag.c_str(), bpo::value<double>(),
-                           cosine_description.c_str());
-        const std::string sine_flag = "b" + std::to_string(frequency);
-        const std::string sine_description =
-            "Sine coefficient of mode " + std::to_string(frequency);
-        desc.add_options()(sine_flag.c_str(), bpo::value<double>(),
-                           sine_description.c_str());
-    }
+    desc.add_options()("case_params_file", bpo::value<std::string>(),
+                       "Path to the cube Fourier parameter file");
 }
 
 template class CubeFourier<2>;

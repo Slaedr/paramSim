@@ -48,33 +48,9 @@ template <int dim>
 void CubePolynomial<dim>::initialize(const bpo::variables_map& params)
 {
     std::shared_ptr<polynomial::DirichletIn<dim>> dirichlet1;
-    if (params.count("center_y")) {
-        constexpr unsigned legacy_degree_levels = 4;
-        std::array<double, legacy_degree_levels> legacy_coefficients{};
-        for (unsigned degree = 0; degree < legacy_degree_levels; ++degree) {
-            const std::string coefficient_flag =
-                "a" + std::to_string(degree);
-            legacy_coefficients[degree] =
-                params[coefficient_flag].as<double>();
-        }
-
-        polynomial::Params<dim> case_params;
-        case_params.center.fill(0.0);
-        case_params.center[1] = params["center_y"].as<double>();
-        case_params.coefficients_by_degree.clear();
-        case_params.coefficients_by_degree.reserve(legacy_degree_levels);
-        for (unsigned degree = 0; degree < legacy_degree_levels; ++degree) {
-            const auto exponents = degree_exponents<dim>(degree);
-            std::vector<double> degree_coefficients(exponents.size(), 0.0);
-            for (std::size_t term = 0; term < exponents.size(); ++term) {
-                if (exponents[term][1] == degree) {
-                    degree_coefficients[term] =
-                        legacy_coefficients[degree];
-                }
-            }
-            case_params.coefficients_by_degree.push_back(
-                std::move(degree_coefficients));
-        }
+    if (params.count("case_params_file")) {
+        const auto case_params = polynomial::read_parameters<dim>(
+            params["case_params_file"].as<std::string>());
         dirichlet1 =
             std::make_shared<polynomial::DirichletIn<dim>>(case_params);
 
@@ -87,8 +63,10 @@ void CubePolynomial<dim>::initialize(const bpo::variables_map& params)
             std::cout << case_params.center[coordinate];
         }
         std::cout << ")\n";
-        for (unsigned degree = 0; degree < legacy_degree_levels; ++degree) {
-            const auto exponents = degree_exponents<dim>(degree);
+        for (std::size_t degree = 0;
+             degree < case_params.coefficients_by_degree.size(); ++degree) {
+            const auto exponents =
+                degree_exponents<dim>(static_cast<unsigned>(degree));
             for (std::size_t term = 0; term < exponents.size(); ++term) {
                 std::cout << "  Degree " << degree << " exponents (";
                 for (std::size_t coordinate = 0; coordinate < dim;
@@ -140,16 +118,8 @@ template <int dim>
 void CubePolynomial<dim>::add_case_cmd_args(bpo::options_description& desc) const
 {
     desc.add_options()(
-        "center_y", bpo::value<double>(),
-        "The polynomial terms' center or offset");
-    constexpr unsigned legacy_degree_levels = 4;
-    for (unsigned degree = 0; degree < legacy_degree_levels; ++degree) {
-        const std::string coefficient_flag = "a" + std::to_string(degree);
-        const std::string description =
-            "Coefficient of degree " + std::to_string(degree);
-        desc.add_options()(coefficient_flag.c_str(), bpo::value<double>(),
-                           description.c_str());
-    }
+        "case_params_file", bpo::value<std::string>(),
+        "Path to the cube polynomial parameter file");
 }
 
 template class CubePolynomial<2>;

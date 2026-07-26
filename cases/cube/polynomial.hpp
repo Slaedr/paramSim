@@ -154,7 +154,7 @@ public:
     void initialize(const bpo::variables_map& params) override;
 
     /**
-     * @brief Adds the legacy polynomial command-line options.
+     * @brief Adds the polynomial parameter-file command-line option.
      *
      * @param desc Options collection to extend.
      */

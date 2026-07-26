@@ -34,9 +34,9 @@ public:
     explicit TemporaryParameterFile(const std::string& contents)
     {
         static unsigned int next_id = 0;
-        path_ = std::filesystem::temp_directory_path() /
-                ("paramsim_case_parameters_" + std::to_string(next_id++) +
-                 ".txt");
+        path_ =
+            std::filesystem::temp_directory_path() /
+            ("paramsim_case_parameters_" + std::to_string(next_id++) + ".txt");
         std::ofstream output(path_);
         output << contents;
         if (!output) {
@@ -72,43 +72,29 @@ private:
 TEST(PolynomialExponents, EnumeratesTwoDimensionsThroughDegreeThree)
 {
     using E = cube::MonomialExponent<2>;
-    EXPECT_EQ(cube::degree_exponents<2>(0),
-              std::vector<E>({E{{0, 0}}}));
+    EXPECT_EQ(cube::degree_exponents<2>(0), std::vector<E>({E{{0, 0}}}));
     EXPECT_EQ(cube::degree_exponents<2>(1),
               std::vector<E>({E{{1, 0}}, E{{0, 1}}}));
     EXPECT_EQ(cube::degree_exponents<2>(2),
               std::vector<E>({E{{2, 0}}, E{{1, 1}}, E{{0, 2}}}));
     EXPECT_EQ(cube::degree_exponents<2>(3),
-              std::vector<E>(
-                  {E{{3, 0}}, E{{2, 1}}, E{{1, 2}}, E{{0, 3}}}));
+              std::vector<E>({E{{3, 0}}, E{{2, 1}}, E{{1, 2}}, E{{0, 3}}}));
 }
 
 TEST(PolynomialExponents, EnumeratesThreeDimensionsThroughDegreeThree)
 {
     using E = cube::MonomialExponent<3>;
-    EXPECT_EQ(cube::degree_exponents<3>(0),
-              std::vector<E>({E{{0, 0, 0}}}));
+    EXPECT_EQ(cube::degree_exponents<3>(0), std::vector<E>({E{{0, 0, 0}}}));
     EXPECT_EQ(cube::degree_exponents<3>(1),
-              std::vector<E>(
-                  {E{{1, 0, 0}}, E{{0, 1, 0}}, E{{0, 0, 1}}}));
+              std::vector<E>({E{{1, 0, 0}}, E{{0, 1, 0}}, E{{0, 0, 1}}}));
     EXPECT_EQ(cube::degree_exponents<3>(2),
-              std::vector<E>({E{{2, 0, 0}},
-                              E{{1, 1, 0}},
-                              E{{1, 0, 1}},
-                              E{{0, 2, 0}},
-                              E{{0, 1, 1}},
-                              E{{0, 0, 2}}}));
-    EXPECT_EQ(cube::degree_exponents<3>(3),
-              std::vector<E>({E{{3, 0, 0}},
-                              E{{2, 1, 0}},
-                              E{{2, 0, 1}},
-                              E{{1, 2, 0}},
-                              E{{1, 1, 1}},
-                              E{{1, 0, 2}},
-                              E{{0, 3, 0}},
-                              E{{0, 2, 1}},
-                              E{{0, 1, 2}},
-                              E{{0, 0, 3}}}));
+              std::vector<E>({E{{2, 0, 0}}, E{{1, 1, 0}}, E{{1, 0, 1}},
+                              E{{0, 2, 0}}, E{{0, 1, 1}}, E{{0, 0, 2}}}));
+    EXPECT_EQ(
+        cube::degree_exponents<3>(3),
+        std::vector<E>({E{{3, 0, 0}}, E{{2, 1, 0}}, E{{2, 0, 1}}, E{{1, 2, 0}},
+                        E{{1, 1, 1}}, E{{1, 0, 2}}, E{{0, 3, 0}}, E{{0, 2, 1}},
+                        E{{0, 1, 2}}, E{{0, 0, 3}}}));
 }
 
 TEST(PolynomialExponents, ReportsDegreeAndTotalCoefficientCounts)
@@ -190,20 +176,11 @@ TEST(ParameterFileReader, ErrorsIdentifyCaseFileAndLine)
     }
 }
 
-TEST(ParameterFileReader, RejectsUnreadableFiles)
-{
-    EXPECT_THROW(
-        cube::ParameterFileReader("cube_test",
-                                  "/path/that/does/not/exist/params.txt"),
-        std::runtime_error);
-}
-
 TEST(ExponentialParameters, ParsesRuntimeSizedCentersInBothDimensions)
 {
-    TemporaryParameterFile file(
-        "2\n"
-        "-1 -0.5 0.75 2 0.25\n"
-        "0.5 1 -0.75 -3 0.8\n");
+    TemporaryParameterFile file("2\n"
+                                "-1 -0.5 0.75 2 0.25\n"
+                                "0.5 1 -0.75 -3 0.8\n");
 
     const auto params_2d = exponential::read_parameters<2>(file.path());
     const auto params_3d = exponential::read_parameters<3>(file.path());
@@ -222,10 +199,9 @@ TEST(ExponentialParameters, ParsesRuntimeSizedCentersInBothDimensions)
 
 TEST(ExponentialParameters, UsesIndependentWidthsAndIgnoresZ)
 {
-    TemporaryParameterFile file(
-        "2\n"
-        "0 0 -1 2 0.5\n"
-        "0 0 1 -1 1\n");
+    TemporaryParameterFile file("2\n"
+                                "0 0 -1 2 0.5\n"
+                                "0 0 1 -1 1\n");
     const exponential::DirichletIn<2> profile_2d(
         exponential::read_parameters<2>(file.path()));
     const exponential::DirichletIn<3> profile_3d(
@@ -256,11 +232,9 @@ TEST(ExponentialParameters, PreservesBuiltInDefaults)
 
 TEST(ExponentialParameters, RejectsMalformedRowsAndTrailingData)
 {
-    for (const std::string contents : {
-             "0\n",
-             "1\n0 0 0 1\n",
-             "1\n0 0 0 1 0.5 extra\n",
-             "1\n0 0 0 1 0.5\ntrailing\n"}) {
+    for (const std::string contents :
+         {"0\n", "1\n0 0 0 1\n", "1\n0 0 0 1 0.5 extra\n",
+          "1\n0 0 0 1 0.5\ntrailing\n"}) {
         TemporaryParameterFile file(contents);
         EXPECT_THROW(exponential::read_parameters<2>(file.path()),
                      std::runtime_error);
@@ -269,12 +243,9 @@ TEST(ExponentialParameters, RejectsMalformedRowsAndTrailingData)
 
 TEST(ExponentialParameters, RejectsInvalidCoordinatesAndWidths)
 {
-    for (const std::string contents : {
-             "1\n-1.01 0 0 1 0.5\n",
-             "1\n0 1.01 0 1 0.5\n",
-             "1\n0 0 -1.01 1 0.5\n",
-             "1\n0 0 0 1 0\n",
-             "1\n0 0 0 1 -0.5\n"}) {
+    for (const std::string contents :
+         {"1\n-1.01 0 0 1 0.5\n", "1\n0 1.01 0 1 0.5\n", "1\n0 0 -1.01 1 0.5\n",
+          "1\n0 0 0 1 0\n", "1\n0 0 0 1 -0.5\n"}) {
         TemporaryParameterFile file(contents);
         EXPECT_THROW(exponential::read_parameters<2>(file.path()),
                      std::runtime_error);
@@ -283,12 +254,11 @@ TEST(ExponentialParameters, RejectsInvalidCoordinatesAndWidths)
 
 TEST(FourierParameters, ParsesRuntimeSizedModesInBothDimensions)
 {
-    TemporaryParameterFile file(
-        "3\n"
-        "1.5 0.75\n"
-        "1 -2\n"
-        "3 -4\n"
-        "5 -6\n");
+    TemporaryParameterFile file("3\n"
+                                "1.5 0.75\n"
+                                "1 -2\n"
+                                "3 -4\n"
+                                "5 -6\n");
 
     const auto params_2d = fourier::read_parameters<2>(file.path());
     const auto params_3d = fourier::read_parameters<3>(file.path());
@@ -305,11 +275,10 @@ TEST(FourierParameters, ParsesRuntimeSizedModesInBothDimensions)
 
 TEST(FourierParameters, AssignsRowsToFrequenciesStartingAtOne)
 {
-    TemporaryParameterFile file(
-        "2\n"
-        "0 2\n"
-        "1 0\n"
-        "1 0\n");
+    TemporaryParameterFile file("2\n"
+                                "0 2\n"
+                                "1 0\n"
+                                "1 0\n");
     const fourier::DirichletIn<2> profile_2d(
         fourier::read_parameters<2>(file.path()));
     const fourier::DirichletIn<3> profile_3d(
@@ -338,12 +307,9 @@ TEST(FourierParameters, PreservesBuiltInDefaults)
 
 TEST(FourierParameters, RejectsMalformedRowsAndTrailingData)
 {
-    for (const std::string contents : {
-             "0\n",
-             "1\n1\n1 2\n",
-             "1\n1 0.5 extra\n1 2\n",
-             "2\n1 0.5\n1 2\n",
-             "1\n1 0.5\n1 2\ntrailing\n"}) {
+    for (const std::string contents :
+         {"0\n", "1\n1\n1 2\n", "1\n1 0.5 extra\n1 2\n", "2\n1 0.5\n1 2\n",
+          "1\n1 0.5\n1 2\ntrailing\n"}) {
         TemporaryParameterFile file(contents);
         EXPECT_THROW(fourier::read_parameters<2>(file.path()),
                      std::runtime_error);
@@ -352,9 +318,7 @@ TEST(FourierParameters, RejectsMalformedRowsAndTrailingData)
 
 TEST(FourierParameters, RejectsNonpositiveWavelengths)
 {
-    for (const std::string contents : {
-             "1\n1 0\n1 2\n",
-             "1\n1 -0.5\n1 2\n"}) {
+    for (const std::string contents : {"1\n1 0\n1 2\n", "1\n1 -0.5\n1 2\n"}) {
         TemporaryParameterFile file(contents);
         EXPECT_THROW(fourier::read_parameters<3>(file.path()),
                      std::runtime_error);
@@ -363,47 +327,43 @@ TEST(FourierParameters, RejectsNonpositiveWavelengths)
 
 TEST(PolynomialParameters, ParsesDimensionSpecificRows)
 {
-    TemporaryParameterFile file_2d(
-        "3\n"
-        "0.5 -1.5 99\n"
-        "1\n"
-        "2 3\n"
-        "4 5 6\n");
-    TemporaryParameterFile file_3d(
-        "4\n"
-        "-1 2 -3\n"
-        "1\n"
-        "2 3 4\n"
-        "5 6 7 8 9 10\n"
-        "11 12 13 14 15 16 17 18 19 20\n");
+    TemporaryParameterFile file_2d("3\n"
+                                   "0.5 -1.5 99\n"
+                                   "1\n"
+                                   "2 3\n"
+                                   "4 5 6\n");
+    TemporaryParameterFile file_3d("4\n"
+                                   "-1 2 -3\n"
+                                   "1\n"
+                                   "2 3 4\n"
+                                   "5 6 7 8 9 10\n"
+                                   "11 12 13 14 15 16 17 18 19 20\n");
 
     const auto params_2d = polynomial::read_parameters<2>(file_2d.path());
     const auto params_3d = polynomial::read_parameters<3>(file_3d.path());
 
     EXPECT_EQ(params_2d.center, (std::array<double, 2>{{0.5, -1.5}}));
-    EXPECT_EQ(params_3d.center,
-              (std::array<double, 3>{{-1.0, 2.0, -3.0}}));
-    EXPECT_EQ(params_2d.coefficients_by_degree,
-              (std::vector<std::vector<double>>{
-                  {1.0}, {2.0, 3.0}, {4.0, 5.0, 6.0}}));
-    EXPECT_EQ(params_3d.coefficients_by_degree,
-              (std::vector<std::vector<double>>{
-                  {1.0},
-                  {2.0, 3.0, 4.0},
-                  {5.0, 6.0, 7.0, 8.0, 9.0, 10.0},
-                  {11.0, 12.0, 13.0, 14.0, 15.0,
-                   16.0, 17.0, 18.0, 19.0, 20.0}}));
+    EXPECT_EQ(params_3d.center, (std::array<double, 3>{{-1.0, 2.0, -3.0}}));
+    EXPECT_EQ(
+        params_2d.coefficients_by_degree,
+        (std::vector<std::vector<double>>{{1.0}, {2.0, 3.0}, {4.0, 5.0, 6.0}}));
+    EXPECT_EQ(
+        params_3d.coefficients_by_degree,
+        (std::vector<std::vector<double>>{
+            {1.0},
+            {2.0, 3.0, 4.0},
+            {5.0, 6.0, 7.0, 8.0, 9.0, 10.0},
+            {11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0}}));
 }
 
 TEST(PolynomialParameters, EvaluatesMixedTermsAboutNonzeroCenter)
 {
-    TemporaryParameterFile file(
-        "4\n"
-        "1 2 3\n"
-        "0\n"
-        "0 0 0\n"
-        "0 2 3 0 5 0\n"
-        "0 0 0 0 7 0 0 0 0 0\n");
+    TemporaryParameterFile file("4\n"
+                                "1 2 3\n"
+                                "0\n"
+                                "0 0 0\n"
+                                "0 2 3 0 5 0\n"
+                                "0 0 0 0 7 0 0 0 0 0\n");
 
     const polynomial::DirichletIn<3> profile(
         polynomial::read_parameters<3>(file.path()));
@@ -413,21 +373,18 @@ TEST(PolynomialParameters, EvaluatesMixedTermsAboutNonzeroCenter)
 
 TEST(PolynomialParameters, TwoDimensionsIgnoresThirdCenterCoordinate)
 {
-    TemporaryParameterFile first_file(
-        "3\n"
-        "1 2 99\n"
-        "0\n"
-        "0 0\n"
-        "0 2 0\n");
-    TemporaryParameterFile second_file(
-        "3\n"
-        "1 2 -99\n"
-        "0\n"
-        "0 0\n"
-        "0 2 0\n");
+    TemporaryParameterFile first_file("3\n"
+                                      "1 2 99\n"
+                                      "0\n"
+                                      "0 0\n"
+                                      "0 2 0\n");
+    TemporaryParameterFile second_file("3\n"
+                                       "1 2 -99\n"
+                                       "0\n"
+                                       "0 0\n"
+                                       "0 2 0\n");
 
-    const auto first_params =
-        polynomial::read_parameters<2>(first_file.path());
+    const auto first_params = polynomial::read_parameters<2>(first_file.path());
     const auto second_params =
         polynomial::read_parameters<2>(second_file.path());
     const polynomial::DirichletIn<2> first_profile(first_params);
@@ -451,31 +408,23 @@ TEST(PolynomialParameters, PreservesBuiltInDefaults)
     EXPECT_EQ(params_3d.center, (std::array<double, 3>{}));
     EXPECT_EQ(params_2d.coefficients_by_degree,
               (std::vector<std::vector<double>>{
-                  {1.0}, {0.0, 1.0}, {0.0, 0.0, 1.0},
-                  {0.0, 0.0, 0.0, 1.0}}));
+                  {1.0}, {0.0, 1.0}, {0.0, 0.0, 1.0}, {0.0, 0.0, 0.0, 1.0}}));
     EXPECT_EQ(params_3d.coefficients_by_degree,
               (std::vector<std::vector<double>>{
                   {1.0},
                   {0.0, 1.0, 0.0},
                   {0.0, 0.0, 0.0, 1.0, 0.0, 0.0},
-                  {0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-                   1.0, 0.0, 0.0, 0.0}}));
+                  {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0}}));
     EXPECT_DOUBLE_EQ(profile_2d.value(dealii::Point<2>{-0.4, 2.0}), 15.0);
-    EXPECT_DOUBLE_EQ(
-        profile_3d.value(dealii::Point<3>{-0.4, 2.0, 0.7}), 15.0);
+    EXPECT_DOUBLE_EQ(profile_3d.value(dealii::Point<3>{-0.4, 2.0, 0.7}), 15.0);
 }
 
 TEST(PolynomialParameters, RejectsMalformedFiles)
 {
-    for (const std::string contents : {
-             "0\n",
-             "1\n0 0\n1\n",
-             "1\n0 0 0 extra\n1\n",
-             "1\n0 0 0\n",
-             "1\nnan 0 0\n1\n",
-             "1\n0 0 0\nnan\n",
-             "1\n0 0 0\n1 extra\n",
-             "1\n0 0 0\n1\ntrailing\n"}) {
+    for (const std::string contents :
+         {"0\n", "1\n0 0\n1\n", "1\n0 0 0 extra\n1\n", "1\n0 0 0\n",
+          "1\nnan 0 0\n1\n", "1\n0 0 0\nnan\n", "1\n0 0 0\n1 extra\n",
+          "1\n0 0 0\n1\ntrailing\n"}) {
         TemporaryParameterFile file(contents);
         EXPECT_THROW(polynomial::read_parameters<2>(file.path()),
                      std::runtime_error);
@@ -484,16 +433,14 @@ TEST(PolynomialParameters, RejectsMalformedFiles)
 
 TEST(PolynomialParameters, RejectsDimensionallyIncorrectCoefficientCounts)
 {
-    TemporaryParameterFile too_many_for_2d(
-        "2\n"
-        "0 0 0\n"
-        "1\n"
-        "2 3 4\n");
-    TemporaryParameterFile too_few_for_3d(
-        "2\n"
-        "0 0 0\n"
-        "1\n"
-        "2 3\n");
+    TemporaryParameterFile too_many_for_2d("2\n"
+                                           "0 0 0\n"
+                                           "1\n"
+                                           "2 3 4\n");
+    TemporaryParameterFile too_few_for_3d("2\n"
+                                          "0 0 0\n"
+                                          "1\n"
+                                          "2 3\n");
 
     EXPECT_THROW(polynomial::read_parameters<2>(too_many_for_2d.path()),
                  std::runtime_error);

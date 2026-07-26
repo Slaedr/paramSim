@@ -26,7 +26,14 @@ from libensemble.libE import libE
 from libensemble.message_numbers import TASK_FAILED, WORKER_DONE
 from libensemble.tools import add_unique_random_streams, save_libE_output
 
-from setup_case import get_args_str, get_common_args_str, setup_case
+from setup_case import (
+    get_case_parameter_args,
+    get_common_args_str,
+    load_case_parameter_ranges,
+    sample_parameter_values,
+    setup_case,
+    write_case_parameter_file,
+)
 
 
 def _resolve_path(value: str, base_dir: Path) -> Path:
@@ -54,12 +61,13 @@ def gen_random_samples(H_in, persis_info, gen_specs):
         param_name = param_spec[0]
         lower = user_specs["lower"][param_name]
         upper = user_specs["upper"][param_name]
-        if lower.shape != upper.shape:
-            raise ValueError(f"Mismatched bounds for {param_name}: {lower.shape} != {upper.shape}")
-        out[param_name] = persis_info["rand_stream"].uniform(
+        integer = param_name in user_specs.get("integer_parameters", ())
+        out[param_name] = sample_parameter_values(
+            persis_info["rand_stream"],
             lower,
             upper,
-            (batch_size,) + lower.shape,
+            batch_size,
+            integer=integer,
         )
 
     return out, persis_info
@@ -72,8 +80,15 @@ def run_case(H_in, persis_info, sim_specs, libE_info):
     calc_status = WORKER_DONE
 
     for ibatch, history_row in enumerate(H_in):
-        case_args = get_args_str(sim_specs["user"]["case_type"], history_row)
-        app_args = sim_specs["user"]["common_args"] + case_args
+        parameter_file = write_case_parameter_file(
+            sim_specs["user"]["case_type"],
+            sim_specs["user"]["dimension"],
+            history_row,
+        )
+        app_args = (
+            sim_specs["user"]["common_args"]
+            + get_case_parameter_args(parameter_file)
+        )
 
         start = time.monotonic()
         task = executor.submit(
@@ -112,6 +127,9 @@ def run_ensemble(case_file_path: str) -> None:
     case_path = Path(case_file_path).expanduser().resolve()
     with case_path.open("r", encoding="utf-8") as case_file:
         case_data = json.load(case_file)
+    case_parameter_ranges = load_case_parameter_ranges(
+        case_data, case_path
+    )
 
     executable_value = _env_or_case(
         "PARAMSIM_EXEC",
@@ -177,11 +195,17 @@ def run_ensemble(case_file_path: str) -> None:
         "user": {
             "common_args": common_args,
             "case_type": case_data["case_type"],
+            "dimension": case_data["dimension"],
         },
     }
 
     # Reuse the case-family definitions already present in paramSim.
-    setup_case(case_data, gen_specs, sim_specs)
+    setup_case(
+        case_data,
+        gen_specs,
+        sim_specs,
+        case_parameter_ranges,
+    )
 
     # Each MPI worker is already co-located with and bound to the CPU core on
     # which its serial subprocess should execute. No nested srun is required.

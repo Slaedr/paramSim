@@ -57,44 +57,32 @@ template <int dim>
 void CubeExponential<dim>::initialize(const bpo::variables_map& params)
 {
     std::shared_ptr<exponential::DirichletIn<dim>> dirichlet1;
-    if (params.count("width")) {
-        constexpr std::size_t legacy_center_count = 3;
-        const double width = params["width"].as<double>();
-        exponential::Params<dim> case_params;
-        case_params.centers.clear();
-        for (std::size_t index = 0; index < legacy_center_count; ++index) {
-            const std::string flag =
-                "center" + std::to_string(index) + "_y";
-            const std::string coefficient_flag =
-                "center" + std::to_string(index) + "_coeff";
-            exponential::GaussianCenter<dim> center;
-            center.coordinates[0] = -1.0;
-            center.coordinates[1] = params[flag].as<double>();
-            center.coefficient = params[coefficient_flag].as<double>();
-            center.width = width;
-            case_params.centers.push_back(center);
-        }
-        this->rhs_ = std::make_shared<exponential::RightHandSide<dim>>();
+    if (params.count("case_params_file")) {
+        const auto case_params = exponential::read_parameters<dim>(
+            params["case_params_file"].as<std::string>());
         dirichlet1 =
             std::make_shared<exponential::DirichletIn<dim>>(case_params);
 
-        // Write out params to confirm
         std::cout << "Case 'cube_exponential': read parameters:\n";
         for (std::size_t index = 0; index < case_params.centers.size();
              ++index) {
             const auto& center = case_params.centers[index];
             std::cout << "  Center " << index << ": (";
-            for (const double coordinate : center.coordinates) {
-                std::cout << coordinate << ", ";
+            for (std::size_t coordinate = 0; coordinate < dim; ++coordinate) {
+                if (coordinate > 0) {
+                    std::cout << ", ";
+                }
+                std::cout << center.coordinates[coordinate];
             }
             std::cout << "), coeff = " << center.coefficient
                       << ", width = " << center.width << std::endl;
         }
     } else {
-        this->rhs_ = std::make_shared<exponential::RightHandSide<dim>>();
         dirichlet1 = std::make_shared<exponential::DirichletIn<dim>>();
         std::cout << "Case 'cube_exponential': default parameters.\n";
     }
+
+    this->rhs_ = std::make_shared<exponential::RightHandSide<dim>>();
 
     auto dirichlet2 =
         std::make_shared<exponential::DirichletConstant<dim>>(1.0);
@@ -127,23 +115,9 @@ template <int dim>
 void CubeExponential<dim>::add_case_cmd_args(
     bpo::options_description& desc) const
 {
-    desc.add_options()("width", bpo::value<double>(), "Width of each hill");
-    constexpr int legacy_center_count = 3;
-    for (int ic = 0; ic < legacy_center_count; ic++) {
-        const std::string flag =
-            std::string("center") + std::to_string(ic) + "_y";
-        const std::string descstr =
-            "y coordinate of " + std::to_string(ic) + "th center";
-        desc.add_options()(flag.c_str(), bpo::value<double>(), descstr.c_str());
-        // eg. centers[0][1] = params["center0_y"].as<double>();
-        const std::string coflag =
-            std::string("center") + std::to_string(ic) + "_coeff";
-        const std::string codescstr =
-            "Coefficient multiplying the " + std::to_string(ic) + "th center";
-        // eg. "center1_coeff"
-        desc.add_options()(coflag.c_str(), bpo::value<double>(),
-                           codescstr.c_str());
-    }
+    desc.add_options()(
+        "case_params_file", bpo::value<std::string>(),
+        "Path to the cube exponential parameter file");
 }
 
 template class CubeExponential<2>;
