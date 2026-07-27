@@ -17,6 +17,8 @@ void add_common_options(bpo::options_description& desc, const std::string help_m
          "Type of PDE solver to use: 'poisson_cg', 'minimal_surface'")
         ("dimension", bpo::value<unsigned int>(),
          "Spatial dimension of the problem (required; supported values: 2, 3)")
+        ("case_params_file", bpo::value<std::string>(),
+         "Path to the case-specific parameter file")
         ("refine_levels", bpo::value<int>()->default_value(5),
          "Number of times to refine the grid and solve")
         ("initial_resolution", bpo::value<unsigned int>()->default_value(2),

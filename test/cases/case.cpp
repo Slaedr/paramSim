@@ -70,20 +70,6 @@ create_cube_case(const std::string& case_name,
     return ps::create_case<dim>(params, 1, args);
 }
 
-template <typename CubeCase>
-std::vector<std::string> case_option_names()
-{
-    CubeCase cube_case;
-    bpo::options_description description("Case options");
-    cube_case.add_case_cmd_args(description);
-
-    std::vector<std::string> names;
-    for (const auto& option : description.options()) {
-        names.push_back(option->long_name());
-    }
-    return names;
-}
-
 } // namespace
 
 TEST(Cases, CanCreateDefaultMinSurfCubeSinusoidalCase)
@@ -164,13 +150,16 @@ TEST(CommonParams, RejectsUnsupportedDimension)
     EXPECT_THROW(ps::get_common_params(common_cmdmap), std::invalid_argument);
 }
 
-TEST(CubeCaseOptions, HasParameterFileOption)
+TEST(CommonOptions, HasParameterFileOption)
 {
-    const std::vector<std::string> expected{"case_params_file"};
+    bpo::options_description description("Common options");
+    ps::add_common_options(description, "help!");
 
-    EXPECT_EQ(case_option_names<cube::CubeExponential<2>>(), expected);
-    EXPECT_EQ(case_option_names<cube::CubeFourier<2>>(), expected);
-    EXPECT_EQ(case_option_names<cube::CubePolynomial<2>>(), expected);
+    bool found = false;
+    for (const auto& option : description.options()) {
+        found = found || option->long_name() == "case_params_file";
+    }
+    EXPECT_TRUE(found);
 }
 
 TEST(CubeCaseParameters, UsesParameterFileForSelectedCaseAndDimension)

@@ -111,15 +111,6 @@ void CubeExponential<dim>::initialize(const bpo::variables_map& params)
     this->geom_ = std::make_shared<geom::Cube<dim>>(bcmarks);
 }
 
-template <int dim>
-void CubeExponential<dim>::add_case_cmd_args(
-    bpo::options_description& desc) const
-{
-    desc.add_options()(
-        "case_params_file", bpo::value<std::string>(),
-        "Path to the cube exponential parameter file");
-}
-
 template class CubeExponential<2>;
 template class CubeExponential<3>;
 

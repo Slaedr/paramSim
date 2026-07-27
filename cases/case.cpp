@@ -58,6 +58,7 @@ std::unique_ptr<Case<dim>> create_case(const CommonParams &params,
     bpo::options_description case_desc(std::string("Solves the case ") +
                                        params.case_str +
                                        " given one set of parameters.");
+    add_common_options(case_desc, "");
     tcase->add_case_cmd_args(case_desc);
     const bpo::variables_map case_cmdmap =
         get_cmd_args(n_args, argv, case_desc);

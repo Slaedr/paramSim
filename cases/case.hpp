@@ -23,13 +23,23 @@ struct dirichlet_bc {
     std::shared_ptr<const dealii::Function<dim>> bc_fn;
 };
 
-/// Abstract class gathering all testcase-specific data and descriptions
+/** Abstract class gathering all test-case-specific data and descriptions.
+ *
+ * @tparam dimension Spatial dimension.
+ */
 template <int dimension>
 class Case {
 public:
     static constexpr int dim = dimension;
 
-    virtual void add_case_cmd_args(bpo::options_description&) const = 0;
+    /** Add case-specific command-line options.
+     *
+     * @param description Command-line option description to extend.
+     */
+    virtual void
+    add_case_cmd_args(bpo::options_description& description) const
+    {
+    }
 
     virtual void initialize(const bpo::variables_map&) = 0;
 

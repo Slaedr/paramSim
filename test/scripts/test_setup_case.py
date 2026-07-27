@@ -135,7 +135,7 @@ class RangeValidationTests(unittest.TestCase):
                 "wavelength_bounds": [0.25, 1.0],
             },
             "cube_polynomial": {
-                "num_terms_range": [1, 5],
+                "num_degree_levels_range": [1, 5],
                 "center_coordinate_bounds": [-0.5, 0.5],
                 "coeff_bounds": [-1.0, 1.0],
             },
@@ -321,7 +321,7 @@ class HistoryFieldTests(unittest.TestCase):
 
     def test_polynomial_storage_is_dimension_aware(self):
         ranges = {
-            "num_terms_range": [1, 4],
+            "num_degree_levels_range": [1, 4],
             "center_coordinate_bounds": [-0.5, 0.5],
             "coeff_bounds": [-1.0, 1.0],
         }
@@ -337,7 +337,9 @@ class HistoryFieldTests(unittest.TestCase):
                 setup_case(case_data, gen_specs, sim_specs, ranges)
 
                 history_dtype = np.dtype(gen_specs["out"])
-                self.assertEqual(history_dtype["num_terms"].shape, ())
+                self.assertEqual(
+                    history_dtype["num_degree_levels"].shape, ()
+                )
                 self.assertEqual(
                     history_dtype["center_coordinates"].shape, (3,)
                 )
@@ -351,7 +353,11 @@ class HistoryFieldTests(unittest.TestCase):
                 )
                 self.assertEqual(
                     sim_specs["in"],
-                    ["num_terms", "center_coordinates", "coefficients"],
+                    [
+                        "num_degree_levels",
+                        "center_coordinates",
+                        "coefficients",
+                    ],
                 )
 
 
@@ -492,7 +498,7 @@ class ParameterFileTests(unittest.TestCase):
         for dimension, coefficient_rows in expected_rows.items():
             with self.subTest(dimension=dimension):
                 args = {
-                    "num_terms": 3,
+                    "num_degree_levels": 3,
                     "center_coordinates": np.asarray([0.5, -0.5, 0.25]),
                     "coefficients": np.arange(1.0, 21.0),
                 }

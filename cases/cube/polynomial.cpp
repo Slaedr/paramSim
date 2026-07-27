@@ -114,14 +114,6 @@ void CubePolynomial<dim>::initialize(const bpo::variables_map& params)
     this->geom_ = std::make_shared<geom::Cube<dim>>(bcmarks);
 }
 
-template <int dim>
-void CubePolynomial<dim>::add_case_cmd_args(bpo::options_description& desc) const
-{
-    desc.add_options()(
-        "case_params_file", bpo::value<std::string>(),
-        "Path to the cube polynomial parameter file");
-}
-
 template class CubePolynomial<2>;
 template class CubePolynomial<3>;
 

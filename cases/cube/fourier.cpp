@@ -94,13 +94,6 @@ void CubeFourier<dim>::initialize(const bpo::variables_map& params)
     this->geom_ = std::make_shared<geom::Cube<dim>>(bcmarks);
 }
 
-template <int dim>
-void CubeFourier<dim>::add_case_cmd_args(bpo::options_description& desc) const
-{
-    desc.add_options()("case_params_file", bpo::value<std::string>(),
-                       "Path to the cube Fourier parameter file");
-}
-
 template class CubeFourier<2>;
 template class CubeFourier<3>;
 

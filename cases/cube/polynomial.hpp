@@ -152,13 +152,6 @@ public:
      * @param params Parsed command-line parameters.
      */
     void initialize(const bpo::variables_map& params) override;
-
-    /**
-     * @brief Adds the polynomial parameter-file command-line option.
-     *
-     * @param desc Options collection to extend.
-     */
-    void add_case_cmd_args(bpo::options_description& desc) const override;
 };
 
 } // namespace cube

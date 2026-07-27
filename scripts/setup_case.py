@@ -72,7 +72,7 @@ def validate_case_parameter_ranges(case_type: str, range_data: dict):
             raise ValueError("wavelength_bounds must be positive")
 
     elif case_type == "cube_polynomial":
-        _validate_count_range(range_data, "num_terms_range")
+        _validate_count_range(range_data, "num_degree_levels_range")
         _validate_float_bounds(range_data, "center_coordinate_bounds")
         _validate_float_bounds(range_data, "coeff_bounds")
 
@@ -354,10 +354,12 @@ def setup_case(
         )
 
     elif case_type == "cube_polynomial":
-        count_lower, count_upper = case_parameter_ranges["num_terms_range"]
-        max_terms = count_upper
+        count_lower, count_upper = case_parameter_ranges[
+            "num_degree_levels_range"
+        ]
+        max_degree_levels = count_upper
         max_coefficients = polynomial_coefficient_count(
-            case_data["dimension"], max_terms
+            case_data["dimension"], max_degree_levels
         )
         center_lower, center_upper = case_parameter_ranges[
             "center_coordinate_bounds"
@@ -368,19 +370,19 @@ def setup_case(
 
         gen_specs["out"].extend(
             [
-                ("num_terms", np.int32),
+                ("num_degree_levels", np.int32),
                 ("center_coordinates", np.float32, (3,)),
                 ("coefficients", np.float32, (max_coefficients,)),
             ]
         )
         sim_specs["in"].extend(
-            ["num_terms", "center_coordinates", "coefficients"]
+            ["num_degree_levels", "center_coordinates", "coefficients"]
         )
-        integer_parameters.append("num_terms")
-        gen_specs["user"]["lower"]["num_terms"] = np.asarray(
+        integer_parameters.append("num_degree_levels")
+        gen_specs["user"]["lower"]["num_degree_levels"] = np.asarray(
             count_lower, dtype=np.int32
         )
-        gen_specs["user"]["upper"]["num_terms"] = np.asarray(
+        gen_specs["user"]["upper"]["num_degree_levels"] = np.asarray(
             count_upper, dtype=np.int32
         )
         gen_specs["user"]["lower"]["center_coordinates"] = np.full(
@@ -546,7 +548,7 @@ def write_case_parameter_file(
                 )
 
         elif case_type == "cube_polynomial":
-            degree_levels = int(args["num_terms"])
+            degree_levels = int(args["num_degree_levels"])
             parameter_file.write(f"{degree_levels}\n")
             parameter_file.write(
                 " ".join(

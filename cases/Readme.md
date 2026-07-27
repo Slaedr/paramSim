@@ -181,14 +181,14 @@ See [poisson_fourier.json](../scripts/examples/poisson_fourier.json) and
 
 ```json
 {
-  "num_terms_range": [1, 5],
+  "num_degree_levels_range": [1, 5],
   "center_coordinate_bounds": [-0.5, 0.5],
   "coeff_bounds": [-1.0, 1.0]
 }
 ```
 
-- `num_terms_range`: Inclusive positive-integer range of degree levels. Despite
-  its public name, this is not a total monomial count.
+- `num_degree_levels_range`: Inclusive positive-integer range of polynomial
+  degree levels.
 - `center_coordinate_bounds`: Bounds shared by the three center coordinates.
 - `coeff_bounds`: Bounds shared by every monomial coefficient.
 

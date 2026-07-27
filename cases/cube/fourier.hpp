@@ -112,7 +112,6 @@ template <int dim>
 class CubeFourier final : public Case<dim> {
 public:
     void initialize(const bpo::variables_map &) override;
-    void add_case_cmd_args(bpo::options_description &) const override;
 };
 
 } // namespace cube
