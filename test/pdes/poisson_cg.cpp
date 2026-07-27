@@ -85,6 +85,24 @@ TEST(PoissonVerification3d, ConvergesP1)
     std::free(argv);
 }
 
+TEST(PoissonVerification3d, ConvergesP2)
+{
+    constexpr int test_dim = 3;
+    const int nargs = 15;
+    const char args[][100] = {
+        "prog", "--dimension", "3", "--pde", "poisson_cg",
+        "--refine_levels", "4", "--initial_resolution", "2",
+        "--case", "poisson_verify", "--fe_degree", "2", "--max_its", "5"};
+    const char** argv = allocate_setup_args(nargs, args);
+
+    const auto run_data = get_run_data<test_dim>(nargs, argv);
+    const double conv_slope = testutils::test_grid_convergence(
+        run_data.test_case, run_data.pde_params, run_data.solver_params);
+
+    EXPECT_NEAR(conv_slope, 3.0, 3e-1);
+    std::free(argv);
+}
+
 TEST(RunData, RejectsDimensionMismatch)
 {
     const int nargs = 7;

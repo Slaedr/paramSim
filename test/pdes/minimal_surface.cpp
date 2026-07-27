@@ -98,3 +98,41 @@ TEST_F(MinimalSurfaceVerification, CubeConvergesP2)
         this->run_data.test_case, this->run_data.pde_params, this->run_data.solver_params);
     EXPECT_NEAR(conv_slope, 3.0, this->eps);
 }
+
+TEST(MinimalSurfaceVerification3d, CubeConvergesP1)
+{
+    constexpr int test_dim = 3;
+    const int nargs = 17;
+    const char args[][100] = {
+        "prog", "--dimension", "3", "--pde", "minimal_surface",
+        "--refine_levels", "4", "--initial_resolution", "2",
+        "--case", "minimal_surface_cube_verify", "--fe_degree", "1",
+        "--max_its", "10", "--tolerance", "1e-6"};
+    const char** argv = allocate_setup_args(nargs, args);
+
+    const auto run_data = get_run_data<test_dim>(nargs, argv);
+    const double conv_slope = testutils::test_grid_convergence(
+        run_data.test_case, run_data.pde_params, run_data.solver_params);
+
+    EXPECT_NEAR(conv_slope, 2.0, 3e-1);
+    std::free(argv);
+}
+
+TEST(MinimalSurfaceVerification3d, CubeConvergesP2)
+{
+    constexpr int test_dim = 3;
+    const int nargs = 17;
+    const char args[][100] = {
+        "prog", "--dimension", "3", "--pde", "minimal_surface",
+        "--refine_levels", "4", "--initial_resolution", "2",
+        "--case", "minimal_surface_cube_verify", "--fe_degree", "2",
+        "--max_its", "12", "--tolerance", "1e-8"};
+    const char** argv = allocate_setup_args(nargs, args);
+
+    const auto run_data = get_run_data<test_dim>(nargs, argv);
+    const double conv_slope = testutils::test_grid_convergence(
+        run_data.test_case, run_data.pde_params, run_data.solver_params);
+
+    EXPECT_NEAR(conv_slope, 3.0, 3e-1);
+    std::free(argv);
+}

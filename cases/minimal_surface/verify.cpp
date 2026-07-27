@@ -28,6 +28,7 @@ void MinSurfBallVerify<dim>::add_case_cmd_args(bpo::options_description&) const
 }
 
 template class MinSurfBallVerify<2>;
+template class MinSurfBallVerify<3>;
 
 template <int dim>
 void MinSurfCubeVerify<dim>::initialize(const bpo::variables_map& params)
@@ -52,6 +53,7 @@ void MinSurfCubeVerify<dim>::add_case_cmd_args(bpo::options_description&) const
 }
 
 template class MinSurfCubeVerify<2>;
+template class MinSurfCubeVerify<3>;
 
 
 }

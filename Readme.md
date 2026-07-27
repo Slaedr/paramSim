@@ -31,8 +31,7 @@ Each refinement cycle writes the complete solution volume to
 
 ### Current 3D limitations
 
-The `minimal_surface_ball_verify` and `minimal_surface_cube_verify` cases remain
-2D-only because their manufactured right-hand side has not yet been derived in
-3D. Existing parameterized boundary profiles are extruded in the third
-direction; true two-coordinate B2D parameterizations, beginning with
-`cube_exponential`, are future work.
+The manufactured minimal-surface verification cases support both 2D and 3D.
+Existing parameterized boundary profiles are extruded in the third direction;
+true two-coordinate B2D parameterizations, beginning with `cube_exponential`,
+are future work.

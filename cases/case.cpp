@@ -27,23 +27,9 @@ std::unique_ptr<Case<dim>> create_case(const CommonParams &params,
     } else if (params.case_str == "cube_polynomial") {
         tcase = std::make_unique<cases::cube::CubePolynomial<dim>>();
     } else if (params.case_str == "minimal_surface_ball_verify") {
-        if constexpr (dim == 2) {
-            tcase = std::make_unique<cases::MinSurfBallVerify<dim>>();
-        } else {
-            throw std::runtime_error(
-                "Case 'minimal_surface_ball_verify' does not support "
-                "spatial dimension " +
-                std::to_string(dim) + ".");
-        }
+        tcase = std::make_unique<cases::MinSurfBallVerify<dim>>();
     } else if (params.case_str == "minimal_surface_cube_verify") {
-        if constexpr (dim == 2) {
-            tcase = std::make_unique<cases::MinSurfCubeVerify<dim>>();
-        } else {
-            throw std::runtime_error(
-                "Case 'minimal_surface_cube_verify' does not support "
-                "spatial dimension " +
-                std::to_string(dim) + ".");
-        }
+        tcase = std::make_unique<cases::MinSurfCubeVerify<dim>>();
     } else if (params.case_str == "minimal_surface_disk_sinusoidal") {
         tcase = std::make_unique<cases::MinSurfDiskSinusoidal<dim>>();
     } else if (params.case_str == "minimal_surface_cube_sinusoidal") {
