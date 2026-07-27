@@ -142,12 +142,20 @@ class RangeValidationTests(unittest.TestCase):
         }
 
     def test_accepts_all_case_schemas_and_equal_bounds(self):
-        ranges_by_case = self.valid_ranges()
-        ranges_by_case["cube_polynomial"]["coeff_bounds"] = [1.0, 1.0]
-
-        for case_type, ranges in ranges_by_case.items():
+        for case_type, ranges in self.valid_ranges().items():
+            constant_ranges = {
+                name: [bounds[0], bounds[0]]
+                for name, bounds in ranges.items()
+            }
             with self.subTest(case_type=case_type):
-                validate_case_parameter_ranges(case_type, ranges)
+                validate_case_parameter_ranges(
+                    case_type,
+                    constant_ranges,
+                )
+                validate_case_parameter_ranges(
+                    case_type,
+                    ranges
+                )
 
     def test_rejects_invalid_count_ranges(self):
         invalid_ranges = (
@@ -388,6 +396,32 @@ class SamplingTests(unittest.TestCase):
         self.assertEqual(samples.shape, (2, 4, 3))
         self.assertNotEqual(samples[0, 0, 0], samples[0, 0, 1])
         self.assertNotEqual(samples[0, 0, 0], samples[0, 1, 0])
+
+    def test_equal_bounds_remain_constant_across_samples(self):
+        random_stream = np.random.default_rng(42)
+
+        float_samples = sample_parameter_values(
+            random_stream,
+            np.full((2, 3), 1.25),
+            np.full((2, 3), 1.25),
+            10,
+        )
+        integer_samples = sample_parameter_values(
+            random_stream,
+            np.asarray(3, dtype=np.int32),
+            np.asarray(3, dtype=np.int32),
+            10,
+            integer=True,
+        )
+
+        np.testing.assert_array_equal(
+            float_samples,
+            np.full((10, 2, 3), 1.25),
+        )
+        np.testing.assert_array_equal(
+            integer_samples,
+            np.full(10, 3),
+        )
 
 
 class ParameterFileTests(unittest.TestCase):

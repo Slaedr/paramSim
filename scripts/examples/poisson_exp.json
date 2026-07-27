@@ -6,19 +6,5 @@
   "resolution" : 63,
   "pde" : "poisson_cg",
   "case_type" : "cube_exponential",
-  "centers" : [
-      {
-          "coords_bounds" : [-0.8, 0.1],
-          "coeff_bounds" : [0.1, 0.9]
-      },
-      {
-          "coords_bounds" : [-0.4, 0.4],
-          "coeff_bounds" : [0.1, 0.9]
-      },
-      {
-          "coords_bounds" : [0.1, 0.8],
-          "coeff_bounds" : [0.1, 0.9]
-      }
-  ],
-  "width_bounds" : [0.2, 0.7]
+  "case_params_ranges_file" : "poisson_exp_ranges.json"
 }

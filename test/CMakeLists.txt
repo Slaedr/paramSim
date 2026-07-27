@@ -49,7 +49,7 @@ gtest_discover_tests(geometry_test)
 find_package(Python3 COMPONENTS Interpreter QUIET)
 if(Python3_Interpreter_FOUND)
     add_test(
-        NAME setup_case_dimension
+        NAME ensemble_setup_case
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_setup_case.py
     )
 endif()

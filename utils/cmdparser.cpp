@@ -37,13 +37,20 @@ void add_common_options(bpo::options_description& desc, const std::string help_m
 bpo::variables_map get_cmd_args(const int argc, const char *const argv[],
                                const bpo::options_description& desc)
 {
-	bpo::variables_map cmdvarmap;
-	bpo::parsed_options parsedopts =
-		bpo::command_line_parser(argc, argv).options(desc).allow_unregistered().run();
-	bpo::store(parsedopts, cmdvarmap);
-	bpo::notify(cmdvarmap);
+    const auto style =
+        bpo::command_line_style::default_style &
+        ~bpo::command_line_style::allow_guessing;
+    const bpo::parsed_options parsed_options =
+        bpo::command_line_parser(argc, argv)
+            .options(desc)
+            .style(style)
+            .allow_unregistered()
+            .run();
+    bpo::variables_map cmdvarmap;
+    bpo::store(parsed_options, cmdvarmap);
+    bpo::notify(cmdvarmap);
 
-	return cmdvarmap;
+    return cmdvarmap;
 }
 
 CommonParams get_common_params(const bpo::variables_map& common_cmdmap)

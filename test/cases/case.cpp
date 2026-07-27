@@ -60,9 +60,10 @@ create_cube_case(const std::string& case_name,
     ps::CommonParams params{};
     params.case_str = case_name;
     if (parameter_file != nullptr) {
-        const char *args[] = {"prog", "--case_params_file",
+        const char *args[] = {"prog", "--case", case_name.c_str(),
+                              "--case_params_file",
                               parameter_file->c_str()};
-        return ps::create_case<dim>(params, 3, args);
+        return ps::create_case<dim>(params, 5, args);
     }
 
     const char *args[] = {"prog"};

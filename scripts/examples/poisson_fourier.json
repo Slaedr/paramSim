@@ -6,16 +6,5 @@
   "resolution" : 63,
   "pde" : "poisson_cg",
   "case_type" : "cube_fourier",
-  "amplitudes" : [
-      {
-          "a_bounds" : [-1.0, 1.0],
-          "b_bounds" : [-1.0, 1.0]
-      },
-      {
-          "a_bounds" : [-0.5, 0.5],
-          "b_bounds" : [-0.5, 0.5]
-      }
-  ],
-  "constant_bounds" : [0.5, 1.5],
-  "wavelength_bounds" : [0.25, 1.0]
+  "case_params_ranges_file" : "poisson_fourier_ranges.json"
 }
