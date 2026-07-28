@@ -23,6 +23,10 @@ enum class InitialGuess {
 /**
  * @brief Computes a Poisson solution to use as a nonlinear initial guess.
  *
+ * Interestingly, keeping the RHS and BCs the same, initializing a minimal
+ * surface solve with a Poisson solution is a much better starting point than
+ * all zeros.
+ *
  * @tparam dim Active spatial dimension.
  * @param test_case Cube exponential case shared with the nonlinear PDE.
  * @param pde_parameters Grid and finite-element parameters.
