@@ -17,17 +17,20 @@ Params<dim> read_parameters(const std::string& filename)
 {
     ParameterFileReader reader("cube_fourier", filename);
     const unsigned mode_count = reader.read_count("number of modes");
-    const auto header =
-        reader.read_finite_values(2, "constant and fundamental wavelength");
-    if (header[1] <= 0.0) {
-        reader.fail(2, "fundamental wavelength must be positive");
-    }
+    const auto header = reader.read_finite_values(
+        dim + 1, "constant and directional fundamental wavelengths");
 
     Params<dim> params;
     params.modes.clear();
     params.modes.reserve(mode_count);
     params.constant = header[0];
-    params.fundamental_wavelength = header[1];
+    for (int direction = 0; direction < dim; ++direction) {
+        const double wavelength = header[direction + 1];
+        if (wavelength <= 0.0) {
+            reader.fail(2, "fundamental wavelengths must be positive");
+        }
+        params.fundamental_wavelength[direction] = wavelength;
+    }
     for (unsigned index = 0; index < mode_count; ++index) {
         const auto coefficients =
             reader.read_finite_values(2, "mode " + std::to_string(index + 1));
@@ -52,8 +55,14 @@ void CubeFourier<dim>::initialize(const bpo::variables_map& params)
         dirichlet1 = std::make_shared<fourier::DirichletIn<dim>>(case_params);
 
         std::cout << "Case 'cube_fourier': read parameters:\n";
-        std::cout << "  Fundamental wavelength = "
-                  << case_params.fundamental_wavelength << std::endl;
+        std::cout << "  Fundamental wavelengths = (";
+        for (int direction = 0; direction < dim; ++direction) {
+            if (direction > 0) {
+                std::cout << ", ";
+            }
+            std::cout << case_params.fundamental_wavelength[direction];
+        }
+        std::cout << ")" << std::endl;
         std::cout << "  Constant term = " << case_params.constant << std::endl;
         for (std::size_t index = 0; index < case_params.modes.size(); ++index) {
             const auto& mode = case_params.modes[index];

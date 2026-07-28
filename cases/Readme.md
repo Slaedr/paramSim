@@ -34,9 +34,9 @@ All three coordinates are required and must lie in `[-1, 1]`. Each width must
 be positive. Coefficients may have either sign. Each center has its own
 coefficient and width.
 
-The current profile evaluates normalized Gaussians using the x-y distance in
-both spatial dimensions. The z coordinate is parsed and validated but does
-not currently affect the profile, so the 3D boundary data is extruded in z.
+The profile evaluates normalized Gaussians using every active coordinate.
+The z coordinate is ignored in 2D and participates in the distance and
+normalization in 3D.
 
 See
 [cube_exponential_case_params.txt](examples/cube_exponential_case_params.txt)
@@ -44,26 +44,38 @@ for a complete file.
 
 ### Fourier parameters
 
-The `cube_fourier` format is:
+In 2D, the `cube_fourier` format is:
 
 ```text
 <number_of_modes>
-<constant> <fundamental_wavelength>
+<constant> <wavelength_x> <wavelength_y>
 <cosine_coefficient_1> <sine_coefficient_1>
 ...one row per mode
 ```
 
-The fundamental wavelength must be positive. For mode \(n\), the profile adds
+In 3D, the header has one additional directional wavelength:
+
+```text
+<number_of_modes>
+<constant> <wavelength_x> <wavelength_y> <wavelength_z>
+<cosine_coefficient_1> <sine_coefficient_1>
+...one row per mode
+```
+
+Every directional fundamental wavelength must be positive. For spatial
+dimension \(D\), mode \(n\) adds
 
 \[
-a_n \cos(2\pi n y/\lambda) + b_n \sin(2\pi n y/\lambda).
+a_n \prod_{d=1}^{D}\cos(2\pi n x_d/\lambda_d)
++ b_n \prod_{d=1}^{D}\sin(2\pi n x_d/\lambda_d).
 \]
 
 Rows are frequencies `1` through `number_of_modes`; the constant is present
-only once and is not a mode row. The profile depends on y in both 2D and 3D.
+only once and is not a mode row.
 
-See [cube_fourier_case_params.txt](examples/cube_fourier_case_params.txt) for
-a complete file.
+See the
+[2D example](examples/cube_fourier_case_params.txt) and
+[3D example](examples/cube_fourier_3d_case_params.txt).
 
 ### Polynomial parameters
 
@@ -172,7 +184,8 @@ See [poisson_exp.json](../scripts/examples/poisson_exp.json) and
 - `a_bounds`: Bounds shared by cosine coefficients.
 - `b_bounds`: Bounds shared by sine coefficients.
 - `constant_bounds`: Bounds for the single constant term.
-- `wavelength_bounds`: Positive fundamental-wavelength bounds.
+- `wavelength_bounds`: Positive bounds used to sample each active direction's
+  fundamental wavelength independently.
 
 See [poisson_fourier.json](../scripts/examples/poisson_fourier.json) and
 [poisson_fourier_ranges.json](../scripts/examples/poisson_fourier_ranges.json).

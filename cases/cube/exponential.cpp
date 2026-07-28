@@ -22,12 +22,11 @@ Params<dim> read_parameters(const std::string& filename)
     params.centers.clear();
     params.centers.reserve(center_count);
     for (unsigned index = 0; index < center_count; ++index) {
-        const auto values = reader.read_finite_values(
-            5, "center " + std::to_string(index));
+        const auto values =
+            reader.read_finite_values(5, "center " + std::to_string(index));
 
         for (std::size_t coordinate = 0; coordinate < 3; ++coordinate) {
-            if (values[coordinate] < -1.0 ||
-                values[coordinate] > 1.0) {
+            if (values[coordinate] < -1.0 || values[coordinate] > 1.0) {
                 reader.fail(index + 2,
                             "center coordinates must lie in [-1, 1]");
             }
@@ -37,7 +36,7 @@ Params<dim> read_parameters(const std::string& filename)
         }
 
         GaussianCenter<dim> center;
-        for (std::size_t coordinate = 0; coordinate < dim; ++coordinate) {
+        for (int coordinate = 0; coordinate < dim; ++coordinate) {
             center.coordinates[coordinate] = values[coordinate];
         }
         center.coefficient = values[3];
@@ -68,7 +67,7 @@ void CubeExponential<dim>::initialize(const bpo::variables_map& params)
              ++index) {
             const auto& center = case_params.centers[index];
             std::cout << "  Center " << index << ": (";
-            for (std::size_t coordinate = 0; coordinate < dim; ++coordinate) {
+            for (int coordinate = 0; coordinate < dim; ++coordinate) {
                 if (coordinate > 0) {
                     std::cout << ", ";
                 }

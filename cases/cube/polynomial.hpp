@@ -98,10 +98,9 @@ public:
     double value(const Point<dim>& p,
                  const unsigned int /*component*/ = 0) const override
     {
-        std::array<double, dim> shifted_coordinates{};
-        for (std::size_t coordinate = 0; coordinate < dim; ++coordinate) {
-            shifted_coordinates[coordinate] =
-                p[coordinate] - params_.center[coordinate];
+        std::array<double, dim> shifted_p{};
+        for (int idim = 0; idim < dim; ++idim) {
+            shifted_p[idim] = p[idim] - params_.center[idim];
         }
 
         double sum = 0.0;
@@ -109,15 +108,12 @@ public:
              degree < params_.coefficients_by_degree.size(); ++degree) {
             const auto exponents =
                 degree_exponents<dim>(static_cast<unsigned>(degree));
-            const auto& coefficients =
-                params_.coefficients_by_degree[degree];
+            const auto& coefficients = params_.coefficients_by_degree[degree];
             for (std::size_t term = 0; term < exponents.size(); ++term) {
                 double monomial = 1.0;
-                for (std::size_t coordinate = 0; coordinate < dim;
-                     ++coordinate) {
+                for (int idim = 0; idim < dim; ++idim) {
                     monomial *=
-                        std::pow(shifted_coordinates[coordinate],
-                                 exponents[term][coordinate]);
+                        std::pow(shifted_p[idim], exponents[term][idim]);
                 }
                 sum += coefficients[term] * monomial;
             }

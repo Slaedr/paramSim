@@ -16,13 +16,12 @@ template <int dim>
 Params<dim> read_parameters(const std::string& filename)
 {
     ParameterFileReader reader("cube_polynomial", filename);
-    const unsigned degree_levels =
-        reader.read_count("number of degree levels");
+    const unsigned degree_levels = reader.read_count("number of degree levels");
     const auto center_values =
         reader.read_finite_values(3, "polynomial center");
 
     Params<dim> params;
-    for (std::size_t coordinate = 0; coordinate < dim; ++coordinate) {
+    for (int coordinate = 0; coordinate < dim; ++coordinate) {
         params.center[coordinate] = center_values[coordinate];
     }
     params.coefficients_by_degree.clear();
@@ -30,10 +29,9 @@ Params<dim> read_parameters(const std::string& filename)
     for (unsigned degree = 0; degree < degree_levels; ++degree) {
         const std::size_t coefficient_count =
             degree_exponents<dim>(degree).size();
-        params.coefficients_by_degree.push_back(
-            reader.read_finite_values(
-                coefficient_count,
-                "degree " + std::to_string(degree) + " coefficients"));
+        params.coefficients_by_degree.push_back(reader.read_finite_values(
+            coefficient_count,
+            "degree " + std::to_string(degree) + " coefficients"));
     }
     reader.require_end();
     return params;
@@ -56,7 +54,7 @@ void CubePolynomial<dim>::initialize(const bpo::variables_map& params)
 
         std::cout << "Case 'cube_polynomial': read parameters:\n";
         std::cout << "  Center: (";
-        for (std::size_t coordinate = 0; coordinate < dim; ++coordinate) {
+        for (int coordinate = 0; coordinate < dim; ++coordinate) {
             if (coordinate > 0) {
                 std::cout << ", ";
             }
@@ -69,8 +67,7 @@ void CubePolynomial<dim>::initialize(const bpo::variables_map& params)
                 degree_exponents<dim>(static_cast<unsigned>(degree));
             for (std::size_t term = 0; term < exponents.size(); ++term) {
                 std::cout << "  Degree " << degree << " exponents (";
-                for (std::size_t coordinate = 0; coordinate < dim;
-                     ++coordinate) {
+                for (int coordinate = 0; coordinate < dim; ++coordinate) {
                     if (coordinate > 0) {
                         std::cout << ", ";
                     }
@@ -93,24 +90,24 @@ void CubePolynomial<dim>::initialize(const bpo::variables_map& params)
     this->bc_dirichlet_.push_back(dirichlet_bc<dim>{1, dirichlet1});
     this->bc_dirichlet_.push_back(dirichlet_bc<dim>{2, dirichlet2});
 
-    constexpr double tol = 1000*std::numeric_limits<double>::epsilon();
+    constexpr double tol = 1000 * std::numeric_limits<double>::epsilon();
     std::vector<typename DomainGeometry<dim>::bc_mark_desc> bcmarks;
-    bcmarks.push_back(std::make_pair(this->bc_dirichlet_[1].bc_id, 
-        [](const dealii::Point<dim>& p) {
-        if(std::abs(p[0] - (-1.0)) > tol) {
-            return true;
-        } else {
-            return false;
-        }
-        }));
-    bcmarks.push_back(std::make_pair(this->bc_dirichlet_[0].bc_id, 
-        [](const dealii::Point<dim>& p) {
-        if(std::abs(p[0] - (-1.0)) <= tol) {
-            return true;
-        } else {
-            return false;
-        }
-        }));
+    bcmarks.push_back(std::make_pair(this->bc_dirichlet_[1].bc_id,
+                                     [](const dealii::Point<dim>& p) {
+                                         if (std::abs(p[0] - (-1.0)) > tol) {
+                                             return true;
+                                         } else {
+                                             return false;
+                                         }
+                                     }));
+    bcmarks.push_back(std::make_pair(this->bc_dirichlet_[0].bc_id,
+                                     [](const dealii::Point<dim>& p) {
+                                         if (std::abs(p[0] - (-1.0)) <= tol) {
+                                             return true;
+                                         } else {
+                                             return false;
+                                         }
+                                     }));
     this->geom_ = std::make_shared<geom::Cube<dim>>(bcmarks);
 }
 

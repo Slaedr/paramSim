@@ -310,7 +310,7 @@ def setup_case(
                 ("num_modes", np.int32),
                 ("mode_coefficients", np.float32, (max_modes, 2)),
                 ("constant", np.float32),
-                ("wavelength", np.float32),
+                ("wavelength", np.float32, (case_data["dimension"],)),
             ]
         )
         sim_specs["in"].extend(
@@ -346,11 +346,11 @@ def setup_case(
         gen_specs["user"]["upper"]["constant"] = np.asarray(
             constant_upper, dtype=np.float32
         )
-        gen_specs["user"]["lower"]["wavelength"] = np.asarray(
-            wavelength_lower, dtype=np.float32
+        gen_specs["user"]["lower"]["wavelength"] = np.full(
+            case_data["dimension"], wavelength_lower, dtype=np.float32
         )
-        gen_specs["user"]["upper"]["wavelength"] = np.asarray(
-            wavelength_upper, dtype=np.float32
+        gen_specs["user"]["upper"]["wavelength"] = np.full(
+            case_data["dimension"], wavelength_upper, dtype=np.float32
         )
 
     elif case_type == "cube_polynomial":
@@ -535,8 +535,12 @@ def write_case_parameter_file(
         elif case_type == "cube_fourier":
             count = int(args["num_modes"])
             parameter_file.write(f"{count}\n")
+            header = [
+                args["constant"],
+                *args["wavelength"][:dimension],
+            ]
             parameter_file.write(
-                f"{args['constant']} {args['wavelength']}\n"
+                " ".join(str(value) for value in header) + "\n"
             )
             for index in range(count):
                 parameter_file.write(

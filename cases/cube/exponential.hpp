@@ -46,10 +46,9 @@ struct Params {
                   "Exponential parameters require dimension 2 or 3.");
 
     // Supplying two coordinates initializes z to zero when dim is three.
-    std::vector<GaussianCenter<dim>> centers{
-        {{{-1.0, -0.67}}, 0.27, 0.4},
-        {{{-1.0, -0.01}}, 0.35, 0.4},
-        {{{-1.0, 0.66}}, -0.34, 0.4}};
+    std::vector<GaussianCenter<dim>> centers{{{{-1.0, -0.67}}, 0.27, 0.4},
+                                             {{{-1.0, -0.01}}, 0.35, 0.4},
+                                             {{{-1.0, 0.66}}, -0.34, 0.4}};
 };
 
 /**
@@ -108,7 +107,7 @@ private:
 /**
  * @brief Evaluates the Gaussian boundary profile on the cube input face.
  *
- * The current profile uses x and y in both supported dimensions.
+ * The profile uses every coordinate in the active spatial dimension.
  *
  * @tparam dim Active spatial dimension; must be 2 or 3.
  */
@@ -135,18 +134,16 @@ public:
     double value(const Point<dim>& p,
                  const unsigned int /*component*/ = 0) const override
     {
-        constexpr std::size_t profile_dim = 2;
         double sum = 0.0;
         for (const auto& center : params_.centers) {
             double distance_square = 0.0;
-            for (std::size_t idim = 0; idim < profile_dim; ++idim) {
+            for (int idim = 0; idim < dim; ++idim) {
                 distance_square +=
                     std::pow(p[idim] - center.coordinates[idim], 2);
             }
             const double width_square = center.width * center.width;
             const double multiplier =
-                1.0 / std::pow(2.0 * numbers::PI * width_square,
-                               profile_dim / 2.0);
+                1.0 / std::pow(2.0 * numbers::PI * width_square, dim / 2.0);
             sum += center.coefficient *
                    std::exp(-distance_square / width_square) * multiplier;
         }

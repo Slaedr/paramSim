@@ -1,6 +1,7 @@
 #ifndef PARAMSIM_CASES_CUBE_FOURIER_HPP_
 #define PARAMSIM_CASES_CUBE_FOURIER_HPP_
 
+#include <array>
 #include <cstddef>
 #include <string>
 #include <vector>
@@ -40,7 +41,11 @@ struct Params {
 
     std::vector<Mode> modes{{1.0, 1.0}, {1.0, 1.0}};
     double constant{1.0};
-    double fundamental_wavelength{1.0};
+    std::array<double, dim> fundamental_wavelength = [] {
+        std::array<double, dim> values{};
+        values.fill(1.0);
+        return values;
+    }();
 };
 
 /**
@@ -55,7 +60,10 @@ template <int dim>
 Params<dim> read_parameters(const std::string& filename);
 
 /**
- * @brief Evaluates a Fourier boundary profile along the y coordinate.
+ * @brief Evaluates a multidimensional Fourier boundary profile.
+ *
+ * Each mode is the sum of a product of directional cosine terms and a
+ * product of directional sine terms.
  *
  * @tparam dim Active spatial dimension; must be 2 or 3.
  */
@@ -83,14 +91,19 @@ public:
                  const unsigned int /*component*/ = 0) const override
     {
         double sum = params_.constant;
-        const double fundamental_angular_frequency =
-            2.0 * pi / params_.fundamental_wavelength;
         for (std::size_t index = 0; index < params_.modes.size(); ++index) {
             const double frequency = static_cast<double>(index + 1);
-            const double angle =
-                frequency * fundamental_angular_frequency * p[1];
-            sum += params_.modes[index].cosine_coefficient * std::cos(angle) +
-                   params_.modes[index].sine_coefficient * std::sin(angle);
+            double cosine_product = 1.0;
+            double sine_product = 1.0;
+            for (int idim = 0; idim < dim; ++idim) {
+                const double angle = frequency * 2.0 * pi /
+                                     params_.fundamental_wavelength[idim] *
+                                     p[idim];
+                cosine_product *= std::cos(angle);
+                sine_product *= std::sin(angle);
+            }
+            sum += params_.modes[index].cosine_coefficient * cosine_product +
+                   params_.modes[index].sine_coefficient * sine_product;
         }
         return sum;
     }
@@ -111,7 +124,7 @@ namespace bpo = boost::program_options;
 template <int dim>
 class CubeFourier final : public Case<dim> {
 public:
-    void initialize(const bpo::variables_map &) override;
+    void initialize(const bpo::variables_map&) override;
 };
 
 } // namespace cube

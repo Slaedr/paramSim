@@ -29,9 +29,8 @@ Ensemble JSON files likewise require an integer `"dimension": 2` or
 Each refinement cycle writes the complete solution volume to
 `<output-prefix>-<cycle>.vtk`. Boundary data is not written to a separate file.
 
-### Current 3D limitations
+### 3D boundary profiles
 
 The manufactured minimal-surface verification cases support both 2D and 3D.
-Existing parameterized boundary profiles are extruded in the third direction;
-true two-coordinate B2D parameterizations, beginning with `cube_exponential`,
-are future work.
+The parameterized cube exponential and Fourier profiles use every active
+coordinate, providing non-extruded boundary data in 3D.

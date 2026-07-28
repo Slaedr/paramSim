@@ -61,8 +61,7 @@ create_cube_case(const std::string& case_name,
     params.case_str = case_name;
     if (parameter_file != nullptr) {
         const char *args[] = {"prog", "--case", case_name.c_str(),
-                              "--case_params_file",
-                              parameter_file->c_str()};
+                              "--case_params_file", parameter_file->c_str()};
         return ps::create_case<dim>(params, 5, args);
     }
 
@@ -167,7 +166,7 @@ TEST(CubeCaseParameters, UsesParameterFileForSelectedCaseAndDimension)
     TemporaryCaseParameterFile exponential_file("1\n"
                                                 "0 0 0 2 1\n");
     TemporaryCaseParameterFile fourier_file("1\n"
-                                            "5 2\n"
+                                            "5 2 3 4\n"
                                             "0 0\n");
     TemporaryCaseParameterFile polynomial_file("2\n"
                                                "1 2 3\n"

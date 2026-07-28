@@ -13,3 +13,10 @@ deal_ii_setup_target(cube_parameters_test)
 target_link_libraries(cube_parameters_test paramsim_cases utils
                       GTest::gtest_main)
 gtest_discover_tests(cube_parameters_test)
+
+add_executable(cube_exponential_test cube_exponential.cpp)
+deal_ii_setup_target(cube_exponential_test)
+target_link_libraries(
+    cube_exponential_test paramsim_dpdes paramsim_solvers paramsim_cases
+    paramsim_utils utils GTest::gtest_main)
+gtest_discover_tests(cube_exponential_test)

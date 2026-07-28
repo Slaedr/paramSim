@@ -197,7 +197,7 @@ TEST(ExponentialParameters, ParsesRuntimeSizedCentersInBothDimensions)
     EXPECT_DOUBLE_EQ(params_3d.centers[1].width, 0.8);
 }
 
-TEST(ExponentialParameters, UsesIndependentWidthsAndIgnoresZ)
+TEST(ExponentialParameters, UsesIndependentWidthsAndAllActiveCoordinates)
 {
     TemporaryParameterFile file("2\n"
                                 "0 0 -1 2 0.5\n"
@@ -207,9 +207,13 @@ TEST(ExponentialParameters, UsesIndependentWidthsAndIgnoresZ)
     const exponential::DirichletIn<3> profile_3d(
         exponential::read_parameters<3>(file.path()));
 
-    const double expected = 3.5 / dealii::numbers::PI;
-    EXPECT_NEAR(profile_2d.value(dealii::Point<2>{0.0, 0.0}), expected, 1e-14);
-    EXPECT_NEAR(profile_3d.value(dealii::Point<3>{0.0, 0.0, 0.25}), expected,
+    const double expected_2d = 3.5 / dealii::numbers::PI;
+    const double expected_3d =
+        2.0 * std::exp(-6.25) / std::pow(0.5 * dealii::numbers::PI, 1.5) -
+        std::exp(-0.5625) / std::pow(2.0 * dealii::numbers::PI, 1.5);
+    EXPECT_NEAR(profile_2d.value(dealii::Point<2>{0.0, 0.0}), expected_2d,
+                1e-14);
+    EXPECT_NEAR(profile_3d.value(dealii::Point<3>{0.0, 0.0, 0.25}), expected_3d,
                 1e-14);
 }
 
@@ -254,19 +258,27 @@ TEST(ExponentialParameters, RejectsInvalidCoordinatesAndWidths)
 
 TEST(FourierParameters, ParsesRuntimeSizedModesInBothDimensions)
 {
-    TemporaryParameterFile file("3\n"
-                                "1.5 0.75\n"
-                                "1 -2\n"
-                                "3 -4\n"
-                                "5 -6\n");
+    TemporaryParameterFile file_2d("3\n"
+                                   "1.5 0.75 1.25\n"
+                                   "1 -2\n"
+                                   "3 -4\n"
+                                   "5 -6\n");
+    TemporaryParameterFile file_3d("3\n"
+                                   "1.5 0.75 1.25 2\n"
+                                   "1 -2\n"
+                                   "3 -4\n"
+                                   "5 -6\n");
 
-    const auto params_2d = fourier::read_parameters<2>(file.path());
-    const auto params_3d = fourier::read_parameters<3>(file.path());
+    const auto params_2d = fourier::read_parameters<2>(file_2d.path());
+    const auto params_3d = fourier::read_parameters<3>(file_3d.path());
 
     ASSERT_EQ(params_2d.modes.size(), 3);
     ASSERT_EQ(params_3d.modes.size(), 3);
     EXPECT_DOUBLE_EQ(params_2d.constant, 1.5);
-    EXPECT_DOUBLE_EQ(params_3d.fundamental_wavelength, 0.75);
+    EXPECT_EQ(params_2d.fundamental_wavelength,
+              (std::array<double, 2>{{0.75, 1.25}}));
+    EXPECT_EQ(params_3d.fundamental_wavelength,
+              (std::array<double, 3>{{0.75, 1.25, 2.0}}));
     EXPECT_DOUBLE_EQ(params_2d.modes[0].cosine_coefficient, 1.0);
     EXPECT_DOUBLE_EQ(params_2d.modes[0].sine_coefficient, -2.0);
     EXPECT_DOUBLE_EQ(params_3d.modes[2].cosine_coefficient, 5.0);
@@ -275,19 +287,22 @@ TEST(FourierParameters, ParsesRuntimeSizedModesInBothDimensions)
 
 TEST(FourierParameters, AssignsRowsToFrequenciesStartingAtOne)
 {
-    TemporaryParameterFile file("2\n"
-                                "0 2\n"
-                                "1 0\n"
-                                "1 0\n");
+    TemporaryParameterFile file_2d("2\n"
+                                   "0 2 4\n"
+                                   "1 0\n"
+                                   "1 0\n");
+    TemporaryParameterFile file_3d("2\n"
+                                   "0 2 4 8\n"
+                                   "1 0\n"
+                                   "1 0\n");
     const fourier::DirichletIn<2> profile_2d(
-        fourier::read_parameters<2>(file.path()));
+        fourier::read_parameters<2>(file_2d.path()));
     const fourier::DirichletIn<3> profile_3d(
-        fourier::read_parameters<3>(file.path()));
+        fourier::read_parameters<3>(file_3d.path()));
 
-    const double expected = std::sqrt(0.5);
-    EXPECT_NEAR(profile_2d.value(dealii::Point<2>{0.0, 0.25}), expected, 1e-14);
-    EXPECT_NEAR(profile_3d.value(dealii::Point<3>{0.0, 0.25, 0.8}), expected,
+    EXPECT_NEAR(profile_2d.value(dealii::Point<2>{0.0, 0.5}), std::sqrt(0.5),
                 1e-14);
+    EXPECT_NEAR(profile_3d.value(dealii::Point<3>{0.0, 0.5, 1.0}), 0.5, 1e-14);
 }
 
 TEST(FourierParameters, PreservesBuiltInDefaults)
@@ -298,18 +313,34 @@ TEST(FourierParameters, PreservesBuiltInDefaults)
     ASSERT_EQ(params_2d.modes.size(), 2);
     ASSERT_EQ(params_3d.modes.size(), 2);
     EXPECT_DOUBLE_EQ(params_2d.constant, 1.0);
-    EXPECT_DOUBLE_EQ(params_3d.fundamental_wavelength, 1.0);
+    EXPECT_EQ(params_2d.fundamental_wavelength,
+              (std::array<double, 2>{{1.0, 1.0}}));
+    EXPECT_EQ(params_3d.fundamental_wavelength,
+              (std::array<double, 3>{{1.0, 1.0, 1.0}}));
     EXPECT_DOUBLE_EQ(params_2d.modes[0].cosine_coefficient, 1.0);
     EXPECT_DOUBLE_EQ(params_2d.modes[0].sine_coefficient, 1.0);
     EXPECT_DOUBLE_EQ(params_3d.modes[1].cosine_coefficient, 1.0);
     EXPECT_DOUBLE_EQ(params_3d.modes[1].sine_coefficient, 1.0);
 }
 
+TEST(FourierParameters, EvaluatesSineAndCosineProductsInAllDirections)
+{
+    fourier::Params<3> params;
+    params.constant = 0.25;
+    params.fundamental_wavelength = {{2.0, 4.0, 8.0}};
+    params.modes = {{1.0, 2.0}};
+    const fourier::DirichletIn<3> profile(params);
+
+    const double expected = 0.5 + std::sqrt(3.0) / 2.0;
+    EXPECT_NEAR(profile.value(dealii::Point<3>{1.0 / 3.0, 0.5, 1.0}), expected,
+                1e-14);
+}
+
 TEST(FourierParameters, RejectsMalformedRowsAndTrailingData)
 {
     for (const std::string contents :
-         {"0\n", "1\n1\n1 2\n", "1\n1 0.5 extra\n1 2\n", "2\n1 0.5\n1 2\n",
-          "1\n1 0.5\n1 2\ntrailing\n"}) {
+         {"0\n", "1\n1 0.5\n1 2\n", "1\n1 0.5 0.75 extra\n1 2\n",
+          "2\n1 0.5 0.75\n1 2\n", "1\n1 0.5 0.75\n1 2\ntrailing\n"}) {
         TemporaryParameterFile file(contents);
         EXPECT_THROW(fourier::read_parameters<2>(file.path()),
                      std::runtime_error);
@@ -318,7 +349,8 @@ TEST(FourierParameters, RejectsMalformedRowsAndTrailingData)
 
 TEST(FourierParameters, RejectsNonpositiveWavelengths)
 {
-    for (const std::string contents : {"1\n1 0\n1 2\n", "1\n1 -0.5\n1 2\n"}) {
+    for (const std::string contents :
+         {"1\n1 1 0 1\n1 2\n", "1\n1 1 1 -0.5\n1 2\n"}) {
         TemporaryParameterFile file(contents);
         EXPECT_THROW(fourier::read_parameters<3>(file.path()),
                      std::runtime_error);

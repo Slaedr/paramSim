@@ -300,7 +300,11 @@ class HistoryFieldTests(unittest.TestCase):
             history_dtype["mode_coefficients"].shape, (6, 2)
         )
         self.assertEqual(history_dtype["constant"].shape, ())
-        self.assertEqual(history_dtype["wavelength"].shape, ())
+        self.assertEqual(history_dtype["wavelength"].shape, (3,))
+        np.testing.assert_array_equal(
+            gen_specs["user"]["lower"]["wavelength"],
+            np.full(3, 0.25, dtype=np.float32),
+        )
         np.testing.assert_array_equal(
             gen_specs["user"]["lower"]["mode_coefficients"][:, 0],
             np.full(6, -1.0, dtype=np.float32),
@@ -462,11 +466,10 @@ class ParameterFileTests(unittest.TestCase):
     def test_writes_only_active_fourier_modes(self):
         args = {
             "num_modes": 2,
-            "mode_coefficients": np.asarray(
-                [[1.0, -2.0], [3.0, -4.0], [99.0, 99.0]]
-            ),
+            "mode_coefficients":
+                [[1.0, -2.0], [3.0, -4.0], [99.0, 99.0]],
             "constant": 1.5,
-            "wavelength": 0.75,
+            "wavelength": [0.75, 1.25, 2.0],
         }
 
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -476,7 +479,7 @@ class ParameterFileTests(unittest.TestCase):
             self.assertEqual(
                 path.read_text(encoding="utf-8"),
                 "2\n"
-                "1.5 0.75\n"
+                "1.5 0.75 1.25 2.0\n"
                 "1.0 -2.0\n"
                 "3.0 -4.0\n",
             )
