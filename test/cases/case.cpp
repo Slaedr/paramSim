@@ -212,6 +212,40 @@ TEST(CubeCaseParameters, UsesBuiltInDefaultsWhenOptionIsOmitted)
         cube::polynomial::DirichletIn<2>().value(point));
 }
 
+TEST(CubeCaseParameters, HasExactlyOneDirichletRegion)
+{
+    for (const std::string case_name :
+         {"cube_exponential", "cube_fourier", "cube_polynomial"}) {
+        const auto case2 = create_cube_case<2>(case_name);
+        const auto case3 = create_cube_case<3>(case_name);
+
+        EXPECT_EQ(case2->get_dirichlet_bcs().size(), 1u) << case_name;
+        EXPECT_EQ(case3->get_dirichlet_bcs().size(), 1u) << case_name;
+    }
+}
+
+TEST(CubeCaseParameters, ProfileAppliesToEveryBoundaryFace)
+{
+    for (const std::string case_name :
+         {"cube_exponential", "cube_fourier", "cube_polynomial"}) {
+        const auto case2 = create_cube_case<2>(case_name);
+        const auto bc_id = case2->get_dirichlet_bcs().front().bc_id;
+
+        dealii::Triangulation<2> tria;
+        case2->get_geometry()->generate_grid(tria, 3);
+        case2->get_geometry()->set_boundary_ids(tria);
+
+        for (const auto& cell : tria.cell_iterators()) {
+            for (const auto& face : cell->face_iterators()) {
+                if (!face->at_boundary()) {
+                    continue;
+                }
+                EXPECT_EQ(face->boundary_id(), bc_id) << case_name;
+            }
+        }
+    }
+}
+
 TEST(CubeCaseParameters, ReportsMalformedFilesForSelectedCase)
 {
     TemporaryCaseParameterFile file("0\n");

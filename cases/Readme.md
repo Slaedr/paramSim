@@ -1,8 +1,8 @@
 # Cube case parameters
 
 The `cube_exponential`, `cube_fourier`, and `cube_polynomial` cases apply a
-configurable Dirichlet profile to the cube face at \(x=-1\). The remaining
-faces use the case's constant boundary value.
+configurable Dirichlet profile, evaluated over the cube's full coordinate
+range, as the boundary condition on every face of the cube.
 
 ## Direct `run_case` usage
 
