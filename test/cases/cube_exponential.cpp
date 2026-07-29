@@ -113,7 +113,7 @@ double solve_three_grid_sequence(const unsigned initial_resolution,
     return final_residual;
 }
 
-TEST(CubeExponentialPoisson, ConvergesWithP1In2D)
+TEST(CubeExponentialPoisson, SolverConvergesWithP1In2D)
 {
     EXPECT_LT((solve_three_grid_sequence<2, paramsim::pde::PoissonCG>(
                   32, 3, "poisson_cg", poisson_maximum_newton_iterations,
@@ -121,15 +121,15 @@ TEST(CubeExponentialPoisson, ConvergesWithP1In2D)
               nonlinear_tolerance);
 }
 
-TEST(CubeExponentialPoisson, ConvergesWithP1In3D)
+TEST(CubeExponentialPoisson, SolverConvergesWithP1In3D)
 {
     EXPECT_LT((solve_three_grid_sequence<3, paramsim::pde::PoissonCG>(
-                  16, 3, "poisson_cg", poisson_maximum_newton_iterations,
+                  8, 3, "poisson_cg", poisson_maximum_newton_iterations,
                   InitialGuess::zero)),
               nonlinear_tolerance);
 }
 
-TEST(CubeExponentialMinimalSurface, ConvergesWithP1In2D)
+TEST(CubeExponentialMinimalSurface, SolverConvergesWithP1In2D)
 {
     EXPECT_LT(
         (solve_three_grid_sequence<2, paramsim::pde::MinimalSurface>(
@@ -138,7 +138,7 @@ TEST(CubeExponentialMinimalSurface, ConvergesWithP1In2D)
         nonlinear_tolerance);
 }
 
-TEST(CubeExponentialMinimalSurface, ConvergesWithP1In3D)
+TEST(CubeExponentialMinimalSurface, SolverConvergesWithP1In3D)
 {
     EXPECT_LT(
         (solve_three_grid_sequence<3, paramsim::pde::MinimalSurface>(

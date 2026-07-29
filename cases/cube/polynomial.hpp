@@ -11,8 +11,8 @@
 #include <boost/program_options/variables_map.hpp>
 #include <deal.II/grid/grid_generator.h>
 
-#include "../case.hpp"
 #include "case_parameters.hpp"
+#include "cube_case.hpp"
 #include "exponential.hpp"
 
 namespace paramsim {
@@ -127,9 +127,6 @@ public:
 template <int dim>
 using RightHandSide = exponential::RightHandSide<dim>;
 
-template <int dim>
-using DirichletConstant = exponential::DirichletConstant<dim>;
-
 } // namespace polynomial
 
 namespace bpo = boost::program_options;
@@ -140,7 +137,7 @@ namespace bpo = boost::program_options;
  * @tparam dim Active spatial dimension; must be 2 or 3.
  */
 template <int dim>
-class CubePolynomial final : public Case<dim> {
+class CubePolynomial final : public CubeCase<dim> {
 public:
     /**
      * @brief Initializes the polynomial cube case.

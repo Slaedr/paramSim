@@ -10,7 +10,7 @@
 #include <boost/program_options/variables_map.hpp>
 #include <deal.II/grid/grid_generator.h>
 
-#include "../case.hpp"
+#include "cube_case.hpp"
 
 namespace paramsim {
 namespace cases {
@@ -153,14 +153,12 @@ public:
     const Params<dim> params_;
 };
 
-template <int dim>
-using DirichletConstant = cases::DirichletConstant<dim>;
 } // namespace exponential
 
 namespace bpo = boost::program_options;
 
 template <int dim>
-class CubeExponential final : public Case<dim> {
+class CubeExponential final : public CubeCase<dim> {
 public:
     void initialize(const bpo::variables_map&) override;
 };

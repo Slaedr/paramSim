@@ -2,8 +2,6 @@
 
 #include "case_parameters.hpp"
 
-#include <limits>
-
 namespace paramsim {
 namespace cases {
 namespace cube {
@@ -85,30 +83,7 @@ void CubePolynomial<dim>::initialize(const bpo::variables_map& params)
 
     this->rhs_ = std::make_shared<polynomial::RightHandSide<dim>>();
 
-    auto dirichlet2 = std::make_shared<polynomial::DirichletConstant<dim>>(1.0);
-
-    this->bc_dirichlet_.push_back(dirichlet_bc<dim>{1, dirichlet1});
-    this->bc_dirichlet_.push_back(dirichlet_bc<dim>{2, dirichlet2});
-
-    constexpr double tol = 1000 * std::numeric_limits<double>::epsilon();
-    std::vector<typename DomainGeometry<dim>::bc_mark_desc> bcmarks;
-    bcmarks.push_back(std::make_pair(this->bc_dirichlet_[1].bc_id,
-                                     [](const dealii::Point<dim>& p) {
-                                         if (std::abs(p[0] - (-1.0)) > tol) {
-                                             return true;
-                                         } else {
-                                             return false;
-                                         }
-                                     }));
-    bcmarks.push_back(std::make_pair(this->bc_dirichlet_[0].bc_id,
-                                     [](const dealii::Point<dim>& p) {
-                                         if (std::abs(p[0] - (-1.0)) <= tol) {
-                                             return true;
-                                         } else {
-                                             return false;
-                                         }
-                                     }));
-    this->geom_ = std::make_shared<geom::Cube<dim>>(bcmarks);
+    this->initialize_dirichlet_everywhere(dirichlet1);
 }
 
 template class CubePolynomial<2>;

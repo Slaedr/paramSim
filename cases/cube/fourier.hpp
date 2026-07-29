@@ -11,6 +11,7 @@
 #include <deal.II/grid/grid_generator.h>
 
 #include "../case.hpp"
+#include "cube_case.hpp"
 #include "exponential.hpp"
 
 namespace paramsim {
@@ -114,15 +115,12 @@ public:
 template <int dim>
 using RightHandSide = exponential::RightHandSide<dim>;
 
-template <int dim>
-using DirichletConstant = cases::DirichletConstant<dim>;
-
 } // namespace fourier
 
 namespace bpo = boost::program_options;
 
 template <int dim>
-class CubeFourier final : public Case<dim> {
+class CubeFourier final : public CubeCase<dim> {
 public:
     void initialize(const bpo::variables_map&) override;
 };
