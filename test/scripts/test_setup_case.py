@@ -40,6 +40,28 @@ class CommonArgsTests(unittest.TestCase):
             "--refine_levels 2 --initial_resolution 8 --output_prefix field",
         )
 
+    def test_init_pde_is_omitted_by_default(self):
+        self.assertNotIn(
+            "--init_pde",
+            get_common_args_str(self.base_case()),
+        )
+
+    def test_init_pde_is_forwarded(self):
+        case_data = self.base_case()
+        case_data["init_pde"] = "none"
+
+        self.assertTrue(
+            get_common_args_str(case_data).endswith(" --init_pde none")
+        )
+
+    def test_init_pde_must_be_a_nonempty_string(self):
+        for value in (None, "", " ", 1, False):
+            with self.subTest(value=value):
+                case_data = self.base_case()
+                case_data["init_pde"] = value
+                with self.assertRaisesRegex(ValueError, "non-empty string"):
+                    get_common_args_str(case_data)
+
     def test_dimension_is_required(self):
         case_data = self.base_case()
         del case_data["dimension"]

@@ -12,9 +12,20 @@ void add_common_options(bpo::options_description& desc, const std::string help_m
     desc.add_options()
         ("help", help_msg.c_str())
         ("case", bpo::value<std::string>(),
-         "Name of the PDE case to solve: 'poisson_verify', 'cube_exponential', 'minimal_surface_exp'")
+         "Name of the PDE case to solve: 'poisson_verify', 'cube_exponential', 'cube_fourier', "
+         "'cube_polynomial', 'minimal_surface_ball_verify', 'minimal_surface_cube_verify', "
+         "'minimal_surface_disk_sinusoidal', 'minimal_surface_cube_sinusoidal', "
+         "'minimal_surface_cube_polynomial', 'minimal_surface_cube_gaussians'")
         ("pde", bpo::value<std::string>(),
          "Type of PDE solver to use: 'poisson_cg', 'minimal_surface'")
+        ("init_pde", bpo::value<std::string>()->default_value(""),
+         "PDE solved first on the initial grid to initialize the main solve, using the same case. "
+         "Leave empty to use the default for the chosen --pde ('minimal_surface' defaults to "
+         "'poisson_cg'); set to 'none' to start the main solve from zero")
+        ("init_tolerance", bpo::value<double>()->default_value(1e-4),
+         "Tolerance for convergence of the initialization solve")
+        ("init_max_its", bpo::value<int>()->default_value(20),
+         "Maximum iterations for the initialization solve")
         ("dimension", bpo::value<unsigned int>(),
          "Spatial dimension of the problem (required; supported values: 2, 3)")
         ("case_params_file", bpo::value<std::string>(),
@@ -81,7 +92,10 @@ CommonParams get_common_params(const bpo::variables_map& common_cmdmap)
         /*outpath =           */ common_cmdmap["output_prefix"].as<std::string>(),
         /*is_adaptive =       */ common_cmdmap["is_adaptive"].as<bool>(),
         /*tolerance =         */ common_cmdmap["tolerance"].as<double>(),
-        /*max_its =           */ common_cmdmap["max_its"].as<int>()
+        /*max_its =           */ common_cmdmap["max_its"].as<int>(),
+        /*init_pde_str =      */ common_cmdmap["init_pde"].as<std::string>(),
+        /*init_tolerance =    */ common_cmdmap["init_tolerance"].as<double>(),
+        /*init_max_its =      */ common_cmdmap["init_max_its"].as<int>()
     };
 }
 

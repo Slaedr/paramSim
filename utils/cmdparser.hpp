@@ -22,6 +22,9 @@ struct CommonParams {
     bool is_adaptive;
     double tolerance;
     int max_outer_its;
+    std::string init_pde_str;
+    double init_tolerance;
+    int init_max_its;
 };
 
 namespace bpo = boost::program_options;

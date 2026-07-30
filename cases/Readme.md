@@ -123,16 +123,24 @@ for complete files.
 
 An ensemble uses two JSON files:
 
-1. A common configuration containing the PDE, dimension, resolution, and
-   case name.
+1. A common configuration containing the PDE, dimension, resolution, case
+   name, and an optional initialization PDE.
 2. A case-specific range configuration referenced from the common file:
 
 ```json
 {
+  "pde": "minimal_surface",
+  "dimension": 2,
+  "resolution": 63,
   "case_type": "cube_exponential",
+  "init_pde": "poisson_cg",
   "case_params_ranges_file": "poisson_exp_ranges.json"
 }
 ```
+
+A common configuration may omit `init_pde` to use the per-PDE default.
+Setting it to `"none"` disables the initialization solve. Any other
+non-empty value is passed to `run_case` through `--init_pde`.
 
 A relative `case_params_ranges_file` path is resolved relative to the common
 JSON file. The ensemble driver samples the ranges and writes a local

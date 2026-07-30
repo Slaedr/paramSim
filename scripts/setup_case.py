@@ -189,7 +189,8 @@ def get_common_args_str(case_data : dict) -> str:
         Command-line fragment containing the common run settings.
 
     Raises:
-        ValueError: If the configured dimension is invalid or absent.
+        ValueError: If the configured dimension or initialization PDE is
+            invalid.
     """
     if "dimension" not in case_data:
         raise ValueError("The case JSON must define dimension as 2 or 3")
@@ -197,6 +198,12 @@ def get_common_args_str(case_data : dict) -> str:
     dimension = case_data["dimension"]
     if type(dimension) is not int or dimension not in (2, 3):
         raise ValueError("dimension must be the integer 2 or 3")
+
+    init_pde = case_data.get("init_pde")
+    if "init_pde" in case_data and (
+        not isinstance(init_pde, str) or not init_pde.strip()
+    ):
+        raise ValueError("init_pde must be a non-empty string")
 
     refine_levels = case_data.get("refine_levels", 1)
     return (
@@ -206,6 +213,7 @@ def get_common_args_str(case_data : dict) -> str:
         + " --refine_levels " + str(refine_levels)
         + " --initial_resolution " + str(case_data["resolution"])
         + " --output_prefix field"
+        + (" --init_pde " + init_pde if init_pde is not None else "")
     )
 
 #TODO: Replace the if-blocks in this file with a set of classes
