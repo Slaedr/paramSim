@@ -38,7 +38,7 @@ TEST(CubeFourierMinimalSurface, SolverConvergesWithP1In3D)
 {
     EXPECT_LT((solve_grid_sequence<3, paramsim::cases::cube::CubeFourier,
                                    paramsim::pde::MinimalSurface>(
-                  8, 2, "minimal_surface",
+                  16, 2, "minimal_surface",
                   minimal_surface_maximum_newton_iterations)),
               nonlinear_tolerance);
 }
