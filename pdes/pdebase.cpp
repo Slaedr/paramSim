@@ -1,6 +1,7 @@
 
 #include "pdebase.hpp"
 
+#include <cmath>
 #include <stdexcept>
 #include <memory>
 #include <iostream>
@@ -244,10 +245,8 @@ scalar_type DiscretePDE<dim, FE_t>::compute_lp_norm(const vector_type& u, const 
     const dealii::QGauss<dim> quadrature_formula(fe_.degree + 1);
     dealii::FEValues<dim> fe_values(fe_, quadrature_formula,
                                     dealii::update_JxW_values | dealii::update_values);
-    const auto dofs_per_cell = fe_.n_dofs_per_cell();
     const auto n_q_points = fe_values.get_quadrature().size();
     std::vector<scalar_type> u_quadrature_values(n_q_points);
-    std::vector<dealii::types::global_dof_index> local_dof_indices(dofs_per_cell);
 
     scalar_type normp = 0;
 
@@ -256,10 +255,7 @@ scalar_type DiscretePDE<dim, FE_t>::compute_lp_norm(const vector_type& u, const 
         fe_values.reinit(cell);
         fe_values.get_function_values(u, u_quadrature_values);
         for (unsigned int q = 0; q < n_q_points; ++q) {
-            cell->get_dof_indices(local_dof_indices);
-            for (unsigned int i = 0; i < dofs_per_cell; ++i) {
-                normp += std::pow(u_quadrature_values[i], p) * fe_values.JxW(q);
-            }
+            normp += std::pow(std::abs(u_quadrature_values[q]), p) * fe_values.JxW(q);
         }
     }
 

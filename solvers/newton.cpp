@@ -14,6 +14,11 @@ namespace solver {
 
 void NewtonSolver::linear_solve(const int i_iter)
 {
+    // Start every linear solve from zero. The iterative solvers below treat the
+    // incoming vector as an initial guess, and du_ otherwise still holds the
+    // previous Newton iteration's direction.
+    du_ = 0;
+
     const auto max_its = std::min(
         1000, static_cast<int>(i_max_its_ * std::pow(r_base_, i_iter)));
     const double i_tol_exp = std::log10(i_tol_);
@@ -58,12 +63,13 @@ void NewtonSolver::reinit()
     system_matrix_.reinit(sparsity_pattern_);
 }
 
-void NewtonSolver::solve(vector_type& u)
+NewtonResult NewtonSolver::solve(vector_type& u)
 {
     double cur_norm = 1.0;
+    int i_iter = 0;
     pde_->set_boundary_values(u);
 
-    for (int i_iter = 0; i_iter < sparams_.max_its; i_iter++) {
+    for (i_iter = 0; i_iter < sparams_.max_its; i_iter++) {
         std::cout << "  Newton: iteration " << i_iter << ", ";
 
         // assemble Jacobian and residual
@@ -80,30 +86,50 @@ void NewtonSolver::solve(vector_type& u)
         // check convergence
         if (cur_norm < sparams_.tolerance) {
             std::cout << "  Newton: converged." << std::endl;
-            break;
+            return {true, i_iter, cur_norm};
         }
 
         // linear solve
         linear_solve(i_iter);
         pde_->impose_constraints(du_);
 
-        // update
-        const double alpha = determine_step_length(u, cur_norm);
-        u.add(alpha, du_);
+        // update, but only along a direction that actually reduces the residual
+        const auto step = determine_step_length(u, cur_norm);
+        if (!step.success) {
+            std::cout << "  Newton: no acceptable step found; stopping at a "
+                         "residual norm of "
+                      << cur_norm << "." << std::endl;
+            return {false, i_iter, cur_norm};
+        }
+        u.add(step.lambda, du_);
+        cur_norm = step.norm;
     }
+
+    // The final step of the loop above may itself have reached the tolerance,
+    // in which case the state being returned is converged even though the
+    // iteration ran out of its budget before it could re-check.
+    if (cur_norm < sparams_.tolerance) {
+        std::cout << "  Newton: converged." << std::endl;
+        return {true, i_iter, cur_norm};
+    }
+
+    std::cout << "  Newton: reached the maximum of " << sparams_.max_its
+              << " iterations without converging." << std::endl;
+    return {false, i_iter, cur_norm};
 }
 
-double NewtonSolver::determine_step_length(const vector_type& u,
-                                           const double rnorm_0)
+NewtonSolver::StepSearchResult
+NewtonSolver::determine_step_length(const vector_type& u, const double rnorm_0)
 {
-    /* For now, this is a very simple monotone line search.
+    /* Backtracking line search with an Armijo-type sufficient-decrease
+     * condition. Only step lengths that have actually been evaluated are ever
+     * returned, and a search that finds nothing reports failure instead of
+     * handing back a step that increases the residual.
      * Can use CP line search from Brune et al., SIAM Review, 2025.
      */
-    const int max_its = 5;
     double lambda = 1.0;
-    double final_norm = 100.0;
     dealii::Vector<scalar_type> y(u.size());
-    for (int i = 0; i < max_its; i++) {
+    for (int i = 0; i < max_backtracks_; i++) {
         // compute new point: y <- du
         y = du_;
         // y <- u + ly
@@ -112,20 +138,20 @@ double NewtonSolver::determine_step_length(const vector_type& u,
         pde_->evaluate_residual(y, rhs_);
         pde_->apply_zero_boundary_values(rhs_);
 
-        final_norm = pde_->compute_lp_norm(rhs_, 2);
-        std::cout << "  Newton:     line search: current norm = " << final_norm
-                  << std::endl;
-        if (final_norm < rnorm_0) {
-            break;
-        } else {
-            lambda *= 0.66;
+        const double trial_norm = pde_->compute_lp_norm(rhs_, 2);
+        std::cout << "  Newton:     line search: step length " << lambda
+                  << ", current norm = " << trial_norm << std::endl;
+
+        if (trial_norm <= (1.0 - c_armijo_ * lambda) * rnorm_0) {
+            std::cout << "  Newton:   step length: " << lambda << std::endl;
+            return {lambda, true, trial_norm};
         }
+        lambda *= backtrack_factor_;
     }
-    std::cout << "  Newton:   step length: " << lambda << std::endl;
-    if (final_norm > rnorm_0) {
-        std::cout << "  Newton: Line search failed!" << std::endl;
-    }
-    return lambda;
+
+    std::cout << "  Newton: Line search failed! No step length down to "
+              << lambda << " gave sufficient decrease." << std::endl;
+    return {0.0, false, rnorm_0};
 }
 
 } // namespace solver

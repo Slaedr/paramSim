@@ -31,8 +31,27 @@ run_grid_refinement(const PDEParams& params, const SolverParams& sparams,
     for (int imesh = 0; imesh < params.refine_levels;
          imesh++, resolution *= 2) {
         solver.reinit();
-        solver.solve(u);
+        const auto result = solver.solve(u);
         pde->output_results(imesh, u);
+        if (!result.converged) {
+            // On an intermediate level a partially converged state is still a
+            // usable starting point for the next, finer grid. On the final
+            // level it is the answer, and an unconverged answer must not be
+            // mistaken for data.
+            if (imesh == params.refine_levels - 1) {
+                throw std::runtime_error(
+                    "The nonlinear solve did not converge on the final "
+                    "refinement level (" +
+                    std::to_string(imesh) + "): residual norm " +
+                    std::to_string(result.final_residual_norm) + " after " +
+                    std::to_string(result.iterations) + " iterations.");
+            }
+            std::cout << "WARNING: the nonlinear solve did not converge on "
+                         "refinement level "
+                      << imesh << " (residual norm "
+                      << result.final_residual_norm << "). Continuing to the "
+                      << "next level." << std::endl;
+        }
         if (imesh < params.refine_levels - 1) {
             pde->refine_mesh_and_interpolate_solution(u);
         }
