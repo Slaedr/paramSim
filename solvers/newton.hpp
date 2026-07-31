@@ -67,7 +67,21 @@ protected:
     std::shared_ptr<const DiscretePDEBase> pde_;
     SolverParams sparams_;
     int i_max_its_{500};
-    double i_tol_{1e-4};
+    /// Hard ceiling on linear iterations, whatever the schedule below asks for.
+    int max_linear_its_{5000};
+    /** Forcing term of the first nonlinear iteration.
+     *
+     * The linear solve tolerance is this fraction of the current residual
+     * norm, tightened geometrically as the Newton iteration proceeds. It is
+     * relative rather than absolute: an absolute target is either unreachable
+     * once the Jacobian is ill-conditioned, or already satisfied on entry --
+     * in which case the linear solve silently becomes a no-op.
+     */
+    double eta_0_{1e-2};
+    /// Tightest forcing term, so the linear solves stay affordable.
+    double eta_min_{1e-8};
+    /// Floor on the absolute tolerance, for when the residual is already tiny.
+    double absolute_floor_{1e-14};
     double r_base_{1.2};
     lin_sys_type lstype_;
 
@@ -88,8 +102,12 @@ protected:
     dealii::SparsityPattern sparsity_pattern_;
     matrix_type system_matrix_;
 
-    // Solve linear system at a given nonlinear iteration.
-    void linear_solve(int i_iter);
+    /** Solve the linear system at a given nonlinear iteration.
+     *
+     * @return  False if the linear solver stopped without reducing the linear
+     *   residual at all, in which case du_ is not a usable direction.
+     */
+    bool linear_solve(int i_iter);
 
     // Determine nonlinear update step length, given the current residual norm.
     StepSearchResult determine_step_length(const vector_type& state, double orig_norm_2);

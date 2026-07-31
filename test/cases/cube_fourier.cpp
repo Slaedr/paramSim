@@ -48,11 +48,11 @@ TEST(CubeFourierMinimalSurface, DefaultInitialGuessMatchesExplicitPoissonIn2D)
     const double default_residual =
         solve_grid_sequence<2, paramsim::cases::cube::CubeFourier,
                             paramsim::pde::MinimalSurface>(
-            4, 2, "minimal_surface", minimal_surface_maximum_newton_iterations);
+            4, 2, "minimal_surface", 15);
     const double explicit_residual =
         solve_grid_sequence<2, paramsim::cases::cube::CubeFourier,
                             paramsim::pde::MinimalSurface>(
-            4, 2, "minimal_surface", minimal_surface_maximum_newton_iterations);
+            4, 2, "minimal_surface", 15);
 
     EXPECT_DOUBLE_EQ(default_residual, explicit_residual);
     EXPECT_LT(default_residual, nonlinear_tolerance);
