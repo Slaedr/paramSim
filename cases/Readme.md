@@ -77,6 +77,31 @@ See the
 [2D example](examples/cube_fourier_case_params.txt) and
 [3D example](examples/cube_fourier_3d_case_params.txt).
 
+#### Resolving the profile
+
+The cube spans \([-1, 1]^D\), so a fundamental wavelength of \(\lambda\) puts
+\(2/\lambda\) periods along each edge, and mode \(n\) multiplies that by \(n\).
+The initial grid has to resolve the highest mode: with `--initial_resolution R`
+the cell size is \(2/R\) and mode \(n\) has period \(\lambda/n\), giving
+\(R\lambda/(2n)\) cells per period.
+
+Under-resolving the profile is not merely inaccurate. On a grid too coarse to
+see the oscillation, the solver converges quickly to the solution of an
+effectively smoother, aliased problem; the first refinement then exposes the
+true profile, and the interpolated coarse solution is a poor starting point for
+it. This matters most for `minimal_surface`, whose coefficient
+\(1/\sqrt{1+|\nabla u|^2}\) becomes small and strongly varying wherever
+boundary gradients are large — the defaults (two modes, unit coefficients,
+\(\lambda = 1\)) reach gradients of order \(2\pi + 4\pi \approx 19\). The
+nonlinear solve can then stall, and `run_case` will report a failure to
+converge rather than write an unconverged volume.
+
+With the 3D defaults, `--initial_resolution 16` gives 4 cells per period of the
+highest mode and solves cleanly, while `--initial_resolution 8` gives 2 and is
+known to stall for `minimal_surface`. Treat 4 cells per period of the highest
+mode as the minimum. Longer wavelengths or smaller mode coefficients relax the
+requirement.
+
 ### Polynomial parameters
 
 The `cube_polynomial` format is:

@@ -52,12 +52,12 @@ bool NewtonSolver::linear_solve(const int i_iter)
         // A linear solve that ran out of iterations is not fatal: as long as it
         // reduced the linear residual, du_ is still a usable direction and the
         // line search downstream decides whether it is worth a step.
-        std::cout << "  Newton: linear solver: DID NOT CONVERGE in "
+        std::cout << "    Linear solver: DID NOT CONVERGE in "
                   << e.last_step << " iterations; residual " << e.last_residual
                   << " against a target of " << tol << "." << std::endl;
         return e.last_residual < rhs_norm;
     }
-    std::cout << "  Newton: linear solver: converged in "
+    std::cout << "    Linear solver: converged in "
               << solver_control.last_step() << " iterations." << std::endl;
     return true;
 }
@@ -151,7 +151,7 @@ NewtonSolver::determine_step_length(const vector_type& u, const double rnorm_0)
      * handing back a step that increases the residual.
      * Can use CP line search from Brune et al., SIAM Review, 2025.
      */
-    double lambda = 1.0;
+    double lambda = 1.0, trial_norm = 0.0;
     dealii::Vector<scalar_type> y(u.size());
     for (int i = 0; i < max_backtracks_; i++) {
         // compute new point: y <- du
@@ -162,19 +162,19 @@ NewtonSolver::determine_step_length(const vector_type& u, const double rnorm_0)
         pde_->evaluate_residual(y, rhs_);
         pde_->apply_zero_boundary_values(rhs_);
 
-        const double trial_norm = pde_->compute_lp_norm(rhs_, 2);
-        std::cout << "  Newton:     line search: step length " << lambda
-                  << ", current norm = " << trial_norm << std::endl;
+        trial_norm = pde_->compute_lp_norm(rhs_, 2);
 
         if (trial_norm <= (1.0 - c_armijo_ * lambda) * rnorm_0) {
-            std::cout << "  Newton:   step length: " << lambda << std::endl;
+            std::cout << "    Linesearch step " << i << ",  step length: " << lambda
+                << ", current norm = " << trial_norm << std::endl;
             return {lambda, true, trial_norm};
         }
         lambda *= backtrack_factor_;
     }
 
-    std::cout << "  Newton: Line search failed! No step length down to "
+    std::cout << "  ! Newton: Line search failed! No step length down to "
               << lambda << " gave sufficient decrease." << std::endl;
+    std::cout << "  ! Newton: final line search residual norm = " << trial_norm << std::endl;
     return {0.0, false, rnorm_0};
 }
 
