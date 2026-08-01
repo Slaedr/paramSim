@@ -1,11 +1,13 @@
 import json
+import socket
+import time
 from pathlib import Path
 
 import numpy as np
 import libensemble as libe
-from libensemble.executors.executor import Executor
 from libensemble.executors import Executor
 from libensemble.libE import libE
+from libensemble.message_numbers import TASK_FAILED, WORKER_DONE
 import libensemble.tools
 
 from setup_case import (
@@ -42,23 +44,47 @@ def gen_random_samples(H_in, persis_info, gen_specs):
     return out, persis_info
 
 def run_case(H_in, persis_info, sim_specs, libE_info):
-    for ibatch in range(len(H_in)):
+    output = np.zeros(len(H_in), dtype=sim_specs["out"])
+    executor = libE_info.get("executor", Executor.executor)
+    calc_status = WORKER_DONE
+
+    for ibatch, history_row in enumerate(H_in):
         parameter_file = write_case_parameter_file(
             sim_specs["user"]["case_type"],
             sim_specs["user"]["dimension"],
-            H_in[ibatch],
+            history_row,
         )
         all_args = (
             sim_specs["user"]["common_args"]
             + get_case_parameter_args(parameter_file)
         )
 
-        # Submit our app for execution
-        exctr = Executor.executor
-        task = exctr.submit(app_name="run_fem_case", app_args=all_args)
-        # Block until the task finishes
+        start = time.monotonic()
+        task = executor.submit(
+            app_name="run_fem_case",
+            app_args=all_args,
+            stdout=f"run_case_{ibatch}.out",
+            stderr=f"run_case_{ibatch}.err",
+        )
         task.wait()
-    return 0
+        elapsed = time.monotonic() - start
+
+        succeeded = bool(getattr(task, "success", False))
+        return_code = getattr(task, "errcode", None)
+        if return_code is None:
+            return_code = 0 if succeeded else -1
+
+        output["success"][ibatch] = int(succeeded)
+        output["return_code"][ibatch] = int(return_code)
+        output["runtime_sec"][ibatch] = elapsed
+        output["hostname"][ibatch] = (
+            socket.gethostname().encode("utf-8")[:63]
+        )
+
+        if not succeeded:
+            calc_status = TASK_FAILED
+
+    return output, persis_info, calc_status
 
 def run_ensemble(case_file_path):
 
@@ -91,7 +117,12 @@ def run_ensemble(case_file_path):
     sim_specs = {
         "sim_f" : run_case,
         "in" : [],
-        "out" : [("success", int)],
+        "out" : [
+            ("success", np.int32),
+            ("return_code", np.int32),
+            ("runtime_sec", np.float64),
+            ("hostname", "S64"),
+        ],
         "user" : {
             "case_type" : case_data["case_type"],
             "dimension" : case_data["dimension"],
@@ -115,4 +146,4 @@ def run_ensemble(case_file_path):
                                 libE_specs=libE_specs)
 
     if is_manager:
-        libe.tools.save_libE_output(H, persis_info, __file__, nworkers)
+        libe.tools.save_libE_output(H, persis_info, "paramsim", nworkers)

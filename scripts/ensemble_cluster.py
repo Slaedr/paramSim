@@ -43,7 +43,8 @@ def _resolve_path(value: str, base_dir: Path) -> Path:
     return path.resolve()
 
 
-def _env_or_case(env_name: str, case_data: dict[str, Any], key: str, default: Any = None) -> Any:
+def _env_or_case(env_name: str, case_data: dict[str, Any], key: str,
+                 default: Any = None) -> Any:
     value = os.environ.get(env_name)
     if value is not None and value != "":
         return value
