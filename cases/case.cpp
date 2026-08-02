@@ -2,7 +2,6 @@
 
 #include <memory>
 
-#include "minimal_surface/gaussians.hpp"
 #include "minimal_surface/minimal_surface.hpp"
 #include "minimal_surface/verify.hpp"
 #include "cube/exponential.hpp"
@@ -32,12 +31,6 @@ std::unique_ptr<Case<dim>> create_case(const CommonParams &params,
         tcase = std::make_unique<cases::MinSurfCubeVerify<dim>>();
     } else if (params.case_str == "minimal_surface_disk_sinusoidal") {
         tcase = std::make_unique<cases::MinSurfDiskSinusoidal<dim>>();
-    } else if (params.case_str == "minimal_surface_cube_sinusoidal") {
-        tcase = std::make_unique<cases::MinSurfCubeSinusoidal<dim>>();
-    } else if (params.case_str == "minimal_surface_cube_polynomial") {
-        tcase = std::make_unique<cases::MinSurfCubePolynomial<dim>>();
-    } else if (params.case_str == "minimal_surface_cube_gaussians") {
-        tcase = std::make_unique<cases::MinSurfCubeGaussians<dim>>();
     } else {
         throw std::runtime_error("Non-existent case!");
     }

@@ -71,7 +71,7 @@ create_cube_case(const std::string& case_name,
 
 } // namespace
 
-TEST(Cases, CanCreateDefaultMinSurfCubeSinusoidalCase)
+TEST(Cases, CanCreateDefaultMinSurfDiskSinusoidalCase)
 {
     const int nargs = 13;
     bpo::options_description common_desc(
@@ -85,7 +85,7 @@ TEST(Cases, CanCreateDefaultMinSurfCubeSinusoidalCase)
                         "--refine_levels",
                         "4",
                         "--case",
-                        "minimal_surface_cube_sinusoidal",
+                        "minimal_surface_disk_sinusoidal",
                         "--fe_degree",
                         "2",
                         "--max_its",
@@ -103,7 +103,7 @@ TEST(Cases, CanCreateDefaultMinSurfCubeSinusoidalCase)
         ps::create_case<2>(cparams, nargs, argv);
 
     EXPECT_TRUE(
-        std::dynamic_pointer_cast<ps::cases::MinSurfCubeSinusoidal<2>>(case1));
+        std::dynamic_pointer_cast<ps::cases::MinSurfDiskSinusoidal<2>>(case1));
     std::free(argv);
 }
 
