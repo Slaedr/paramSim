@@ -7,3 +7,30 @@ add_executable(cases_test case.cpp)
 deal_ii_setup_target(cases_test)
 target_link_libraries(cases_test paramsim_cases utils GTest::gtest_main)
 gtest_discover_tests(cases_test)
+
+add_executable(cube_parameters_test cube_parameters.cpp)
+deal_ii_setup_target(cube_parameters_test)
+target_link_libraries(cube_parameters_test paramsim_cases utils
+                      GTest::gtest_main)
+gtest_discover_tests(cube_parameters_test)
+
+add_executable(cube_exponential_test cube_exponential.cpp)
+deal_ii_setup_target(cube_exponential_test)
+target_link_libraries(
+    cube_exponential_test paramsim_dpdes paramsim_solvers paramsim_cases
+    paramsim_utils utils GTest::gtest_main)
+gtest_discover_tests(cube_exponential_test)
+
+add_executable(cube_fourier_test cube_fourier.cpp)
+deal_ii_setup_target(cube_fourier_test)
+target_link_libraries(
+    cube_fourier_test paramsim_dpdes paramsim_solvers paramsim_cases
+    paramsim_utils utils GTest::gtest_main)
+gtest_discover_tests(cube_fourier_test)
+
+add_executable(cube_polynomial_test cube_polynomial.cpp)
+deal_ii_setup_target(cube_polynomial_test)
+target_link_libraries(
+    cube_polynomial_test paramsim_dpdes paramsim_solvers paramsim_cases
+    paramsim_utils utils GTest::gtest_main)
+gtest_discover_tests(cube_polynomial_test)

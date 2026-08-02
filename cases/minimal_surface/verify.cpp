@@ -6,7 +6,7 @@ namespace cases {
 using namespace dealii;
 
 template <int dim>
-void MinSurfVerify<dim>::initialize(const bpo::variables_map& params)
+void MinSurfBallVerify<dim>::initialize(const bpo::variables_map& params)
 {
     std::shared_ptr<Function<dim>> dirichlet1;
     dirichlet1 = std::make_shared<minsurf_verify::Solution<dim>>();
@@ -23,11 +23,12 @@ void MinSurfVerify<dim>::initialize(const bpo::variables_map& params)
 }
 
 template <int dim>
-void MinSurfVerify<dim>::add_case_cmd_args(bpo::options_description&) const
+void MinSurfBallVerify<dim>::add_case_cmd_args(bpo::options_description&) const
 {
 }
 
-template class MinSurfVerify<2>;
+template class MinSurfBallVerify<2>;
+template class MinSurfBallVerify<3>;
 
 template <int dim>
 void MinSurfCubeVerify<dim>::initialize(const bpo::variables_map& params)
@@ -52,6 +53,7 @@ void MinSurfCubeVerify<dim>::add_case_cmd_args(bpo::options_description&) const
 }
 
 template class MinSurfCubeVerify<2>;
+template class MinSurfCubeVerify<3>;
 
 
 }

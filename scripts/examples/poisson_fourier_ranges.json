@@ -1,0 +1,7 @@
+{
+  "num_modes_range" : [1, 5],
+  "a_bounds" : [-1.0, 1.0],
+  "b_bounds" : [-1.0, 1.0],
+  "constant_bounds" : [0.5, 1.5],
+  "wavelength_bounds" : [0.25, 1.0]
+}

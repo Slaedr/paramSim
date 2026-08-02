@@ -46,5 +46,21 @@ target_link_libraries(geometry_test GTest::gtest_main)
 
 gtest_discover_tests(geometry_test)
 
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(Python3_Interpreter_FOUND)
+    add_test(
+        NAME ensemble_setup_case
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_setup_case.py
+    )
+    add_test(
+        NAME ensemble_drivers
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_ensemble_drivers.py
+    )
+    add_test(
+        NAME ensemble_results_checker
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_check_ensemble_results.py
+    )
+endif()
+
 add_subdirectory(pdes)
 add_subdirectory(cases)

@@ -347,7 +347,7 @@ void MinimalSurface<dim>::run()
 #endif
 
 template class MinimalSurface<2>;
+template class MinimalSurface<3>;
 
 } // namespace
 }
-

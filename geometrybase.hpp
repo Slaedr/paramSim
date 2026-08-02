@@ -3,34 +3,39 @@
 
 #include <deal.II/base/tensor_function.h>
 #include <deal.II/base/types.h>
-#include <deal.II/grid/tria.h>
 #include <deal.II/grid/grid_generator.h>
+#include <deal.II/grid/tria.h>
 
 namespace paramsim {
 
 using bc_id_t = dealii::types::boundary_id;
 
-/** Abstraction for generating a Deal II Triangulation from some kind of geometry description.
+/** Abstraction for generating a Deal II Triangulation from some kind of
+ * geometry description.
  *
- * Also provides a routine for setting boundary face IDs for boundary conditions.
+ * Also provides a routine for setting boundary face IDs for boundary
+ * conditions.
  */
-template <int dim> 
-class DomainGeometry
-{
+template <int dim>
+class DomainGeometry {
 public:
-    /// Type describing a boundary marker and the condition for a point to be on that boundary
-    using bc_mark_desc = std::pair<bc_id_t, std::function<bool(const dealii::Point<dim>&)>>;
+    /// Type describing a boundary marker and the condition for a point to be on
+    /// that boundary
+    using bc_mark_desc =
+        std::pair<bc_id_t, std::function<bool(const dealii::Point<dim> &)>>;
 
-    DomainGeometry() { }
-    
-    DomainGeometry(const std::vector<bc_mark_desc>& bc_marks)
+    DomainGeometry() {}
+
+    DomainGeometry(const std::vector<bc_mark_desc> &bc_marks)
         : bciddesc(bc_marks)
-    { }
+    {
+    }
 
-    virtual void generate_grid(dealii::Triangulation<dim>& tria,
-            const unsigned int initial_resolution) const = 0;
+    virtual void generate_grid(dealii::Triangulation<dim> &tria,
+                               const unsigned int initial_resolution) const = 0;
 
-    void set_bc_mark_desc(const std::vector<bc_mark_desc>& bc_marks) {
+    void set_bc_mark_desc(const std::vector<bc_mark_desc> &bc_marks)
+    {
         bciddesc = bc_marks;
     }
 
@@ -39,25 +44,28 @@ public:
      *
      * Sets the boundary markers according to \ref bciddesc.
      */
-    void set_boundary_ids(dealii::Triangulation<dim>& tria) const
+    void set_boundary_ids(dealii::Triangulation<dim> &tria) const
     {
-        if(bciddesc.empty()) {
+        if (bciddesc.empty()) {
             return;
         }
         for (const auto &cell : tria.cell_iterators()) {
-          for (const auto &face : cell->face_iterators()) {
-            if (face->at_boundary()) {
-              for (auto bcid : bciddesc) {
-                if (bcid.second(face->center())) {
-                  face->set_boundary_id(bcid.first);
+            for (const auto &face : cell->face_iterators()) {
+                if (face->at_boundary()) {
+                    for (auto bcid : bciddesc) {
+                        if (bcid.second(face->center())) {
+                            face->set_boundary_id(bcid.first);
+                        }
+                    }
                 }
-              }
             }
-          }
         }
     }
+
 protected:
-    /// A list of pairs of a bounary marker and its boundary face location identifier function.
+    /** A list of pairs of a bounary marker and its boundary face location
+     * identifier function.
+     */
     std::vector<bc_mark_desc> bciddesc;
 };
 
@@ -69,41 +77,42 @@ namespace geom {
  * The initial mesh has 5 cells in 2D and 7 in 3D.
  */
 template <int dim>
-class Ball : public DomainGeometry<dim>
-{
+class Ball : public DomainGeometry<dim> {
 public:
-    Ball(const std::vector<typename DomainGeometry<dim>::bc_mark_desc>& bcmarks)
+    Ball(const std::vector<typename DomainGeometry<dim>::bc_mark_desc> &bcmarks)
         : DomainGeometry<dim>(bcmarks)
-    { }
+    {
+    }
 
     /**
      * \brief Generates the grid.
      *
-     * The default grid has 5 or 7 cells in 2D or 3D; 3 cells along the diameter.
-     * The grid is refined to get approximately
-     * the number of requested cells along the diameter.
+     * The default grid has 5 or 7 cells in 2D or 3D; 3 cells along the
+     * diameter. The grid is refined to get approximately the number of
+     * requested cells along the diameter.
      *
      * @param tria  The triangulation object to generate the grid in.
-     * @param ncell_dir  Requested number of cells along the diameter; this is satisfied
-     *   only approximately.
+     * @param ncell_dir  Requested number of cells along the diameter; this is
+     * satisfied only approximately.
      */
-    virtual void generate_grid(dealii::Triangulation<dim>& tria,
-            const unsigned int ncell_dir) const override
+    virtual void generate_grid(dealii::Triangulation<dim> &tria,
+                               const unsigned int ncell_dir) const override
     {
         // Attach spherical manifold on the boundary for AMR
-        dealii::GridGenerator::hyper_ball(tria, dealii::Point<dim>(), 1.0, true);
+        dealii::GridGenerator::hyper_ball(tria, dealii::Point<dim>(), 1.0,
+                                          true);
         // Refine
         tria.refine_global(ncell_dir / 3);
     }
 };
 
 template <int dim>
-class Cube : public DomainGeometry<dim>
-{
+class Cube : public DomainGeometry<dim> {
 public:
-    Cube(const std::vector<typename DomainGeometry<dim>::bc_mark_desc>& bcmarks)
+    Cube(const std::vector<typename DomainGeometry<dim>::bc_mark_desc> &bcmarks)
         : DomainGeometry<dim>(bcmarks)
-    { }
+    {
+    }
 
     /**
      * \brief Generates the grid.
@@ -111,10 +120,11 @@ public:
      * @param tria  The triangulation object to generate the grid in.
      * @param ncell_dir  Requested number of cells in each direction
      */
-    virtual void generate_grid(dealii::Triangulation<dim>& tria,
-            const unsigned int ncell_dir) const override
+    virtual void generate_grid(dealii::Triangulation<dim> &tria,
+                               const unsigned int ncell_dir) const override
     {
-        dealii::GridGenerator::subdivided_hyper_cube(tria, ncell_dir, -1.0, 1.0, false);
+        dealii::GridGenerator::subdivided_hyper_cube(tria, ncell_dir, -1.0, 1.0,
+                                                     false);
     }
 };
 
@@ -122,13 +132,13 @@ public:
 
 /// Abstract type for a function on a facet
 template <int dim>
-class FaceFunction
-{
+class FaceFunction {
 public:
-  virtual double value_normal(const dealii::Point<dim>& p, const dealii::Tensor<1,dim>& normal,
-          const unsigned int = 0) const = 0;
+    virtual double value_normal(const dealii::Point<dim> &p,
+                                const dealii::Tensor<1, dim> &normal,
+                                const unsigned int = 0) const = 0;
 };
 
-}
+} // namespace paramsim
 
 #endif

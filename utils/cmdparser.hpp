@@ -14,6 +14,7 @@ namespace paramsim {
 struct CommonParams {
     std::string case_str;
     std::string solver_str;
+    unsigned int dimension;
     int refine_levels;
     unsigned initial_resolution;
     int fe_degree;
@@ -21,6 +22,9 @@ struct CommonParams {
     bool is_adaptive;
     double tolerance;
     int max_outer_its;
+    std::string init_pde_str;
+    double init_tolerance;
+    int init_max_its;
 };
 
 namespace bpo = boost::program_options;

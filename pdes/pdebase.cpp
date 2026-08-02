@@ -1,6 +1,7 @@
 
 #include "pdebase.hpp"
 
+#include <cmath>
 #include <stdexcept>
 #include <memory>
 #include <iostream>
@@ -15,7 +16,6 @@
 #include <deal.II/numerics/error_estimator.h>
 #include <deal.II/lac/dynamic_sparsity_pattern.h>
 #include <deal.II/numerics/data_out.h>
-#include <deal.II/numerics/data_out_faces.h>
 
 #include "../utils/error_handling.hpp"
 #include "poisson/poisson_cg.hpp"
@@ -245,10 +245,8 @@ scalar_type DiscretePDE<dim, FE_t>::compute_lp_norm(const vector_type& u, const 
     const dealii::QGauss<dim> quadrature_formula(fe_.degree + 1);
     dealii::FEValues<dim> fe_values(fe_, quadrature_formula,
                                     dealii::update_JxW_values | dealii::update_values);
-    const auto dofs_per_cell = fe_.n_dofs_per_cell();
     const auto n_q_points = fe_values.get_quadrature().size();
     std::vector<scalar_type> u_quadrature_values(n_q_points);
-    std::vector<dealii::types::global_dof_index> local_dof_indices(dofs_per_cell);
 
     scalar_type normp = 0;
 
@@ -257,10 +255,7 @@ scalar_type DiscretePDE<dim, FE_t>::compute_lp_norm(const vector_type& u, const 
         fe_values.reinit(cell);
         fe_values.get_function_values(u, u_quadrature_values);
         for (unsigned int q = 0; q < n_q_points; ++q) {
-            cell->get_dof_indices(local_dof_indices);
-            for (unsigned int i = 0; i < dofs_per_cell; ++i) {
-                normp += std::pow(u_quadrature_values[i], p) * fe_values.JxW(q);
-            }
+            normp += std::pow(std::abs(u_quadrature_values[q]), p) * fe_values.JxW(q);
         }
     }
 
@@ -283,21 +278,10 @@ void DiscretePDE<dim, FE_t>::output_results(const int refinement_cycle,
     std::ofstream output(filename);
     data_out.write_vtk(output);
 
-    std::ofstream b_output(file_prefix + "-boundary.vtk");
-    dealii::DataOutFaces<dim> data_out_boundary(true);
-    std::vector<std::string> face_name(1, "solution");
-    std::vector<dealii::DataComponentInterpretation::DataComponentInterpretation>
-        face_component_type(1, dealii::DataComponentInterpretation::component_is_scalar);
-    data_out_boundary.add_data_vector(dof_handler_,
-                                      solution,
-                                      face_name,
-                                      face_component_type);
-    data_out_boundary.build_patches(fe_.degree);
-    data_out_boundary.write_vtk(b_output);
-    b_output.close();
 }
 
 template class DiscretePDE<2, dealii::FE_Q<2>>;
+template class DiscretePDE<3, dealii::FE_Q<3>>;
 
 template <int dim>
 std::unique_ptr<DiscretePDEBase> create_discrete_pde(std::shared_ptr<const Case<dim>> test_case,
@@ -314,6 +298,9 @@ std::unique_ptr<DiscretePDEBase> create_discrete_pde(std::shared_ptr<const Case<
 
 template
 std::unique_ptr<DiscretePDEBase> create_discrete_pde(std::shared_ptr<const Case<2>>,
+                                                     const PDEParams&);
+template
+std::unique_ptr<DiscretePDEBase> create_discrete_pde(std::shared_ptr<const Case<3>>,
                                                      const PDEParams&);
 
 }

@@ -1,0 +1,6 @@
+{
+  "num_centers_range": [1, 5],
+  "coordinate_bounds": [-1.0, 1.0],
+  "coeff_bounds": [0.1, 0.9],
+  "width_bounds": [0.2, 0.7]
+}
