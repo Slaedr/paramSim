@@ -26,7 +26,6 @@ run_grid_refinement(const PDEParams& params, const SolverParams& sparams,
     pde->allocate_solution_vector(u);
     paramsim::solver::compute_initial_guess<dim>(tcase, params, init_pde,
                                                  init_solver_params, u);
-    std::cout << "Initialization solve completed.\n";
 
     unsigned resolution = params.initial_resolution;
     for (int imesh = 0; imesh < params.refine_levels;
@@ -126,6 +125,7 @@ void compute_initial_guess(std::shared_ptr<const Case<dim>> test_case,
     init_solver.solve(init_solution);
 
     solution = init_solution;
+    std::cout << "Initialization solve completed.\n";
 }
 
 template void compute_initial_guess<2>(std::shared_ptr<const Case<2>>,

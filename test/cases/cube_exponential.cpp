@@ -57,13 +57,14 @@ TEST(CubeExponentialMinimalSurface,
     const double default_residual =
         solve_grid_sequence<2, paramsim::cases::cube::CubeExponential,
                             paramsim::pde::MinimalSurface>(
-            4, 1, "minimal_surface", minimal_surface_maximum_newton_iterations);
+            16, 1, "minimal_surface", minimal_surface_maximum_newton_iterations);
     const double explicit_residual =
         solve_grid_sequence<2, paramsim::cases::cube::CubeExponential,
                             paramsim::pde::MinimalSurface>(
-            4, 1, "minimal_surface", minimal_surface_maximum_newton_iterations);
+            16, 1, "minimal_surface", minimal_surface_maximum_newton_iterations,
+            "none");
 
-    EXPECT_DOUBLE_EQ(default_residual, explicit_residual);
+    EXPECT_NEAR(default_residual, explicit_residual, 1e-8);
     EXPECT_LT(default_residual, nonlinear_tolerance);
 }
 

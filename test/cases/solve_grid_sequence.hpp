@@ -32,7 +32,8 @@ constexpr int minimal_surface_maximum_newton_iterations = 10;
 template <int dim, template <int> class Case, template <int> class PDE>
 double solve_grid_sequence(const unsigned initial_resolution,
                            const int grid_count, const std::string& pde_name,
-                           const int maximum_iterations)
+                           const int maximum_iterations,
+                           const std::string init_pde_name = "default")
 {
     auto test_case = std::make_shared<Case<dim>>();
     test_case->initialize(boost::program_options::variables_map{});
@@ -53,7 +54,9 @@ double solve_grid_sequence(const unsigned initial_resolution,
 
     auto solution = solver::run_grid_refinement<dim>(
         pde_parameters, solver_parameters, test_case, discrete_pde,
-        solver::default_init_pde(pde_name), initialization_solver_parameters);
+        init_pde_name == "default" ? solver::default_init_pde(pde_name)
+                                   : init_pde_name,
+        initialization_solver_parameters);
 
     DiscretePDEBase::vector_type residual;
     discrete_pde->allocate_solution_vector(residual);

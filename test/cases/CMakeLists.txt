@@ -27,3 +27,10 @@ target_link_libraries(
     cube_fourier_test paramsim_dpdes paramsim_solvers paramsim_cases
     paramsim_utils utils GTest::gtest_main)
 gtest_discover_tests(cube_fourier_test)
+
+add_executable(cube_polynomial_test cube_polynomial.cpp)
+deal_ii_setup_target(cube_polynomial_test)
+target_link_libraries(
+    cube_polynomial_test paramsim_dpdes paramsim_solvers paramsim_cases
+    paramsim_utils utils GTest::gtest_main)
+gtest_discover_tests(cube_polynomial_test)
