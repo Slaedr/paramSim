@@ -30,3 +30,8 @@ target_link_libraries(run_case paramsim_dpdes paramsim_solvers paramsim_cases pa
 # Test the main executable
 configure_file(test/run_case_check.sh ${CMAKE_BINARY_DIR}/run_case_check.sh COPYONLY)
 add_test(NAME runcheck COMMAND sh ./run_case_check.sh)
+
+# Test that a thrown C++ exception is surfaced as a nonzero exit code, which
+# is the contract scripts/ensemble.py relies on to record a failure.
+configure_file(test/run_case_exception_check.sh ${CMAKE_BINARY_DIR}/run_case_exception_check.sh COPYONLY)
+add_test(NAME runcheck_exception COMMAND sh ./run_case_exception_check.sh)

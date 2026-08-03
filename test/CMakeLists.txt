@@ -48,18 +48,52 @@ gtest_discover_tests(geometry_test)
 
 find_package(Python3 COMPONENTS Interpreter QUIET)
 if(Python3_Interpreter_FOUND)
-    add_test(
-        NAME ensemble_setup_case
-        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_setup_case.py
+    execute_process(
+        COMMAND ${Python3_EXECUTABLE} -c "import numpy"
+        RESULT_VARIABLE PARAMSIM_NUMPY_STATUS
+        OUTPUT_QUIET ERROR_QUIET
     )
-    add_test(
-        NAME ensemble_drivers
-        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_ensemble_drivers.py
+    execute_process(
+        COMMAND ${Python3_EXECUTABLE} -c "import libensemble"
+        RESULT_VARIABLE PARAMSIM_LIBENSEMBLE_STATUS
+        OUTPUT_QUIET ERROR_QUIET
     )
-    add_test(
-        NAME ensemble_results_checker
-        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_check_ensemble_results.py
-    )
+
+    if(PARAMSIM_NUMPY_STATUS EQUAL 0)
+        add_test(
+            NAME ensemble_setup_case
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_setup_case.py
+        )
+        add_test(
+            NAME ensemble_results_checker
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_check_ensemble_results.py
+        )
+    else()
+        message(STATUS "Skipping paramSim Python tests that need NumPy: not importable by ${Python3_EXECUTABLE}")
+    endif()
+
+    if(PARAMSIM_LIBENSEMBLE_STATUS EQUAL 0)
+        add_test(
+            NAME ensemble_drivers
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_ensemble_drivers.py
+        )
+        # End-to-end: runs a real libEnsemble ensemble (with a stub
+        # executable, plus the real run_case binary when available) and
+        # checks that a failing simulation is recorded as a failure in the
+        # saved history .npy file.
+        add_test(
+            NAME ensemble_failure_history
+            COMMAND ${CMAKE_COMMAND} -E env PARAMSIM_RUN_CASE=$<TARGET_FILE:run_case>
+                    ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_ensemble_failure_history.py
+        )
+        set_tests_properties(ensemble_failure_history PROPERTIES
+            TIMEOUT 900
+            RUN_SERIAL TRUE
+            SKIP_RETURN_CODE 77
+        )
+    else()
+        message(STATUS "Skipping paramSim Python tests that need libEnsemble: not importable by ${Python3_EXECUTABLE}")
+    endif()
 endif()
 
 add_subdirectory(pdes)
