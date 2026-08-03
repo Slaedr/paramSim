@@ -49,7 +49,7 @@ In 2D, the `cube_fourier` format is:
 ```text
 <number_of_modes>
 <constant> <wavelength_x> <wavelength_y>
-<cosine_coefficient_1> <sine_coefficient_1>
+<cc_1> <cs_1> <sc_1> <ss_1>
 ...one row per mode
 ```
 
@@ -58,20 +58,30 @@ In 3D, the header has one additional directional wavelength:
 ```text
 <number_of_modes>
 <constant> <wavelength_x> <wavelength_y> <wavelength_z>
-<cosine_coefficient_1> <sine_coefficient_1>
+<ccc_1> <ccs_1> <csc_1> <css_1> <scc_1> <scs_1> <ssc_1> <sss_1>
 ...one row per mode
 ```
 
 Every directional fundamental wavelength must be positive. For spatial
-dimension \(D\), mode \(n\) adds
+dimension \(D\), mode \(n\) adds every tensor product
 
 \[
-a_n \prod_{d=1}^{D}\cos(2\pi n x_d/\lambda_d)
-+ b_n \prod_{d=1}^{D}\sin(2\pi n x_d/\lambda_d).
+\sum_{\boldsymbol{q}\in\{c,s\}^D} a_{n,\boldsymbol{q}}
+\prod_{d=1}^{D} f_{q_d}(2\pi n x_d/\lambda_d),
+\qquad f_c(\theta)=\cos(\theta),\quad f_s(\theta)=\sin(\theta).
 \]
+
+Coefficients are ordered lexicographically with cosine before sine in each
+direction: `CC, CS, SC, SS` in 2D and
+`CCC, CCS, CSC, CSS, SCC, SCS, SSC, SSS` in 3D. Thus, each mode row has four
+values in 2D and eight values in 3D.
 
 Rows are frequencies `1` through `number_of_modes`; the constant is present
 only once and is not a mode row.
+
+The built-in defaults preserve the earlier profile: the all-cosine and
+all-sine coefficients are 1 for each of two modes, while all mixed
+coefficients are 0.
 
 See the
 [2D example](examples/cube_fourier_case_params.txt) and
@@ -91,8 +101,9 @@ effectively smoother, aliased problem; the first refinement then exposes the
 true profile, and the interpolated coarse solution is a poor starting point for
 it. This matters most for `minimal_surface`, whose coefficient
 \(1/\sqrt{1+|\nabla u|^2}\) becomes small and strongly varying wherever
-boundary gradients are large — the defaults (two modes, unit coefficients,
-\(\lambda = 1\)) reach gradients of order \(2\pi + 4\pi \approx 19\). The
+boundary gradients are large — the defaults (two modes, unit all-cosine and
+all-sine coefficients, \(\lambda = 1\)) reach gradients of order
+\(2\pi + 4\pi \approx 19\). The
 nonlinear solve can then stall, and `run_case` will report a failure to
 converge rather than write an unconverged volume.
 
@@ -206,16 +217,15 @@ See [poisson_exp.json](../scripts/examples/poisson_exp.json) and
 ```json
 {
   "num_modes_range": [1, 5],
-  "a_bounds": [-1.0, 1.0],
-  "b_bounds": [-1.0, 1.0],
+  "coeff_bounds": [-1.0, 1.0],
   "constant_bounds": [0.5, 1.5],
   "wavelength_bounds": [0.25, 1.0]
 }
 ```
 
 - `num_modes_range`: Inclusive positive-integer mode-count range.
-- `a_bounds`: Bounds shared by cosine coefficients.
-- `b_bounds`: Bounds shared by sine coefficients.
+- `coeff_bounds`: Bounds shared by all four 2D or eight 3D coefficients in
+  every mode. Every coefficient is sampled independently.
 - `constant_bounds`: Bounds for the single constant term.
 - `wavelength_bounds`: Positive bounds used to sample each active direction's
   fundamental wavelength independently.

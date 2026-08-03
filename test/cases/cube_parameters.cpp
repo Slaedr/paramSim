@@ -1,8 +1,5 @@
-#include <filesystem>
-#include <fstream>
 #include <stdexcept>
 #include <string>
-#include <system_error>
 #include <type_traits>
 #include <vector>
 
@@ -12,6 +9,7 @@
 #include "../../cases/cube/exponential.hpp"
 #include "../../cases/cube/fourier.hpp"
 #include "../../cases/cube/polynomial.hpp"
+#include "../utils/temporary_parameter_file.hpp"
 
 namespace cube = paramsim::cases::cube;
 namespace exponential = cube::exponential;
@@ -19,53 +17,7 @@ namespace fourier = cube::fourier;
 namespace polynomial = cube::polynomial;
 
 namespace {
-
-/**
- * @brief Owns a temporary parameter file used by one test.
- */
-class TemporaryParameterFile {
-public:
-    /**
-     * @brief Creates a uniquely named temporary file with supplied contents.
-     *
-     * @param contents Text to write to the temporary file.
-     * @throws std::runtime_error if the file cannot be created.
-     */
-    explicit TemporaryParameterFile(const std::string& contents)
-    {
-        static unsigned int next_id = 0;
-        path_ =
-            std::filesystem::temp_directory_path() /
-            ("paramsim_case_parameters_" + std::to_string(next_id++) + ".txt");
-        std::ofstream output(path_);
-        output << contents;
-        if (!output) {
-            throw std::runtime_error("Could not create temporary test file.");
-        }
-    }
-
-    /**
-     * @brief Removes the temporary file without throwing.
-     */
-    ~TemporaryParameterFile()
-    {
-        std::error_code error;
-        std::filesystem::remove(path_, error);
-    }
-
-    /**
-     * @brief Returns the temporary file path as a string.
-     *
-     * @return Path suitable for passing to the parameter reader.
-     */
-    std::string path() const
-    {
-        return path_.string();
-    }
-
-private:
-    std::filesystem::path path_;
-};
+using paramsim::test::TemporaryParameterFile;
 
 } // namespace
 
@@ -260,14 +212,14 @@ TEST(FourierParameters, ParsesRuntimeSizedModesInBothDimensions)
 {
     TemporaryParameterFile file_2d("3\n"
                                    "1.5 0.75 1.25\n"
-                                   "1 -2\n"
-                                   "3 -4\n"
-                                   "5 -6\n");
+                                   "1 -2 3 -4\n"
+                                   "5 -6 7 -8\n"
+                                   "9 -10 11 -12\n");
     TemporaryParameterFile file_3d("3\n"
                                    "1.5 0.75 1.25 2\n"
-                                   "1 -2\n"
-                                   "3 -4\n"
-                                   "5 -6\n");
+                                   "1 -2 3 -4 5 -6 7 -8\n"
+                                   "9 -10 11 -12 13 -14 15 -16\n"
+                                   "17 -18 19 -20 21 -22 23 -24\n");
 
     const auto params_2d = fourier::read_parameters<2>(file_2d.path());
     const auto params_3d = fourier::read_parameters<3>(file_3d.path());
@@ -279,22 +231,28 @@ TEST(FourierParameters, ParsesRuntimeSizedModesInBothDimensions)
               (std::array<double, 2>{{0.75, 1.25}}));
     EXPECT_EQ(params_3d.fundamental_wavelength,
               (std::array<double, 3>{{0.75, 1.25, 2.0}}));
-    EXPECT_DOUBLE_EQ(params_2d.modes[0].cosine_coefficient, 1.0);
-    EXPECT_DOUBLE_EQ(params_2d.modes[0].sine_coefficient, -2.0);
-    EXPECT_DOUBLE_EQ(params_3d.modes[2].cosine_coefficient, 5.0);
-    EXPECT_DOUBLE_EQ(params_3d.modes[2].sine_coefficient, -6.0);
+    EXPECT_EQ(params_2d.modes[0].coefficients,
+              (std::array<double, 4>{{1.0, -2.0, 3.0, -4.0}}));
+    EXPECT_EQ(params_2d.modes[2].coefficients,
+              (std::array<double, 4>{{9.0, -10.0, 11.0, -12.0}}));
+    EXPECT_EQ(params_3d.modes[0].coefficients,
+              (std::array<double, 8>{
+                  {1.0, -2.0, 3.0, -4.0, 5.0, -6.0, 7.0, -8.0}}));
+    EXPECT_EQ(params_3d.modes[2].coefficients,
+              (std::array<double, 8>{{17.0, -18.0, 19.0, -20.0, 21.0,
+                                      -22.0, 23.0, -24.0}}));
 }
 
 TEST(FourierParameters, AssignsRowsToFrequenciesStartingAtOne)
 {
     TemporaryParameterFile file_2d("2\n"
                                    "0 2 4\n"
-                                   "1 0\n"
-                                   "1 0\n");
+                                   "1 0 0 0\n"
+                                   "1 0 0 0\n");
     TemporaryParameterFile file_3d("2\n"
                                    "0 2 4 8\n"
-                                   "1 0\n"
-                                   "1 0\n");
+                                   "1 0 0 0 0 0 0 0\n"
+                                   "1 0 0 0 0 0 0 0\n");
     const fourier::DirichletIn<2> profile_2d(
         fourier::read_parameters<2>(file_2d.path()));
     const fourier::DirichletIn<3> profile_3d(
@@ -317,30 +275,59 @@ TEST(FourierParameters, PreservesBuiltInDefaults)
               (std::array<double, 2>{{1.0, 1.0}}));
     EXPECT_EQ(params_3d.fundamental_wavelength,
               (std::array<double, 3>{{1.0, 1.0, 1.0}}));
-    EXPECT_DOUBLE_EQ(params_2d.modes[0].cosine_coefficient, 1.0);
-    EXPECT_DOUBLE_EQ(params_2d.modes[0].sine_coefficient, 1.0);
-    EXPECT_DOUBLE_EQ(params_3d.modes[1].cosine_coefficient, 1.0);
-    EXPECT_DOUBLE_EQ(params_3d.modes[1].sine_coefficient, 1.0);
+    EXPECT_EQ(params_2d.modes[0].coefficients,
+              (std::array<double, 4>{{1.0, 0.0, 0.0, 1.0}}));
+    EXPECT_EQ(params_3d.modes[1].coefficients,
+              (std::array<double, 8>{
+                  {1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0}}));
 }
 
-TEST(FourierParameters, EvaluatesSineAndCosineProductsInAllDirections)
+TEST(FourierParameters, EvaluatesEveryCrossTermInDocumentedOrder)
 {
     fourier::Params<3> params;
     params.constant = 0.25;
-    params.fundamental_wavelength = {{2.0, 4.0, 8.0}};
-    params.modes = {{1.0, 2.0}};
-    const fourier::DirichletIn<3> profile(params);
+    params.fundamental_wavelength = {{2.0, 4.0, 6.0}};
+    params.modes.resize(1);
 
-    const double expected = 0.5 + std::sqrt(3.0) / 2.0;
-    EXPECT_NEAR(profile.value(dealii::Point<3>{1.0 / 3.0, 0.5, 1.0}), expected,
-                1e-14);
+    const double sqrt_three = std::sqrt(3.0);
+    const double cosine_x = sqrt_three / 2.0;
+    const double sine_x = 0.5;
+    const double cosine_y = 0.5;
+    const double sine_y = sqrt_three / 2.0;
+    const double cosine_z = std::cos(dealii::numbers::PI / 5.0);
+    const double sine_z = std::sin(dealii::numbers::PI / 5.0);
+    const std::array<double, 8> expected_terms{{
+        cosine_x * cosine_y * cosine_z,
+        cosine_x * cosine_y * sine_z,
+        cosine_x * sine_y * cosine_z,
+        cosine_x * sine_y * sine_z,
+        sine_x * cosine_y * cosine_z,
+        sine_x * cosine_y * sine_z,
+        sine_x * sine_y * cosine_z,
+        sine_x * sine_y * sine_z,
+    }};
+    const dealii::Point<3> point{1.0 / 6.0, 2.0 / 3.0, 0.6};
+
+    for (unsigned term_index = 0;
+         term_index < fourier::Mode<3>::term_count;
+         ++term_index) {
+        params.modes[0].coefficients.fill(0.0);
+        params.modes[0].coefficients[term_index] = 1.0;
+        const fourier::DirichletIn<3> profile(params);
+        EXPECT_NEAR(profile.value(point), 0.25 + expected_terms[term_index],
+                    1e-14);
+    }
 }
 
 TEST(FourierParameters, RejectsMalformedRowsAndTrailingData)
 {
     for (const std::string contents :
-         {"0\n", "1\n1 0.5\n1 2\n", "1\n1 0.5 0.75 extra\n1 2\n",
-          "2\n1 0.5 0.75\n1 2\n", "1\n1 0.5 0.75\n1 2\ntrailing\n"}) {
+         {"0\n", "1\n1 0.5\n1 2 3 4\n",
+          "1\n1 0.5 0.75 extra\n1 2 3 4\n",
+          "2\n1 0.5 0.75\n1 2 3 4\n", "1\n1 0.5 0.75\n1 2\n",
+          "1\n1 0.5 0.75\n1 2 3 4 5\n",
+          "1\n1 0.5 0.75\n1 2 nan 4\n",
+          "1\n1 0.5 0.75\n1 2 3 4\ntrailing\n"}) {
         TemporaryParameterFile file(contents);
         EXPECT_THROW(fourier::read_parameters<2>(file.path()),
                      std::runtime_error);
@@ -350,7 +337,8 @@ TEST(FourierParameters, RejectsMalformedRowsAndTrailingData)
 TEST(FourierParameters, RejectsNonpositiveWavelengths)
 {
     for (const std::string contents :
-         {"1\n1 1 0 1\n1 2\n", "1\n1 1 1 -0.5\n1 2\n"}) {
+         {"1\n1 1 0 1\n1 2 3 4 5 6 7 8\n",
+          "1\n1 1 1 -0.5\n1 2 3 4 5 6 7 8\n"}) {
         TemporaryParameterFile file(contents);
         EXPECT_THROW(fourier::read_parameters<3>(file.path()),
                      std::runtime_error);

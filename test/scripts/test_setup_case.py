@@ -121,8 +121,7 @@ class RangeFileLoadingTests(unittest.TestCase):
                 json.dumps(
                     {
                         "num_modes_range": [0, 2],
-                        "a_bounds": [-1.0, 1.0],
-                        "b_bounds": [-1.0, 1.0],
+                        "coeff_bounds": [-1.0, 1.0],
                         "constant_bounds": [0.5, 1.5],
                         "wavelength_bounds": [0.25, 1.0],
                     }
@@ -151,8 +150,7 @@ class RangeValidationTests(unittest.TestCase):
             },
             "cube_fourier": {
                 "num_modes_range": [1, 5],
-                "a_bounds": [-1.0, 1.0],
-                "b_bounds": [-1.0, 1.0],
+                "coeff_bounds": [-1.0, 1.0],
                 "constant_bounds": [0.5, 1.5],
                 "wavelength_bounds": [0.25, 1.0],
             },
@@ -199,9 +197,9 @@ class RangeValidationTests(unittest.TestCase):
 
     def test_rejects_missing_ranges(self):
         ranges = dict(self.valid_ranges()["cube_fourier"])
-        del ranges["b_bounds"]
+        del ranges["coeff_bounds"]
 
-        with self.assertRaisesRegex(KeyError, "b_bounds"):
+        with self.assertRaisesRegex(KeyError, "coeff_bounds"):
             validate_case_parameter_ranges("cube_fourier", ranges)
 
     def test_rejects_nonfinite_and_reversed_bounds(self):
@@ -300,50 +298,59 @@ class HistoryFieldTests(unittest.TestCase):
             ],
         )
 
-    def test_fourier_fields_use_maximum_mode_count(self):
-        case_data = {
-            "case_type": "cube_fourier",
-            "dimension": 3,
-        }
+    def test_fourier_fields_are_dimension_aware(self):
         ranges = {
             "num_modes_range": [2, 6],
-            "a_bounds": [-1.0, 1.0],
-            "b_bounds": [-2.0, 2.0],
+            "coeff_bounds": [-2.0, 2.0],
             "constant_bounds": [0.5, 1.5],
             "wavelength_bounds": [0.25, 1.0],
         }
-        gen_specs, sim_specs = empty_specs()
 
-        setup_case(case_data, gen_specs, sim_specs, ranges)
+        for dimension, coefficient_count in ((2, 4), (3, 8)):
+            with self.subTest(dimension=dimension):
+                case_data = {
+                    "case_type": "cube_fourier",
+                    "dimension": dimension,
+                }
+                gen_specs, sim_specs = empty_specs()
 
-        history_dtype = np.dtype(gen_specs["out"])
-        self.assertEqual(history_dtype["num_modes"].shape, ())
-        self.assertEqual(
-            history_dtype["mode_coefficients"].shape, (6, 2)
-        )
-        self.assertEqual(history_dtype["constant"].shape, ())
-        self.assertEqual(history_dtype["wavelength"].shape, (3,))
-        np.testing.assert_array_equal(
-            gen_specs["user"]["lower"]["wavelength"],
-            np.full(3, 0.25, dtype=np.float32),
-        )
-        np.testing.assert_array_equal(
-            gen_specs["user"]["lower"]["mode_coefficients"][:, 0],
-            np.full(6, -1.0, dtype=np.float32),
-        )
-        np.testing.assert_array_equal(
-            gen_specs["user"]["lower"]["mode_coefficients"][:, 1],
-            np.full(6, -2.0, dtype=np.float32),
-        )
-        self.assertEqual(
-            sim_specs["in"],
-            [
-                "num_modes",
-                "mode_coefficients",
-                "constant",
-                "wavelength",
-            ],
-        )
+                setup_case(case_data, gen_specs, sim_specs, ranges)
+
+                history_dtype = np.dtype(gen_specs["out"])
+                self.assertEqual(history_dtype["num_modes"].shape, ())
+                self.assertEqual(
+                    history_dtype["mode_coefficients"].shape,
+                    (6, coefficient_count),
+                )
+                self.assertEqual(history_dtype["constant"].shape, ())
+                self.assertEqual(
+                    history_dtype["wavelength"].shape, (dimension,)
+                )
+                np.testing.assert_array_equal(
+                    gen_specs["user"]["lower"]["wavelength"],
+                    np.full(dimension, 0.25, dtype=np.float32),
+                )
+                np.testing.assert_array_equal(
+                    gen_specs["user"]["lower"]["mode_coefficients"],
+                    np.full(
+                        (6, coefficient_count), -2.0, dtype=np.float32
+                    ),
+                )
+                np.testing.assert_array_equal(
+                    gen_specs["user"]["upper"]["mode_coefficients"],
+                    np.full(
+                        (6, coefficient_count), 2.0, dtype=np.float32
+                    ),
+                )
+                self.assertEqual(
+                    sim_specs["in"],
+                    [
+                        "num_modes",
+                        "mode_coefficients",
+                        "constant",
+                        "wavelength",
+                    ],
+                )
 
     def test_polynomial_storage_is_dimension_aware(self):
         ranges = {
@@ -420,12 +427,12 @@ class SamplingTests(unittest.TestCase):
 
         samples = sample_parameter_values(
             DistinctRandomStream(),
-            np.full((4, 3), -1.0, dtype=np.float32),
-            np.full((4, 3), 1.0, dtype=np.float32),
+            np.full((4, 8), -1.0, dtype=np.float32),
+            np.full((4, 8), 1.0, dtype=np.float32),
             2,
         )
 
-        self.assertEqual(samples.shape, (2, 4, 3))
+        self.assertEqual(samples.shape, (2, 4, 8))
         self.assertNotEqual(samples[0, 0, 0], samples[0, 0, 1])
         self.assertNotEqual(samples[0, 0, 0], samples[0, 1, 0])
 
@@ -485,26 +492,44 @@ class ParameterFileTests(unittest.TestCase):
                 "0.5 1.0 -0.25 -0.3 0.4\n",
             )
 
-    def test_writes_only_active_fourier_modes(self):
+    def test_writes_active_dimension_specific_fourier_coefficients(self):
         args = {
             "num_modes": 2,
-            "mode_coefficients":
-                [[1.0, -2.0], [3.0, -4.0], [99.0, 99.0]],
+            "mode_coefficients": [
+                [1.0, -2.0, 3.0, -4.0, 5.0, -6.0, 7.0, -8.0],
+                [9.0, -10.0, 11.0, -12.0, 13.0, -14.0, 15.0, -16.0],
+                [99.0] * 8,
+            ],
             "constant": 1.5,
             "wavelength": [0.75, 1.25, 2.0],
         }
 
-        with tempfile.TemporaryDirectory() as temporary_directory:
-            path = Path(temporary_directory) / "case_params.txt"
-            write_case_parameter_file("cube_fourier", 3, args, path)
-
-            self.assertEqual(
-                path.read_text(encoding="utf-8"),
+        expected_contents = {
+            2: (
+                "2\n"
+                "1.5 0.75 1.25\n"
+                "1.0 -2.0 3.0 -4.0\n"
+                "9.0 -10.0 11.0 -12.0\n"
+            ),
+            3: (
                 "2\n"
                 "1.5 0.75 1.25 2.0\n"
-                "1.0 -2.0\n"
-                "3.0 -4.0\n",
-            )
+                "1.0 -2.0 3.0 -4.0 5.0 -6.0 7.0 -8.0\n"
+                "9.0 -10.0 11.0 -12.0 13.0 -14.0 15.0 -16.0\n"
+            ),
+        }
+
+        for dimension, expected in expected_contents.items():
+            with self.subTest(dimension=dimension):
+                with tempfile.TemporaryDirectory() as temporary_directory:
+                    path = Path(temporary_directory) / "case_params.txt"
+                    write_case_parameter_file(
+                        "cube_fourier", dimension, args, path
+                    )
+
+                    self.assertEqual(
+                        path.read_text(encoding="utf-8"), expected
+                    )
 
     def test_writes_dimension_specific_polynomial_rows(self):
         expected_rows = {

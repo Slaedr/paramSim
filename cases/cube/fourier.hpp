@@ -2,6 +2,7 @@
 #define PARAMSIM_CASES_CUBE_FOURIER_HPP_
 
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <string>
 #include <vector>
@@ -23,11 +24,25 @@ namespace fourier {
 using namespace dealii;
 
 /**
- * @brief Sine and cosine coefficients for one positive Fourier frequency.
+ * @brief Tensor-product coefficients for one positive Fourier frequency.
+ *
+ * Coefficients are ordered lexicographically by directional factor, with
+ * cosine before sine in each direction.
+ *
+ * @tparam dim Active spatial dimension; must be 2 or 3.
  */
+template <int dim>
 struct Mode {
-    double cosine_coefficient{0.0};
-    double sine_coefficient{0.0};
+    static_assert(dim == 2 || dim == 3,
+                  "Fourier modes require dimension 2 or 3.");
+
+    static constexpr unsigned term_count = 1U << dim;
+    std::array<double, term_count> coefficients = [] {
+        std::array<double, term_count> values{};
+        values.front() = 1.0;
+        values.back() = 1.0;
+        return values;
+    }();
 };
 
 /**
@@ -40,7 +55,7 @@ struct Params {
     static_assert(dim == 2 || dim == 3,
                   "Fourier parameters require dimension 2 or 3.");
 
-    std::vector<Mode> modes{{1.0, 1.0}, {1.0, 1.0}};
+    std::vector<Mode<dim>> modes = std::vector<Mode<dim>>(2);
     double constant{1.0};
     std::array<double, dim> fundamental_wavelength = [] {
         std::array<double, dim> values{};
@@ -63,8 +78,8 @@ Params<dim> read_parameters(const std::string& filename);
 /**
  * @brief Evaluates a multidimensional Fourier boundary profile.
  *
- * Each mode is the sum of a product of directional cosine terms and a
- * product of directional sine terms.
+ * Each mode contains every tensor product of directional sine and cosine
+ * terms. Products are ordered lexicographically with cosine before sine.
  *
  * @tparam dim Active spatial dimension; must be 2 or 3.
  */
@@ -94,17 +109,28 @@ public:
         double sum = params_.constant;
         for (std::size_t index = 0; index < params_.modes.size(); ++index) {
             const double frequency = static_cast<double>(index + 1);
-            double cosine_product = 1.0;
-            double sine_product = 1.0;
+            std::array<double, dim> cosine_values{};
+            std::array<double, dim> sine_values{};
             for (int idim = 0; idim < dim; ++idim) {
                 const double angle = frequency * 2.0 * pi /
                                      params_.fundamental_wavelength[idim] *
                                      p[idim];
-                cosine_product *= std::cos(angle);
-                sine_product *= std::sin(angle);
+                cosine_values[idim] = std::cos(angle);
+                sine_values[idim] = std::sin(angle);
             }
-            sum += params_.modes[index].cosine_coefficient * cosine_product +
-                   params_.modes[index].sine_coefficient * sine_product;
+
+            for (unsigned term_index = 0;
+                 term_index < Mode<dim>::term_count; ++term_index) {
+                double product = 1.0;
+                for (int idim = 0; idim < dim; ++idim) {
+                    const unsigned direction_mask =
+                        1U << static_cast<unsigned>(dim - idim - 1);
+                    product *= (term_index & direction_mask) != 0U
+                                   ? sine_values[idim]
+                                   : cosine_values[idim];
+                }
+                sum += params_.modes[index].coefficients[term_index] * product;
+            }
         }
         return sum;
     }
@@ -119,10 +145,20 @@ using RightHandSide = exponential::RightHandSide<dim>;
 
 namespace bpo = boost::program_options;
 
+/**
+ * @brief Cube case with a tensor-product Fourier Dirichlet profile.
+ *
+ * @tparam dim Active spatial dimension; must be 2 or 3.
+ */
 template <int dim>
 class CubeFourier final : public CubeCase<dim> {
 public:
-    void initialize(const bpo::variables_map&) override;
+    /**
+     * @brief Initializes the case from optional runtime Fourier parameters.
+     *
+     * @param params Parsed command-line options.
+     */
+    void initialize(const bpo::variables_map& params) override;
 };
 
 } // namespace cube

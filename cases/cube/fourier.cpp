@@ -30,9 +30,17 @@ Params<dim> read_parameters(const std::string& filename)
         params.fundamental_wavelength[direction] = wavelength;
     }
     for (unsigned index = 0; index < mode_count; ++index) {
-        const auto coefficients =
-            reader.read_finite_values(2, "mode " + std::to_string(index + 1));
-        params.modes.push_back({coefficients[0], coefficients[1]});
+        const auto coefficients = reader.read_finite_values(
+            fourier::Mode<dim>::term_count,
+            "mode " + std::to_string(index + 1));
+        fourier::Mode<dim> mode;
+        for (unsigned coefficient_index = 0;
+             coefficient_index < fourier::Mode<dim>::term_count;
+             ++coefficient_index) {
+            mode.coefficients[coefficient_index] =
+                coefficients[coefficient_index];
+        }
+        params.modes.push_back(mode);
     }
     reader.require_end();
     return params;
@@ -64,9 +72,16 @@ void CubeFourier<dim>::initialize(const bpo::variables_map& params)
         std::cout << "  Constant term = " << case_params.constant << std::endl;
         for (std::size_t index = 0; index < case_params.modes.size(); ++index) {
             const auto& mode = case_params.modes[index];
-            std::cout << "  Mode " << index + 1 << ": ("
-                      << mode.cosine_coefficient << ", "
-                      << mode.sine_coefficient << ")" << std::endl;
+            std::cout << "  Mode " << index + 1 << ": (";
+            for (unsigned coefficient_index = 0;
+                 coefficient_index < fourier::Mode<dim>::term_count;
+                 ++coefficient_index) {
+                if (coefficient_index > 0) {
+                    std::cout << ", ";
+                }
+                std::cout << mode.coefficients[coefficient_index];
+            }
+            std::cout << ")" << std::endl;
         }
     } else {
         dirichlet1 = std::make_shared<fourier::DirichletIn<dim>>();

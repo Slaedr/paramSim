@@ -3,7 +3,9 @@
 
 #include <memory>
 #include <string>
+#include <utility>
 
+#include <boost/any.hpp>
 #include <boost/program_options/variables_map.hpp>
 
 #include "../../pdes/pdebase.hpp"
@@ -27,16 +29,26 @@ constexpr int minimal_surface_maximum_newton_iterations = 10;
  * @param grid_count Number of grids in the refinement sequence.
  * @param pde_name PDE name stored in its runtime parameters.
  * @param maximum_iterations Maximum Newton iterations on each grid.
+ * @param init_pde_name Initialization PDE name or `default`.
+ * @param case_parameter_file Optional case-parameter-file path.
  * @return Nonlinear residual norm following the final solve.
  */
 template <int dim, template <int> class Case, template <int> class PDE>
 double solve_grid_sequence(const unsigned initial_resolution,
                            const int grid_count, const std::string& pde_name,
                            const int maximum_iterations,
-                           const std::string init_pde_name = "default")
+                           const std::string init_pde_name = "default",
+                           const std::string case_parameter_file = "")
 {
     auto test_case = std::make_shared<Case<dim>>();
-    test_case->initialize(boost::program_options::variables_map{});
+    boost::program_options::variables_map case_parameters;
+    if (!case_parameter_file.empty()) {
+        case_parameters.insert(std::make_pair(
+            "case_params_file",
+            boost::program_options::variable_value(
+                boost::any(case_parameter_file), false)));
+    }
+    test_case->initialize(case_parameters);
 
     const PDEParams pde_parameters{
         pde_name, 1, initial_resolution, grid_count, false, "_",

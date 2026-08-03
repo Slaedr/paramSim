@@ -7,11 +7,22 @@
 #include "../../cases/cube/fourier.hpp"
 #include "../../pdes/nonlinear_elliptic/minimal_surface.hpp"
 #include "../../pdes/poisson/poisson_cg.hpp"
+#include "../utils/temporary_parameter_file.hpp"
 #include "solve_grid_sequence.hpp"
 
 namespace {
 
 using namespace paramsim::test;
+
+constexpr char cross_term_parameters_2d[] =
+    "1\n"
+    "1 3 3\n"
+    "0.04 -0.03 0.02 -0.01\n";
+
+constexpr char cross_term_parameters_3d[] =
+    "1\n"
+    "1 3 3 3\n"
+    "0.08 -0.07 0.06 -0.05 0.04 -0.03 0.02 -0.01\n";
 
 TEST(CubeFourierPoisson, SolverConvergesWithP1In2D)
 {
@@ -74,6 +85,52 @@ TEST(CubeFourierMinimalSurface, SolverConvergesWithP1In3D)
                                    paramsim::pde::MinimalSurface>(
                   16, 2, "minimal_surface",
                   minimal_surface_maximum_newton_iterations)),
+              nonlinear_tolerance);
+}
+
+TEST(CubeFourierCrossTerms, PoissonConvergesWithNonzeroCoefficientsIn2D)
+{
+    const TemporaryParameterFile parameter_file(cross_term_parameters_2d);
+
+    EXPECT_LT((solve_grid_sequence<2, paramsim::cases::cube::CubeFourier,
+                                   paramsim::pde::PoissonCG>(
+                  32, 3, "poisson_cg", poisson_maximum_newton_iterations,
+                  "default", parameter_file.path())),
+              nonlinear_tolerance);
+}
+
+TEST(CubeFourierCrossTerms, MinimalSurfaceConvergesWithNonzeroCoefficientsIn2D)
+{
+    const TemporaryParameterFile parameter_file(cross_term_parameters_2d);
+
+    EXPECT_LT((solve_grid_sequence<2, paramsim::cases::cube::CubeFourier,
+                                   paramsim::pde::MinimalSurface>(
+                  16, 3, "minimal_surface",
+                  minimal_surface_maximum_newton_iterations, "default",
+                  parameter_file.path())),
+              nonlinear_tolerance);
+}
+
+TEST(CubeFourierCrossTerms, PoissonConvergesWithNonzeroCoefficientsIn3D)
+{
+    const TemporaryParameterFile parameter_file(cross_term_parameters_3d);
+
+    EXPECT_LT((solve_grid_sequence<3, paramsim::cases::cube::CubeFourier,
+                                   paramsim::pde::PoissonCG>(
+                  8, 3, "poisson_cg", poisson_maximum_newton_iterations,
+                  "default", parameter_file.path())),
+              nonlinear_tolerance);
+}
+
+TEST(CubeFourierCrossTerms, MinimalSurfaceConvergesWithNonzeroCoefficientsIn3D)
+{
+    const TemporaryParameterFile parameter_file(cross_term_parameters_3d);
+
+    EXPECT_LT((solve_grid_sequence<3, paramsim::cases::cube::CubeFourier,
+                                   paramsim::pde::MinimalSurface>(
+                  16, 2, "minimal_surface",
+                  minimal_surface_maximum_newton_iterations, "default",
+                  parameter_file.path())),
               nonlinear_tolerance);
 }
 

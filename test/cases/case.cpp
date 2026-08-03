@@ -1,10 +1,7 @@
 #include <cstdlib>
-#include <filesystem>
-#include <fstream>
 #include <memory>
 #include <stdexcept>
 #include <string>
-#include <system_error>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -15,42 +12,14 @@
 #include "../../cases/cube/polynomial.hpp"
 #include "../../cases/minimal_surface/minimal_surface.hpp"
 #include "../../utils/cmdparser.hpp"
+#include "../utils/temporary_parameter_file.hpp"
 
 namespace ps = paramsim;
 namespace bpo = boost::program_options;
 namespace cube = ps::cases::cube;
 
 namespace {
-
-class TemporaryCaseParameterFile {
-public:
-    explicit TemporaryCaseParameterFile(const std::string& contents)
-    {
-        static unsigned next_id = 0;
-        path_ = std::filesystem::temp_directory_path() /
-                ("paramsim_case_cli_" + std::to_string(next_id++) + ".txt");
-        std::ofstream output(path_);
-        output << contents;
-        if (!output) {
-            throw std::runtime_error(
-                "Could not create temporary case parameter file.");
-        }
-    }
-
-    ~TemporaryCaseParameterFile()
-    {
-        std::error_code error;
-        std::filesystem::remove(path_, error);
-    }
-
-    std::string path() const
-    {
-        return path_.string();
-    }
-
-private:
-    std::filesystem::path path_;
-};
+using paramsim::test::TemporaryParameterFile;
 
 template <int dim>
 std::unique_ptr<ps::Case<dim>>
@@ -163,15 +132,15 @@ TEST(CommonOptions, HasParameterFileOption)
 
 TEST(CubeCaseParameters, UsesParameterFileForSelectedCaseAndDimension)
 {
-    TemporaryCaseParameterFile exponential_file("1\n"
-                                                "0 0 0 2 1\n");
-    TemporaryCaseParameterFile fourier_file("1\n"
-                                            "5 2 3 4\n"
-                                            "0 0\n");
-    TemporaryCaseParameterFile polynomial_file("2\n"
-                                               "1 2 3\n"
-                                               "1\n"
-                                               "2 3 4\n");
+    TemporaryParameterFile exponential_file("1\n"
+                                            "0 0 0 2 1\n");
+    TemporaryParameterFile fourier_file("1\n"
+                                        "5 2 3 4\n"
+                                        "0 0 0 0 0 0 0 0\n");
+    TemporaryParameterFile polynomial_file("2\n"
+                                           "1 2 3\n"
+                                           "1\n"
+                                           "2 3 4\n");
     const std::string exponential_path = exponential_file.path();
     const std::string fourier_path = fourier_file.path();
     const std::string polynomial_path = polynomial_file.path();
@@ -248,7 +217,7 @@ TEST(CubeCaseParameters, ProfileAppliesToEveryBoundaryFace)
 
 TEST(CubeCaseParameters, ReportsMalformedFilesForSelectedCase)
 {
-    TemporaryCaseParameterFile file("0\n");
+    TemporaryParameterFile file("0\n");
     const std::string path = file.path();
 
     for (const std::string case_name :

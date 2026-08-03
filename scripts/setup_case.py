@@ -61,8 +61,7 @@ def validate_case_parameter_ranges(case_type: str, range_data: dict):
 
     elif case_type == "cube_fourier":
         _validate_count_range(range_data, "num_modes_range")
-        _validate_float_bounds(range_data, "a_bounds")
-        _validate_float_bounds(range_data, "b_bounds")
+        _validate_float_bounds(range_data, "coeff_bounds")
         _validate_float_bounds(range_data, "constant_bounds")
         wavelength_lower, _ = _validate_float_bounds(
             range_data, "wavelength_bounds"
@@ -304,8 +303,9 @@ def setup_case(
     elif case_type == "cube_fourier":
         count_lower, count_upper = case_parameter_ranges["num_modes_range"]
         max_modes = count_upper
-        a_lower, a_upper = case_parameter_ranges["a_bounds"]
-        b_lower, b_upper = case_parameter_ranges["b_bounds"]
+        coefficient_lower, coefficient_upper = case_parameter_ranges[
+            "coeff_bounds"
+        ]
         constant_lower, constant_upper = case_parameter_ranges[
             "constant_bounds"
         ]
@@ -316,7 +316,11 @@ def setup_case(
         gen_specs["out"].extend(
             [
                 ("num_modes", np.int32),
-                ("mode_coefficients", np.float32, (max_modes, 2)),
+                (
+                    "mode_coefficients",
+                    np.float32,
+                    (max_modes, 2 ** case_data["dimension"]),
+                ),
                 ("constant", np.float32),
                 ("wavelength", np.float32, (case_data["dimension"],)),
             ]
@@ -336,18 +340,13 @@ def setup_case(
         gen_specs["user"]["upper"]["num_modes"] = np.asarray(
             count_upper, dtype=np.int32
         )
-        lower_coefficients = np.empty((max_modes, 2), dtype=np.float32)
-        upper_coefficients = np.empty((max_modes, 2), dtype=np.float32)
-        lower_coefficients[:, 0] = a_lower
-        lower_coefficients[:, 1] = b_lower
-        upper_coefficients[:, 0] = a_upper
-        upper_coefficients[:, 1] = b_upper
-        gen_specs["user"]["lower"][
-            "mode_coefficients"
-        ] = lower_coefficients
-        gen_specs["user"]["upper"][
-            "mode_coefficients"
-        ] = upper_coefficients
+        coefficient_shape = (max_modes, 2 ** case_data["dimension"])
+        gen_specs["user"]["lower"]["mode_coefficients"] = np.full(
+            coefficient_shape, coefficient_lower, dtype=np.float32
+        )
+        gen_specs["user"]["upper"]["mode_coefficients"] = np.full(
+            coefficient_shape, coefficient_upper, dtype=np.float32
+        )
         gen_specs["user"]["lower"]["constant"] = np.asarray(
             constant_lower, dtype=np.float32
         )
@@ -409,102 +408,6 @@ def setup_case(
     else:
         raise ValueError(f"Invalid case type: {case_type}")
 
-def _setup_legacy_case(case_data: dict, gen_specs: dict, sim_specs: dict):
-    """ Depending on the case type, adds case-specific ensemble run parameters to
-        libensemble dicts.
-        
-        For the case cube_exponential, this needs an array "centers" of length 3, each having
-        dict "coords_bounds" (lower and upper bounds for y-coordinates, so array of length 2),
-        dict "coeff_bounds" (lower and upper bounds for coefficients, so array of length 2).
-        In addition, a key "width_bounds" with a 2-array as value, having lower and upper bounds
-        for the width of each exponential hill.
-
-        @param[in] case_data  Dict of ensemble options supplied in the ensemble settings JSON.
-        @param[in,out] gen_specs  Parameter bounds are populated in this libEnsemble dict.
-    """
-    if case_data["case_type"] == "cube_exponential":
-        ncenters = 3
-        ndim = 1
-        # Output of generator include 2 centers, each with x-coord, y-coord and coefficient
-        gen_specs["out"].append( ("centers", np.float32, (ncenters, ndim+1)) )
-        # ..and width of the hills
-        gen_specs["out"].append( ("width", np.float32, (1,)) )
-        sim_specs["in"].append("centers")
-        sim_specs["in"].append("width")
-
-        cparams = case_data["centers"]
-        l_cbounds = np.zeros((ncenters,ndim+1), dtype=np.float32)
-        u_cbounds = np.zeros((ncenters,ndim+1), dtype=np.float32)
-        for ic in range(ncenters):
-            l_cbounds[ic][0] = cparams[ic]["coords_bounds"][0]
-            l_cbounds[ic][1] = cparams[ic]["coeff_bounds"][0]
-            u_cbounds[ic][0] = cparams[ic]["coords_bounds"][1]
-            u_cbounds[ic][1] = cparams[ic]["coeff_bounds"][1]
-        gen_specs["user"]["lower"]["centers"] = l_cbounds
-        gen_specs["user"]["upper"]["centers"] = u_cbounds
-        
-        l_wbound = case_data["width_bounds"][0]
-        u_wbound = case_data["width_bounds"][1]
-        gen_specs["user"]["lower"]["width"] = np.array([l_wbound], dtype=np.float32)
-        gen_specs["user"]["upper"]["width"] = np.array([u_wbound], dtype=np.float32)
-
-    elif case_data["case_type"] == "cube_polynomial":
-        nterms = 4
-        ndim = 1
-        gen_specs["out"].append( ("coeffs", np.float32, (nterms,)) )
-        gen_specs["out"].append( ("center_y", np.float32, (1,)) )
-        sim_specs["in"].append("coeffs")
-        sim_specs["in"].append("center_y")
-
-        cparams = case_data["coeffs_bounds"]
-        l_cbounds = np.zeros((nterms,), dtype=np.float32)
-        u_cbounds = np.zeros((nterms,), dtype=np.float32)
-        for it in range(nterms):
-            l_cbounds[it] = cparams[it][0]
-            u_cbounds[it] = cparams[it][1]
-        gen_specs["user"]["lower"]["coeffs"] = l_cbounds
-        gen_specs["user"]["upper"]["coeffs"] = u_cbounds
-
-        l_ybound = case_data["center_y_bounds"][0]
-        u_ybound = case_data["center_y_bounds"][1]
-        gen_specs["user"]["lower"]["center_y"] = np.array([l_ybound], dtype=np.float32)
-        gen_specs["user"]["upper"]["center_y"] = np.array([u_ybound], dtype=np.float32)
-
-    elif case_data["case_type"] == "cube_fourier":
-        nmodes = 2
-        ndim = 1
-        # Output of generator include 2 centers, each with x-coord, y-coord and coefficient
-        gen_specs["out"].append( ("amplitudes", np.float32, (nmodes, 2)) )
-        # ..and width of the hills
-        gen_specs["out"].append( ("constant", np.float32, (1,)) )
-        gen_specs["out"].append( ("wavelength", np.float32, (1,)) )
-        sim_specs["in"].append("amplitudes")
-        sim_specs["in"].append("constant")
-        sim_specs["in"].append("wavelength")
-
-        cparams = case_data["amplitudes"]
-        l_ampbounds = np.zeros((nmodes,2), dtype=np.float32)
-        u_ampbounds = np.zeros((nmodes,2), dtype=np.float32)
-        for ic in range(nmodes):
-            l_ampbounds[ic,0] = cparams[ic]["a_bounds"][0]
-            l_ampbounds[ic,1] = cparams[ic]["b_bounds"][0]
-            u_ampbounds[ic,0] = cparams[ic]["a_bounds"][1]
-            u_ampbounds[ic,1] = cparams[ic]["b_bounds"][1]
-        gen_specs["user"]["lower"]["amplitudes"] = l_ampbounds
-        gen_specs["user"]["upper"]["amplitudes"] = u_ampbounds
-
-        l_cbound = case_data["constant_bounds"][0]
-        u_cbound = case_data["constant_bounds"][1]
-        gen_specs["user"]["lower"]["constant"] = np.array([l_cbound], dtype=np.float32)
-        gen_specs["user"]["upper"]["constant"] = np.array([u_cbound], dtype=np.float32)
-
-        l_wbound = case_data["wavelength_bounds"][0]
-        u_wbound = case_data["wavelength_bounds"][1]
-        gen_specs["user"]["lower"]["wavelength"] = np.array([l_wbound], dtype=np.float32)
-        gen_specs["user"]["upper"]["wavelength"] = np.array([u_wbound], dtype=np.float32)
-    else:
-        raise "Invalid case type!"
-
 def write_case_parameter_file(
     case_type: str,
     dimension: int,
@@ -554,7 +457,9 @@ def write_case_parameter_file(
                 parameter_file.write(
                     " ".join(
                         str(value)
-                        for value in args["mode_coefficients"][index]
+                        for value in args["mode_coefficients"][index][
+                            : 2 ** dimension
+                        ]
                     )
                     + "\n"
                 )
