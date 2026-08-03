@@ -211,6 +211,8 @@ def get_common_args_str(case_data : dict) -> str:
         + " --case " + case_data["case_type"]
         + " --refine_levels " + str(refine_levels)
         + " --initial_resolution " + str(case_data["resolution"])
+        + " --max_its " + str(case_data.get("max_nonlinear_its", 10))
+        + " --tolerance " + str(case_data.get("nonlinear_tolerance", 1e-6))
         + " --output_prefix field"
         + (" --init_pde " + init_pde if init_pde is not None else "")
     )
