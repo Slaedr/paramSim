@@ -22,10 +22,7 @@ class MinimalSurfaceDiskSinusoidal : public testing::Test
 protected:
     MinimalSurfaceDiskSinusoidal() : fe(1)
     {
-        bpo::options_description common_desc
-            ("Solves one problem given one set of parameters.");
-        const bpo::variables_map common_cmdmap = get_cmd_args(0, NULL, common_desc);
-        msds.initialize(common_cmdmap);
+        msds.initialize(bpo::variables_map{});
     }
 
     static constexpr double eps = std::numeric_limits<double>::epsilon();
