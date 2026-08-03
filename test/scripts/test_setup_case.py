@@ -31,13 +31,17 @@ class CommonArgsTests(unittest.TestCase):
             "case_type": "cube_exponential",
             "refine_levels": 2,
             "resolution": 8,
+            "max_nonlinear_its": 20,
+            "nonlinear_tolerance": 1e-7
         }
 
-    def test_dimension_is_forwarded(self):
+    def test_args_are_forwarded(self):
         self.assertEqual(
             get_common_args_str(self.base_case()),
             "--dimension 3 --pde poisson_cg --case cube_exponential "
-            "--refine_levels 2 --initial_resolution 8 --output_prefix field",
+            "--refine_levels 2 --initial_resolution 8 "
+            "--max_its 20 --tolerance 1e-07"
+            " --output_prefix field"
         )
 
     def test_init_pde_is_omitted_by_default(self):

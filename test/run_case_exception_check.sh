@@ -32,7 +32,9 @@ check_failure() {
 }
 
 check_failure "an unknown case name" "Non-existent case!" \
-    --dimension 2 --pde poisson_cg --case nonexistent_case
+    --dimension 2 --pde poisson_cg --case nonexistent_case \
+    --initial_resolution 4
 
 check_failure "an unknown PDE solver" "Unsupported PDE solver!" \
-    --dimension 2 --pde nonexistent_pde --case poisson_verify
+    --dimension 2 --pde nonexistent_pde --case poisson_verify \
+    --initial_resolution 4

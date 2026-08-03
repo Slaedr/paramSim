@@ -29,10 +29,10 @@ void add_common_options(bpo::options_description& desc, const std::string help_m
          "Spatial dimension of the problem (required; supported values: 2, 3)")
         ("case_params_file", bpo::value<std::string>(),
          "Path to the case-specific parameter file")
-        ("refine_levels", bpo::value<int>()->default_value(5),
+        ("refine_levels", bpo::value<int>()->default_value(1),
          "Number of times to refine the grid and solve")
-        ("initial_resolution", bpo::value<unsigned int>()->default_value(2),
-         "Number of cells in first grid")
+        ("initial_resolution", bpo::value<unsigned int>(),
+         "required; Number of cells in first grid")
         ("fe_degree", bpo::value<int>()->default_value(1),
          "Polynomial degree of FEM basis functions to use")
         ("is_adaptive", bpo::value<bool>()->default_value(false),

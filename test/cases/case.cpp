@@ -53,6 +53,8 @@ TEST(Cases, CanCreateDefaultMinSurfDiskSinusoidalCase)
                         "minimal_surface",
                         "--refine_levels",
                         "4",
+                        "--initial_resolution",
+                        "4",
                         "--case",
                         "minimal_surface_disk_sinusoidal",
                         "--fe_degree",
@@ -80,17 +82,17 @@ TEST(CommonParams, AcceptsSupportedDimensions)
 {
     bpo::options_description common_desc("Common options");
     ps::add_common_options(common_desc, "help!");
-    const char *args2[] = {"prog",          "--dimension", "2",
-                           "--pde",         "poisson_cg",  "--case",
-                           "poisson_verify"};
-    const char *args3[] = {"prog",          "--dimension", "3",
-                           "--pde",         "poisson_cg",  "--case",
-                           "poisson_verify"};
+    const char *args2[] = {"prog",           "--dimension",          "2",
+                           "--pde",          "poisson_cg",           "--case",
+                           "poisson_verify", "--initial_resolution", "4"};
+    const char *args3[] = {"prog",           "--dimension",          "3",
+                           "--pde",          "poisson_cg",           "--case",
+                           "poisson_verify", "--initial_resolution", "4"};
 
     const auto params2 =
-        ps::get_common_params(ps::get_cmd_args(7, args2, common_desc));
+        ps::get_common_params(ps::get_cmd_args(9, args2, common_desc));
     const auto params3 =
-        ps::get_common_params(ps::get_cmd_args(7, args3, common_desc));
+        ps::get_common_params(ps::get_cmd_args(9, args3, common_desc));
 
     EXPECT_EQ(params2.dimension, 2);
     EXPECT_EQ(params3.dimension, 3);
@@ -100,9 +102,10 @@ TEST(CommonParams, RejectsMissingDimension)
 {
     bpo::options_description common_desc("Common options");
     ps::add_common_options(common_desc, "help!");
-    const char *args[] = {"prog", "--pde", "poisson_cg", "--case",
-                          "poisson_verify"};
-    const auto common_cmdmap = ps::get_cmd_args(5, args, common_desc);
+    const char *args[] = {"prog",   "--pde",          "poisson_cg",
+                          "--case", "poisson_verify", "--initial_resolution",
+                          "4"};
+    const auto common_cmdmap = ps::get_cmd_args(7, args, common_desc);
 
     EXPECT_THROW(ps::get_common_params(common_cmdmap), std::invalid_argument);
 }
@@ -111,9 +114,10 @@ TEST(CommonParams, RejectsUnsupportedDimension)
 {
     bpo::options_description common_desc("Common options");
     ps::add_common_options(common_desc, "help!");
-    const char *args[] = {"prog",   "--dimension",   "4", "--pde", "poisson_cg",
-                          "--case", "poisson_verify"};
-    const auto common_cmdmap = ps::get_cmd_args(7, args, common_desc);
+    const char *args[] = {"prog",           "--dimension",          "4",
+                          "--pde",          "poisson_cg",           "--case",
+                          "poisson_verify", "--initial_resolution", "4"};
+    const auto common_cmdmap = ps::get_cmd_args(9, args, common_desc);
 
     EXPECT_THROW(ps::get_common_params(common_cmdmap), std::invalid_argument);
 }
