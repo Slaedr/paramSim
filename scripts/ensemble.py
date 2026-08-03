@@ -88,10 +88,6 @@ def run_case(H_in, persis_info, sim_specs, libE_info):
 
 def run_ensemble(case_file_path):
 
-    nworkers, is_manager, libE_specs, _ = libe.tools.parse_args()
-    libe.logger.set_level("INFO")
-    exctr = Executor()
-
     # Read params for this ensemble-case
     case_path = Path(case_file_path).expanduser().resolve()
     with case_path.open("r", encoding="utf-8") as case_file:
@@ -99,6 +95,19 @@ def run_ensemble(case_file_path):
     case_parameter_ranges = load_case_parameter_ranges(
         case_data, case_path
     )
+
+    comms = case_data.get("comms", "local")
+    nworkers = case_data.get("nworkers", 1)
+    is_manager = True
+    #nworkers, is_manager, libE_specs, _ = libe.tools.parse_args()
+    libE_specs = dict()
+    libE_specs["comms"] = comms
+    libE_specs["nworkers"] = nworkers
+    # Create and work inside separate per-simulation directories
+    libE_specs["sim_dirs_make"] = True
+    libe.logger.set_level("INFO")
+
+    exctr = Executor()
 
     # Register simulation executable with executor
     exctr.register_app(full_path=case_data["simulation_exec_path"], app_name="run_fem_case")
@@ -132,9 +141,6 @@ def run_ensemble(case_file_path):
     }
 
     setup_case(case_data, gen_specs, sim_specs, case_parameter_ranges)
-
-    # Create and work inside separate per-simulation directories
-    libE_specs["sim_dirs_make"] = True
 
     exit_criteria = {"sim_max": case_data["num_samples"]}
 
