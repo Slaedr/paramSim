@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include "../../cases/cube/exponential.hpp"
+#include "../../pdes/nonlinear_elliptic/gelfand.hpp"
 #include "../../pdes/nonlinear_elliptic/minimal_surface.hpp"
 #include "../../pdes/poisson/poisson_cg.hpp"
 #include "solve_grid_sequence.hpp"
@@ -8,6 +9,22 @@
 namespace {
 
 using namespace paramsim::test;
+
+TEST(CubeExponentialGelfand, SolverConvergesWithP1In2D)
+{
+    EXPECT_LT((solve_grid_sequence<2, paramsim::cases::cube::CubeExponential,
+                                   paramsim::pde::Gelfand>(
+                  16, 3, "gelfand", 12)),
+              nonlinear_tolerance);
+}
+
+TEST(CubeExponentialGelfand, SolverConvergesWithP1In3D)
+{
+    EXPECT_LT((solve_grid_sequence<3, paramsim::cases::cube::CubeExponential,
+                                   paramsim::pde::Gelfand>(
+                  8, 3, "gelfand", 12)),
+              nonlinear_tolerance);
+}
 
 TEST(InitializationPDE, HasPerPDEDefaults)
 {

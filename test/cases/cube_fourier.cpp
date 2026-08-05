@@ -5,6 +5,7 @@
 #include <deal.II/fe/fe_q.h>
 
 #include "../../cases/cube/fourier.hpp"
+#include "../../pdes/nonlinear_elliptic/gelfand.hpp"
 #include "../../pdes/nonlinear_elliptic/minimal_surface.hpp"
 #include "../../pdes/poisson/poisson_cg.hpp"
 #include "../utils/temporary_parameter_file.hpp"
@@ -13,6 +14,18 @@
 namespace {
 
 using namespace paramsim::test;
+
+constexpr char gelfand_parameters_2d[] =
+    "2\n"
+    "-0.25 1 1\n"
+    "0.8 -0.6 1.2 -0.4\n"
+    "-0.7 0.5 -0.9 0.3\n";
+
+constexpr char gelfand_parameters_3d[] =
+    "2\n"
+    "-0.25 1 1 1\n"
+    "0.8 -0.6 1.2 -0.4 0.7 -0.5 0.9 -0.3\n"
+    "-0.7 0.5 -0.9 0.3 -0.8 0.4 -1.1 0.6\n";
 
 constexpr char cross_term_parameters_2d[] =
     "1\n"
@@ -37,6 +50,26 @@ TEST(CubeFourierPoisson, SolverConvergesWithP1In3D)
     EXPECT_LT((solve_grid_sequence<3, paramsim::cases::cube::CubeFourier,
                                    paramsim::pde::PoissonCG>(
                   8, 3, "poisson_cg", poisson_maximum_newton_iterations)),
+              nonlinear_tolerance);
+}
+
+TEST(CubeFourierGelfand, SolverConvergesWithP1In2D)
+{
+    const TemporaryParameterFile parameter_file(gelfand_parameters_2d);
+
+    EXPECT_LT((solve_grid_sequence<2, paramsim::cases::cube::CubeFourier,
+                                   paramsim::pde::Gelfand>(
+                  16, 3, "gelfand", 12, "default", parameter_file.path())),
+              nonlinear_tolerance);
+}
+
+TEST(CubeFourierGelfand, SolverConvergesWithP1In3D)
+{
+    const TemporaryParameterFile parameter_file(gelfand_parameters_3d);
+
+    EXPECT_LT((solve_grid_sequence<3, paramsim::cases::cube::CubeFourier,
+                                   paramsim::pde::Gelfand>(
+                  8, 3, "gelfand", 12, "default", parameter_file.path())),
               nonlinear_tolerance);
 }
 
