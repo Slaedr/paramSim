@@ -1,2 +1,5 @@
 
-target_sources(paramsim_dpdes PRIVATE minimal_surface.cpp)
+target_sources(paramsim_dpdes PRIVATE
+    gelfand.cpp
+    minimal_surface.cpp
+)

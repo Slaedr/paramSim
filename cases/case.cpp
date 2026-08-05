@@ -2,6 +2,7 @@
 
 #include <memory>
 
+#include "gelfand/verify.hpp"
 #include "minimal_surface/minimal_surface.hpp"
 #include "minimal_surface/verify.hpp"
 #include "cube/exponential.hpp"
@@ -19,6 +20,8 @@ std::unique_ptr<Case<dim>> create_case(const CommonParams &params,
     std::unique_ptr<Case<dim>> tcase;
     if (params.case_str == "poisson_verify") {
         tcase = std::make_unique<cases::PoissonVerify<dim>>();
+    } else if (params.case_str == "gelfand_verify") {
+        tcase = std::make_unique<cases::GelfandVerify<dim>>();
     } else if (params.case_str == "cube_exponential") {
         tcase = std::make_unique<cases::cube::CubeExponential<dim>>();
     } else if (params.case_str == "cube_fourier") {

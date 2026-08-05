@@ -14,9 +14,9 @@ void add_common_options(bpo::options_description& desc, const std::string help_m
         ("case", bpo::value<std::string>(),
          "Name of the PDE case to solve: 'poisson_verify', 'cube_exponential', 'cube_fourier', "
          "'cube_polynomial', 'minimal_surface_ball_verify', 'minimal_surface_cube_verify', "
-         "'minimal_surface_disk_sinusoidal'")
+         "'minimal_surface_disk_sinusoidal', 'gelfand_verify'")
         ("pde", bpo::value<std::string>(),
-         "Type of PDE solver to use: 'poisson_cg', 'minimal_surface'")
+         "Type of PDE solver to use: 'poisson_cg', 'minimal_surface', 'gelfand'")
         ("init_pde", bpo::value<std::string>()->default_value(""),
          "PDE solved first on the initial grid to initialize the main solve, using the same case. "
          "Leave empty to use the default for the chosen --pde ('minimal_surface' defaults to "

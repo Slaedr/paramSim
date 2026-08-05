@@ -18,6 +18,7 @@
 #include <deal.II/numerics/data_out.h>
 
 #include "../utils/error_handling.hpp"
+#include "nonlinear_elliptic/gelfand.hpp"
 #include "poisson/poisson_cg.hpp"
 #include "nonlinear_elliptic/minimal_surface.hpp"
 
@@ -289,6 +290,8 @@ std::unique_ptr<DiscretePDEBase> create_discrete_pde(std::shared_ptr<const Case<
 {
     if(params.pde_solver == "poisson_cg") {
         return std::make_unique<pde::PoissonCG<dim>>(test_case, params);
+    } else if(params.pde_solver == "gelfand") {
+        return std::make_unique<pde::Gelfand<dim>>(test_case, params);
     } else if(params.pde_solver == "minimal_surface") {
         return std::make_unique<pde::MinimalSurface<dim>>(test_case, params);
     } else {

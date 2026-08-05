@@ -1,3 +1,9 @@
+add_executable(gelfand_test gelfand.cpp)
+deal_ii_setup_target(gelfand_test)
+target_link_libraries(gelfand_test paramsim_dpdes paramsim_cases
+                      paramsim_utils utils testutils GTest::gtest_main)
+gtest_discover_tests(gelfand_test)
+
 add_executable(minimal_surface_test minimal_surface.cpp)
 deal_ii_setup_target(minimal_surface_test)
 target_link_libraries(minimal_surface_test paramsim_dpdes paramsim_cases paramsim_utils utils
