@@ -29,8 +29,10 @@ Ensemble JSON files likewise require an integer `"dimension": 2` or
 Each refinement cycle writes the complete solution volume to
 `<output-prefix>-<cycle>.vtk`. Boundary data is not written to a separate file.
 
-### 3D boundary profiles
+## Available PDEs
 
-The manufactured minimal-surface verification cases support both 2D and 3D.
-The parameterized cube exponential and Fourier profiles use every active
-coordinate, providing non-extruded boundary data in 3D.
+The following PDEs are currently available with continuous Galerkin FEM discretization and Dirichlet boundary data:
+1. Poisson equation. It can be selected by `--pde poisson_cg`.
+2. Minimum surface equation. This is a nonlinaer elliptic PDE, frequently called "minimal surface" or "minsurf" in the code. Even for a nonlinear elliptic PDE, this is a difficult PDE because of the nonlinear gradient-dependent diffusivity. It can be selected by `--pde minimal_surface`.
+3. Gelfand equation. This is a nonlinear reaction-diffusion PDE, but the nonlinearity only comes from an exponential source term. It can be selected by `--pde gelfand`.
+
