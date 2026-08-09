@@ -157,46 +157,61 @@ class VTKToHDF5:
 
     Assumes all the samples come from the same physical mesh.
     """
-    def __init__(self, ensemble_root_path, output_path, ndim : int):
+    def __init__(self, ensemble_root_path, hfile, ndim : int):
         """ Prepares to read VTK data from an ensemble tree and write to an
-            HDF5 file. Read mesh from one sample and write it.
+            HDF5 file.
+
+        If the file does not already contain a mesh dataset,
+        read mesh from one sample and write it.
 
         @param ensemble_root_path  Location of the ensemble directory.
-        @param output_path  Path to the HDF5 file.
+        @param hfile  Open HDF5 file object.
         @param ndim  Number of relevant spatial dimensions.
         """
-        self.nsamples = len([name for name in os.listdir(ensemble_root_path)])
         self.indirpath = ensemble_root_path
         self.ndim = ndim
-        self.output_path = output_path
+        self.hfile = hfile
+        self.sample_directories = {}
 
-        points = None
-        for dire in sorted(os.listdir(self.indirpath)):
-            for filename in os.listdir(os.path.join(self.indirpath, dire)):
-                filepath = os.path.join(self.indirpath, dire, filename)
-                if not os.path.isfile(filepath):
-                    continue
-                if not (("vtk" in filepath) or ("vtu" in filepath)):
-                    continue
-                sample = mio.read(filepath)
-                _, points = cartesian_domain_sort(sample, self.ndim)
-                break
-            if points is not None:
-                break
+        for name in os.listdir(self.indirpath):
+            directory = os.path.join(self.indirpath, name)
+            if not os.path.isdir(directory) or not name.startswith("sim"):
+                continue
+            sample_id = name[3:]
+            if not sample_id.isdigit():
+                continue
+            sample_index = int(sample_id)
+            if sample_index in self.sample_directories:
+                raise ValueError(
+                    f"Multiple libEnsemble directories represent sample "
+                    f"{sample_index}: {self.sample_directories[sample_index]!r} "
+                    f"and {directory!r}."
+                )
+            self.sample_directories[sample_index] = directory
 
-        if points is None:
-            raise RuntimeError("Could not read mesh points!")
-        # Open HDF5 file and write the mesh
-        self.hfile = h5py.File(self.output_path, "w")
-        logger.info(" Will write data to " + self.output_path)
-        logger.info("  Writing mesh points.")
-        self.hfile.create_dataset("mesh", data=points)
+        self.nsamples = len(self.sample_directories)
 
-    def __del__(self):
-        self.hfile.close()
+        if "mesh" not in self.hfile.keys():
+            points = None
+            for sample_index in sorted(self.sample_directories):
+                directory = self.sample_directories[sample_index]
+                for filename in os.listdir(directory):
+                    filepath = os.path.join(directory, filename)
+                    if not os.path.isfile(filepath):
+                        continue
+                    if not (("vtk" in filepath) or ("vtu" in filepath)):
+                        continue
+                    sample = mio.read(filepath)
+                    _, points = cartesian_domain_sort(sample, self.ndim)
+                    break
+                if points is not None:
+                    break
 
-    def close(self):
-        self.hfile.close()
+            if points is None:
+                raise RuntimeError("Could not read mesh points!")
+            # Open HDF5 file and write the mesh
+            logger.info("  Writing mesh points.")
+            self.hfile.create_dataset("mesh", data=points)
 
     def process_sample(self, in_sample_idx : int, out_sample_idx : int) -> None:
         """ Reads the specified sample from the ensemble tree and writes it out
@@ -205,25 +220,34 @@ class VTKToHDF5:
         @param in_sample_idx  The sample index from the ensemble to read.
         @param out_sample_idx  The index to use in the HDF5 file for this sample.
         """
-        assert(in_sample_idx < self.nsamples)
-        for dire in sorted(os.listdir(self.indirpath)):
-            if str(in_sample_idx) not in dire:
+        if in_sample_idx not in self.sample_directories:
+            raise ValueError(
+                f"No libEnsemble directory found for sample {in_sample_idx} "
+                f"in {self.indirpath!r}."
+            )
+
+        directory = self.sample_directories[in_sample_idx]
+        for filename in os.listdir(directory):
+            filepath = os.path.join(directory, filename)
+            if not os.path.isfile(filepath):
                 continue
-            for filename in os.listdir(os.path.join(self.indirpath, dire)):
-                filepath = os.path.join(self.indirpath, dire, filename)
-                if not os.path.isfile(filepath):
-                    continue
-                if not (("vtk" in filepath) or ("vtu" in filepath)):
-                    continue
-                sample = mio.read(filepath)
-                fields = cartesian_domain_sort(sample, self.ndim)[0]
-                grp = self.hfile.create_group("sample" + str(out_sample_idx))
-                grp.create_dataset("fields", data=fields)
-                break
+            if not (("vtk" in filepath) or ("vtu" in filepath)):
+                continue
+            sample = mio.read(filepath)
+            fields = cartesian_domain_sort(sample, self.ndim)[0]
+            grp = self.hfile.create_group("sample" + str(out_sample_idx))
+            grp.create_dataset("fields", data=fields)
+            return
+
+        raise RuntimeError(
+            f"No VTK or VTU file found for sample {in_sample_idx} "
+            f"in {directory!r}."
+        )
 
 def ensemble_dir_to_hdf5(path, ndim : int, outpath) -> None:
     logger.info(f" Writing data to HDF5 file {outpath}.")
-    simio = VTKToHDF5(path, outpath, ndim)
+    hfile = h5py.File(outpath, "w")
+    simio = VTKToHDF5(path, hfile, ndim)
     for isample in range(simio.nsamples):
         simio.process_sample(isample, isample)
-    simio.close()
+    hfile.close()

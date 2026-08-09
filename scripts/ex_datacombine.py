@@ -36,32 +36,36 @@ def valid_dimension(value):
 def write_combined_hdf5(input_paths, output_path, nsamples, ndim):
     """Write interleaved samples from multiple simulation trees to HDF5."""
     #datasets = [dc.Sim2DDataSetIO(path) for path in input_paths]
-    simios = [vh5.VTKToHDF5(input_path, output_path, ndim) \
-              for input_path in input_paths]
+    with h5py.File(output_path, "w") as hfile:
+        simios = [vh5.VTKToHDF5(input_path, hfile, ndim) \
+                for input_path in input_paths]
 
-    for ip, simio in enumerate(simios):
-        available = simio.nsamples
-        if nsamples > available:
-            raise ValueError(
-                f"Input tree {input_paths[ip]!r} contains {available} samples; "
-                f"{nsamples} requested."
-            )
+        for ip, simio in enumerate(simios):
+            available = simio.nsamples
+            if nsamples > available:
+                raise ValueError(
+                    f"Input tree {input_paths[ip]!r} contains {available} samples;"
+                    f" {nsamples} requested."
+                )
 
-    output_index = 0
-    for sample_index in range(nsamples):
-        for simio in simios:
-            simio.process_sample(sample_index, output_index)
-            output_index += 1
-
-    for simio in simios:
-        simio.close()
+        output_index = 0
+        for sample_index in range(nsamples):
+            for simio in simios:
+                print(f"Output sample {output_index}")
+                simio.process_sample(sample_index, output_index)
+                output_index += 1
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description=(
             "Interleave samples from multiple simulation directory trees and "
-            "write them to one HDF5 file."
+            "write them to one HDF5 file. "
+            "The output HDF5 file has a dataset 'mesh' containing "
+            "the common mesh points, and group for every sample, "
+            "eg., 'sample0', 'sample1' and so on. Each such sample contains "
+            "a dataset 'fields' containing all the physical variable values "
+            "at each mesh point."
         )
     )
     parser.add_argument(

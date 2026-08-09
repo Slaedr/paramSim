@@ -179,7 +179,7 @@ class EnsembleDirectoryConversion(unittest.TestCase):
         ensemble_path = (
             Path(__file__).resolve().parent / "data" / "tinymesh2"
         )
-        for sample_id in ("0", "1"):
+        for sample_id in ("sim000", "sim001"):
             domain_path = (
                 ensemble_path / sample_id / "test-bc_exp-0-0.vtk"
             )
