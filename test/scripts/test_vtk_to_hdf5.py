@@ -1,8 +1,10 @@
 import sys
 import os
+import tempfile
 import unittest
 from pathlib import Path
 
+import h5py
 import numpy as np
 from numpy.lib import recfunctions as rfn
 import meshio as mio
@@ -170,6 +172,91 @@ class VTKProcessing3dSmall(unittest.TestCase):
         self.assertTrue(np.all(points == self.points))
         self.assertTrue(np.all(solution[0,...] == self.soln[0,...]))
         self.assertTrue(np.all(solution[1,...] == self.soln[1,...]))
+
+
+class EnsembleDirectoryConversion(unittest.TestCase):
+    def test_converts_tinymesh2_to_hdf5(self):
+        ensemble_path = (
+            Path(__file__).resolve().parent / "data" / "tinymesh2"
+        )
+        for sample_id in ("0", "1"):
+            domain_path = (
+                ensemble_path / sample_id / "test-bc_exp-0-0.vtk"
+            )
+            domain_mesh = mio.read(domain_path)
+            self.assertEqual(
+                domain_mesh.point_data["velocity"].shape, (64, 3)
+            )
+
+        coordinates = np.linspace(-1.0, 1.0, 5, dtype=np.float32)
+        mesh_x, mesh_y = np.meshgrid(coordinates, coordinates, indexing="xy")
+        expected_mesh = np.stack((mesh_x, mesh_y))
+
+        expected_solution0 = np.array(
+            [[
+                [1.0, 1.0, 1.0, 1.0, 1.0],
+                [0.301751, 0.552884, 0.796107, 0.850062, 1.0],
+                [0.341951, 0.683350, 1.166260, 0.869299, 1.0],
+                [-0.219635, 0.575200, 1.014130, 0.880826, 1.0],
+                [1.0, 1.0, 1.0, 1.0, 1.0],
+            ]],
+            dtype=np.float32,
+        )
+        expected_solution1 = expected_solution0.copy()
+        expected_solution1[0, 0, 1] = 0.9
+        expected_solution1[0, 1, 0] = 0.322751
+        expected_solution1[0, 2, 0] = 0.441951
+
+        expected_velocity0 = np.stack(
+            (mesh_x, mesh_y, mesh_x + mesh_y)
+        )
+        expected_velocity1 = np.stack(
+            (mesh_x + 0.25, mesh_y - 0.5, mesh_x - mesh_y)
+        )
+        expected_fields0 = np.concatenate(
+            (expected_solution0, expected_velocity0)
+        )
+        expected_fields1 = np.concatenate(
+            (expected_solution1, expected_velocity1)
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_path = Path(temp_dir) / "tinymesh2.h5"
+            vh5.ensemble_dir_to_hdf5(
+                str(ensemble_path), 2, str(output_path)
+            )
+
+            with h5py.File(output_path, "r") as hfile:
+                self.assertEqual(
+                    set(hfile.keys()), {"mesh", "sample0", "sample1"}
+                )
+                self.assertEqual(hfile["mesh"].shape, (2, 5, 5))
+                self.assertEqual(
+                    hfile["mesh"].dtype, np.dtype(np.float32)
+                )
+                np.testing.assert_allclose(
+                    hfile["mesh"][...], expected_mesh
+                )
+
+                for sample_name in ("sample0", "sample1"):
+                    self.assertEqual(
+                        set(hfile[sample_name].keys()), {"fields"}
+                    )
+                    self.assertEqual(
+                        hfile[f"{sample_name}/fields"].shape, (4, 5, 5)
+                    )
+                    self.assertEqual(
+                        hfile[f"{sample_name}/fields"].dtype,
+                        np.dtype(np.float32),
+                    )
+
+                np.testing.assert_allclose(
+                    hfile["sample0/fields"][...], expected_fields0
+                )
+                np.testing.assert_allclose(
+                    hfile["sample1/fields"][...], expected_fields1
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

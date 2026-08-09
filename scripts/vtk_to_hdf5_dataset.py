@@ -3,6 +3,7 @@ import logging
 
 import numpy as np
 import meshio as mio
+import h5py
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +109,7 @@ def cartesian_domain_sort(mesh : mio.Mesh, ndim : int):
     """
     points = mesh.points
     nvars, varnames = get_num_components_and_names(mesh.point_data)
-    datau = np.zeros((points.shape[0], points.shape[1] + nvars), dtype=np.float32)
+    datau = np.zeros((points.shape[0], ndim + nvars), dtype=np.float32)
     datau[:,:ndim] = points[:,:ndim]
     ivar = 0
     for _, u_vals in mesh.point_data.items():
@@ -151,47 +152,34 @@ def reshape_meshgrid_to_list(values_tensor, coords_tensor):
 
     return np.hstack([coords_flat, values_flat])
 
-class SimDataSetIO:
-    """ Reads ensemble of solutions from a directory and can write to HDF5.
+def ensemble_dir_to_hdf5(path, ndim : int, outpath) -> None:
+    """ Reads ensemble of solutions from a directory and writes to HDF5.
+
+    Assumes all the samples come from the same physical mesh.
     """
-    def __init__(self, path):
-        self.nsamples = len([name for name in os.listdir(path)])
-        samples = []
-        for dire in sorted(os.listdir(path)):
-            sample_dict = {}
-            for filename in os.listdir(os.path.join(path, dire)):
-                filepath = os.path.join(path,dire,filename)
-                if not os.path.isfile(filepath):
-                    logger.error("This is not a file!")
-                    continue
-                if not (("vtk" in filepath) or ("vtu" in filepath)):
-                    continue
-                mesh = mio.read(filepath)
-                if "boundary" in filename:
-                    sample_dict["boundary"] = mesh
-                else:
-                    sample_dict["domain"] = mesh
-            samples.append(sample_dict)
-        _, self.boundary_points = cartesian_boundary_faces_2d(samples[0]["boundary"])
-        _, self.domain_points = cartesian_domain_sort(samples[0]["domain"])
-        self.boundary_data = []
-        self.domain_data = []
-        for sample in samples:
-            boundary_values, _ = cartesian_boundary_faces_2d(sample["boundary"])
-            self.boundary_data.append(boundary_values)
-            self.domain_data.append(
-                    cartesian_domain_sort(sample["domain"])[0])
-        logger.info(" Finished loading data from " + path)
-
-    def write_hdf5(self, path):
-        """ Writes data into HDF5 file.
-        """
-        logger.info(f" Writing data to HDF5 file {path}.")
-        hfile = h5py.File(path, 'w')
-        for dirid, (boundaries, domain) in enumerate(zip(self.boundary_data, self.domain_data)):
-            grp = hfile.create_group("sample" + str(dirid))
-            for name, boundary in zip(BOUNDARY_DATASET_NAMES, boundaries):
-                grp.create_dataset(name, data=boundary)
-            grp.create_dataset("domain", data=domain)
-        hfile.close()
-
+    nsamples = len([name for name in os.listdir(path)])
+    samples = []
+    for dire in sorted(os.listdir(path)):
+        #sample_dict = {}
+        for filename in os.listdir(os.path.join(path, dire)):
+            filepath = os.path.join(path,dire,filename)
+            if not os.path.isfile(filepath):
+                #logger.error("This is not a file!")
+                continue
+            if not (("vtk" in filepath) or ("vtu" in filepath)):
+                continue
+            samples.append(mio.read(filepath))
+            break
+    assert(len(samples) == nsamples)
+    _, points = cartesian_domain_sort(samples[0], ndim)
+    domain_data = []
+    for sample in samples:
+        domain_data.append(cartesian_domain_sort(sample, ndim)[0])
+    logger.info(" Finished loading data from " + path)
+    logger.info(f" Writing data to HDF5 file {outpath}.")
+    hfile = h5py.File(outpath, 'w')
+    hfile.create_dataset("mesh", data=points)
+    for dirid, fields in enumerate(domain_data):
+        grp = hfile.create_group("sample" + str(dirid))
+        grp.create_dataset("fields", data=fields)
+    hfile.close()
