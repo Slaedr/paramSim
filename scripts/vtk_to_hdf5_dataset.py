@@ -193,19 +193,16 @@ class VTKToHDF5:
 
         if "mesh" not in self.hfile.keys():
             points = None
-            for sample_index in sorted(self.sample_directories):
-                directory = self.sample_directories[sample_index]
-                for filename in os.listdir(directory):
-                    filepath = os.path.join(directory, filename)
-                    if not os.path.isfile(filepath):
-                        continue
-                    if not (("vtk" in filepath) or ("vtu" in filepath)):
-                        continue
-                    sample = mio.read(filepath)
-                    _, points = cartesian_domain_sort(sample, self.ndim)
-                    break
-                if points is not None:
-                    break
+            directory = self.sample_directories[0]
+            for filename in os.listdir(directory):
+                filepath = os.path.join(directory, filename)
+                if not os.path.isfile(filepath):
+                    continue
+                if not (("vtk" in filepath) or ("vtu" in filepath)):
+                    continue
+                sample = mio.read(filepath)
+                _, points = cartesian_domain_sort(sample, self.ndim)
+                break
 
             if points is None:
                 raise RuntimeError("Could not read mesh points!")

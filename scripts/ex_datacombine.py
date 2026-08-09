@@ -35,7 +35,6 @@ def valid_dimension(value):
 
 def write_combined_hdf5(input_paths, output_path, nsamples, ndim):
     """Write interleaved samples from multiple simulation trees to HDF5."""
-    #datasets = [dc.Sim2DDataSetIO(path) for path in input_paths]
     with h5py.File(output_path, "w") as hfile:
         simios = [vh5.VTKToHDF5(input_path, hfile, ndim) \
                 for input_path in input_paths]
@@ -51,7 +50,8 @@ def write_combined_hdf5(input_paths, output_path, nsamples, ndim):
         output_index = 0
         for sample_index in range(nsamples):
             for simio in simios:
-                print(f"Output sample {output_index}")
+                if output_index % 100 == 0:
+                    print(f"Output sample {output_index}")
                 simio.process_sample(sample_index, output_index)
                 output_index += 1
 
