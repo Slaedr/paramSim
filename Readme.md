@@ -8,6 +8,9 @@ boundary data. Case-specific parameters can be supplied through command-line
 options or referenced parameter files, allowing parameter values to be chosen
 externally for each simulation.
 
+Copyright (C) 2023-2026 Oak Ridge National Laboratory.
+ParamSim is distributed under the terms described in [the 'NTCL 1.0' license](License.md).
+
 ## Running the code
 
 Currently, `run_case` is the main executable. Type the command `run_case --help` to see the common options for all PDEs and cases.
