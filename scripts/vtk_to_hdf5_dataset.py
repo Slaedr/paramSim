@@ -120,7 +120,6 @@ def cartesian_domain_sort(mesh : mio.Mesh, ndim : int):
     assert(ivar == nvars)
     dtypes = [*[(label, np.float32) for label in DIM_LABELS[:ndim]],
               *[(name, np.float32) for name in varnames]]
-    #data = np.array([tuple(i) for i in datau], dtype = dtypes)
     datas = datau.view(dtypes).reshape(-1)
     assert(datas.shape[0] == points.shape[0])
     assert(len(datas[0]) == ndim+nvars)
@@ -152,34 +151,79 @@ def reshape_meshgrid_to_list(values_tensor, coords_tensor):
 
     return np.hstack([coords_flat, values_flat])
 
-def ensemble_dir_to_hdf5(path, ndim : int, outpath) -> None:
-    """ Reads ensemble of solutions from a directory and writes to HDF5.
+class VTKToHDF5:
+    """ Read an ensemble of solutions from a directory
+        and write to HDF5.
 
     Assumes all the samples come from the same physical mesh.
     """
-    nsamples = len([name for name in os.listdir(path)])
-    samples = []
-    for dire in sorted(os.listdir(path)):
-        #sample_dict = {}
-        for filename in os.listdir(os.path.join(path, dire)):
-            filepath = os.path.join(path,dire,filename)
-            if not os.path.isfile(filepath):
-                #logger.error("This is not a file!")
+    def __init__(self, ensemble_root_path, output_path, ndim : int):
+        """ Prepares to read VTK data from an ensemble tree and write to an
+            HDF5 file. Read mesh from one sample and write it.
+
+        @param ensemble_root_path  Location of the ensemble directory.
+        @param output_path  Path to the HDF5 file.
+        @param ndim  Number of relevant spatial dimensions.
+        """
+        self.nsamples = len([name for name in os.listdir(ensemble_root_path)])
+        self.indirpath = ensemble_root_path
+        self.ndim = ndim
+        self.output_path = output_path
+
+        points = None
+        for dire in sorted(os.listdir(self.indirpath)):
+            for filename in os.listdir(os.path.join(self.indirpath, dire)):
+                filepath = os.path.join(self.indirpath, dire, filename)
+                if not os.path.isfile(filepath):
+                    continue
+                if not (("vtk" in filepath) or ("vtu" in filepath)):
+                    continue
+                sample = mio.read(filepath)
+                _, points = cartesian_domain_sort(sample, self.ndim)
+                break
+            if points is not None:
+                break
+
+        if points is None:
+            raise RuntimeError("Could not read mesh points!")
+        # Open HDF5 file and write the mesh
+        self.hfile = h5py.File(self.output_path, "w")
+        logger.info(" Will write data to " + self.output_path)
+        logger.info("  Writing mesh points.")
+        self.hfile.create_dataset("mesh", data=points)
+
+    def __del__(self):
+        self.hfile.close()
+
+    def close(self):
+        self.hfile.close()
+
+    def process_sample(self, in_sample_idx : int, out_sample_idx : int) -> None:
+        """ Reads the specified sample from the ensemble tree and writes it out
+        as the specified output sample index.
+
+        @param in_sample_idx  The sample index from the ensemble to read.
+        @param out_sample_idx  The index to use in the HDF5 file for this sample.
+        """
+        assert(in_sample_idx < self.nsamples)
+        for dire in sorted(os.listdir(self.indirpath)):
+            if str(in_sample_idx) not in dire:
                 continue
-            if not (("vtk" in filepath) or ("vtu" in filepath)):
-                continue
-            samples.append(mio.read(filepath))
-            break
-    assert(len(samples) == nsamples)
-    _, points = cartesian_domain_sort(samples[0], ndim)
-    domain_data = []
-    for sample in samples:
-        domain_data.append(cartesian_domain_sort(sample, ndim)[0])
-    logger.info(" Finished loading data from " + path)
+            for filename in os.listdir(os.path.join(self.indirpath, dire)):
+                filepath = os.path.join(self.indirpath, dire, filename)
+                if not os.path.isfile(filepath):
+                    continue
+                if not (("vtk" in filepath) or ("vtu" in filepath)):
+                    continue
+                sample = mio.read(filepath)
+                fields = cartesian_domain_sort(sample, self.ndim)[0]
+                grp = self.hfile.create_group("sample" + str(out_sample_idx))
+                grp.create_dataset("fields", data=fields)
+                break
+
+def ensemble_dir_to_hdf5(path, ndim : int, outpath) -> None:
     logger.info(f" Writing data to HDF5 file {outpath}.")
-    hfile = h5py.File(outpath, 'w')
-    hfile.create_dataset("mesh", data=points)
-    for dirid, fields in enumerate(domain_data):
-        grp = hfile.create_group("sample" + str(dirid))
-        grp.create_dataset("fields", data=fields)
-    hfile.close()
+    simio = VTKToHDF5(path, outpath, ndim)
+    for isample in range(simio.nsamples):
+        simio.process_sample(isample, isample)
+    simio.close()

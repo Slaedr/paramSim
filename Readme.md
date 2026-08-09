@@ -22,12 +22,9 @@ Every run must select spatial dimension 2 or 3. For example:
 run_case --dimension 3 --pde poisson_cg --case poisson_verify \
     --initial_resolution 2 --refine_levels 1 --output_prefix field
 ```
+Each refinement cycle writes the complete solution volume to `<output-prefix>-<cycle>.vtk`.
 
-Ensemble JSON files likewise require an integer `"dimension": 2` or
-`"dimension": 3` field. The scripts pass this value to `run_case`.
-
-Each refinement cycle writes the complete solution volume to
-`<output-prefix>-<cycle>.vtk`. Boundary data is not written to a separate file.
+In addition, ensembles of simulations for input parameters drawn from a random distribtion can be run from `scripts/run.py` and `scripts/run_cluster.py`. Invoke them with `--help` for more details. The scripts pass randomly-generated inpts to `run_case` internally.
 
 ## Available PDEs
 
