@@ -19,6 +19,7 @@ from vtk_to_hdf5_dataset import (
 )
 
 import vtk_to_hdf5_dataset as vh5
+import ex_datacombine as dc
 
 def open_3d_mesh():
     meshpath = "./data/ex3d.vtk"
@@ -227,9 +228,7 @@ class EnsembleDirectoryConversion(unittest.TestCase):
             )
 
             with h5py.File(output_path, "r") as hfile:
-                self.assertEqual(
-                    set(hfile.keys()), {"mesh", "sample0", "sample1"}
-                )
+                self.assertEqual(set(hfile.keys()), {"mesh", "fields"})
                 self.assertEqual(hfile["mesh"].shape, (2, 5, 5))
                 self.assertEqual(
                     hfile["mesh"].dtype, np.dtype(np.float32)
@@ -238,24 +237,76 @@ class EnsembleDirectoryConversion(unittest.TestCase):
                     hfile["mesh"][...], expected_mesh
                 )
 
-                for sample_name in ("sample0", "sample1"):
-                    self.assertEqual(
-                        set(hfile[sample_name].keys()), {"fields"}
-                    )
-                    self.assertEqual(
-                        hfile[f"{sample_name}/fields"].shape, (4, 5, 5)
-                    )
-                    self.assertEqual(
-                        hfile[f"{sample_name}/fields"].dtype,
-                        np.dtype(np.float32),
-                    )
+                self.assertEqual(hfile["fields"].shape, (2, 4, 5, 5))
+                self.assertEqual(
+                    hfile["fields"].dtype, np.dtype(np.float32)
+                )
+                np.testing.assert_allclose(
+                    hfile["fields"][0], expected_fields0
+                )
+                np.testing.assert_allclose(
+                    hfile["fields"][1], expected_fields1
+                )
 
+    def test_combines_batches_with_block_interleaving(self):
+        ensemble_path = (
+            Path(__file__).resolve().parent / "data" / "tinymesh2"
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_path = Path(temp_dir) / "combined.h5"
+            dc.write_combined_hdf5(
+                [str(ensemble_path), str(ensemble_path)],
+                str(output_path),
+                2,
+                2,
+                batch_size=2,
+            )
+
+            with h5py.File(output_path, "r") as hfile:
+                self.assertEqual(set(hfile.keys()), {"mesh", "fields"})
+                self.assertEqual(hfile["fields"].shape, (4, 4, 5, 5))
                 np.testing.assert_allclose(
-                    hfile["sample0/fields"][...], expected_fields0
+                    hfile["fields"][0], hfile["fields"][2]
                 )
                 np.testing.assert_allclose(
-                    hfile["sample1/fields"][...], expected_fields1
+                    hfile["fields"][1], hfile["fields"][3]
                 )
+                self.assertFalse(np.allclose(
+                    hfile["fields"][0], hfile["fields"][1]
+                ))
+
+    def test_rejects_invalid_batch_ranges_and_shapes(self):
+        ensemble_path = (
+            Path(__file__).resolve().parent / "data" / "tinymesh2"
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_path = Path(temp_dir) / "invalid-batches.h5"
+            with h5py.File(output_path, "w") as hfile:
+                simio = vh5.VTKToHDF5(
+                    str(ensemble_path),
+                    hfile,
+                    2,
+                    output_sample_count=2,
+                )
+
+                with self.assertRaisesRegex(ValueError, "Batch size"):
+                    simio.process_sample(0, 0, 0)
+                with self.assertRaisesRegex(ValueError, "sample IDs"):
+                    simio.process_sample(1, 0, 2)
+                with self.assertRaisesRegex(ValueError, "Output sample range"):
+                    simio.process_sample(0, 1, 2)
+
+                original_read_sample = simio._read_sample
+
+                def read_incompatible_sample(sample_index):
+                    fields, points = original_read_sample(sample_index)
+                    if sample_index == 1:
+                        fields = fields[:-1]
+                    return fields, points
+
+                simio._read_sample = read_incompatible_sample
+                with self.assertRaisesRegex(ValueError, "have shape"):
+                    simio.process_sample(0, 0, 2)
 
 
 if __name__ == "__main__":

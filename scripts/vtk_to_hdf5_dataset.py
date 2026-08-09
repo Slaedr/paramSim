@@ -8,6 +8,7 @@ import h5py
 logger = logging.getLogger(__name__)
 
 DIM_LABELS = ('x', 'y', 'z', 'u', 'v', 'w')
+DEFAULT_BATCH_SIZE = 8
 
 def get_num_components_and_names(mesh_data : dict):
     """ Get the number of physical variable components in meshio
@@ -157,16 +158,21 @@ class VTKToHDF5:
 
     Assumes all the samples come from the same physical mesh.
     """
-    def __init__(self, ensemble_root_path, hfile, ndim : int):
+    def __init__(self, ensemble_root_path, hfile, ndim : int,
+                 output_sample_count=None):
         """ Prepares to read VTK data from an ensemble tree and write to an
             HDF5 file.
 
-        If the file does not already contain a mesh dataset,
-        read mesh from one sample and write it.
+        If the file does not already contain mesh and fields datasets, read
+        their shapes and data types from the first input sample and create
+        them.
 
         @param ensemble_root_path  Location of the ensemble directory.
         @param hfile  Open HDF5 file object.
         @param ndim  Number of relevant spatial dimensions.
+        @param output_sample_count  Number of samples in the output fields
+                                    dataset. Defaults to the number of input
+                                    samples.
         """
         self.indirpath = ensemble_root_path
         self.ndim = ndim
@@ -190,61 +196,135 @@ class VTKToHDF5:
             self.sample_directories[sample_index] = directory
 
         self.nsamples = len(self.sample_directories)
-
-        if "mesh" not in self.hfile.keys():
-            points = None
-            directory = self.sample_directories[0]
-            for filename in os.listdir(directory):
-                filepath = os.path.join(directory, filename)
-                if not os.path.isfile(filepath):
-                    continue
-                if not (("vtk" in filepath) or ("vtu" in filepath)):
-                    continue
-                sample = mio.read(filepath)
-                _, points = cartesian_domain_sort(sample, self.ndim)
-                break
-
-            if points is None:
-                raise RuntimeError("Could not read mesh points!")
-            # Open HDF5 file and write the mesh
-            logger.info("  Writing mesh points.")
-            self.hfile.create_dataset("mesh", data=points)
-
-    def process_sample(self, in_sample_idx : int, out_sample_idx : int) -> None:
-        """ Reads the specified sample from the ensemble tree and writes it out
-        as the specified output sample index.
-
-        @param in_sample_idx  The sample index from the ensemble to read.
-        @param out_sample_idx  The index to use in the HDF5 file for this sample.
-        """
-        if in_sample_idx not in self.sample_directories:
+        if 0 not in self.sample_directories:
             raise ValueError(
-                f"No libEnsemble directory found for sample {in_sample_idx} "
+                f"No libEnsemble directory found for sample 0 "
                 f"in {self.indirpath!r}."
             )
 
-        directory = self.sample_directories[in_sample_idx]
-        for filename in os.listdir(directory):
+        if output_sample_count is None:
+            output_sample_count = self.nsamples
+        if output_sample_count < 1:
+            raise ValueError("Output sample count must be greater than zero.")
+        self.output_sample_count = output_sample_count
+
+        if "mesh" not in self.hfile or "fields" not in self.hfile:
+            fields, points = self._read_sample(0)
+        if "mesh" not in self.hfile:
+            logger.info("  Writing mesh points.")
+            self.hfile.create_dataset("mesh", data=points)
+        if "fields" not in self.hfile:
+            logger.info("  Creating fields dataset.")
+            self.hfile.create_dataset(
+                "fields",
+                shape=(self.output_sample_count, *fields.shape),
+                dtype=fields.dtype,
+            )
+        elif self.hfile["fields"].shape[0] != self.output_sample_count:
+            raise ValueError(
+                f"Output fields dataset contains "
+                f"{self.hfile['fields'].shape[0]} samples; "
+                f"{self.output_sample_count} expected."
+            )
+
+    def _read_sample(self, sample_index : int):
+        """Read and spatially sort one sample's fields and mesh points.
+
+        @param sample_index  Integer sample ID to read from the ensemble tree.
+
+        @return Tuple containing the fields and mesh points arrays.
+        """
+        if sample_index not in self.sample_directories:
+            raise ValueError(
+                f"No libEnsemble directory found for sample {sample_index} "
+                f"in {self.indirpath!r}."
+            )
+
+        directory = self.sample_directories[sample_index]
+        for filename in sorted(os.listdir(directory)):
             filepath = os.path.join(directory, filename)
             if not os.path.isfile(filepath):
                 continue
-            if not (("vtk" in filepath) or ("vtu" in filepath)):
+            if not filename.lower().endswith((".vtk", ".vtu")):
                 continue
             sample = mio.read(filepath)
-            fields = cartesian_domain_sort(sample, self.ndim)[0]
-            grp = self.hfile.create_group("sample" + str(out_sample_idx))
-            grp.create_dataset("fields", data=fields)
-            return
+            print("Reading sample 0 for mesh...")
+            return cartesian_domain_sort(sample, self.ndim)
 
         raise RuntimeError(
-            f"No VTK or VTU file found for sample {in_sample_idx} "
+            f"No VTK or VTU file found for sample {sample_index} "
             f"in {directory!r}."
         )
 
-def ensemble_dir_to_hdf5(path, ndim : int, outpath) -> None:
+    def process_sample(self, in_sample_idx : int, out_sample_idx : int,
+                       batch_size : int = 1) -> None:
+        """Read and write a batch of consecutive ensemble samples.
+
+        @param in_sample_idx  First sample index from the ensemble to read.
+        @param out_sample_idx  First index to use in the output fields dataset.
+        @param batch_size  Number of consecutive samples to read and write.
+        """
+        if batch_size < 1:
+            raise ValueError("Batch size must be greater than zero.")
+
+        input_indices = range(in_sample_idx, in_sample_idx + batch_size)
+        missing_indices = [
+            sample_index for sample_index in input_indices
+            if sample_index not in self.sample_directories
+        ]
+        if missing_indices:
+            raise ValueError(
+                f"No libEnsemble directories found for sample IDs "
+                f"{missing_indices} in {self.indirpath!r}."
+            )
+
+        output_end = out_sample_idx + batch_size
+        output_fields = self.hfile["fields"]
+        if out_sample_idx < 0 or output_end > output_fields.shape[0]:
+            raise ValueError(
+                f"Output sample range [{out_sample_idx}, {output_end}) "
+                f"is outside fields dataset range [0, "
+                f"{output_fields.shape[0]})."
+            )
+
+        batch_fields = []
+        expected_shape = output_fields.shape[1:]
+        expected_dtype = output_fields.dtype
+        for sample_index in input_indices:
+            fields, _ = self._read_sample(sample_index)
+            if fields.shape != expected_shape:
+                raise ValueError(
+                    f"Fields for sample {sample_index} have shape "
+                    f"{fields.shape}; expected {expected_shape}."
+                )
+            if fields.dtype != expected_dtype:
+                raise ValueError(
+                    f"Fields for sample {sample_index} have dtype "
+                    f"{fields.dtype}; expected {expected_dtype}."
+                )
+            batch_fields.append(fields)
+
+        output_fields[out_sample_idx:output_end] = np.stack(batch_fields)
+
+def ensemble_dir_to_hdf5(path, ndim : int, outpath,
+                         batch_size : int = DEFAULT_BATCH_SIZE) -> None:
+    """Convert a libEnsemble directory tree to a batched HDF5 dataset.
+
+    @param path  Path to the libEnsemble output directory.
+    @param ndim  Number of relevant spatial dimensions.
+    @param outpath  Path of the HDF5 file to create.
+    @param batch_size  Maximum number of samples per read and write batch.
+    """
+    if batch_size < 1:
+        raise ValueError("Batch size must be greater than zero.")
+
     logger.info(f" Writing data to HDF5 file {outpath}.")
-    hfile = h5py.File(outpath, "w")
-    simio = VTKToHDF5(path, hfile, ndim)
-    for isample in range(simio.nsamples):
-        simio.process_sample(isample, isample)
-    hfile.close()
+    with h5py.File(outpath, "w") as hfile:
+        simio = VTKToHDF5(path, hfile, ndim)
+        for sample_index in range(0, simio.nsamples, batch_size):
+            current_batch_size = min(
+                batch_size, simio.nsamples - sample_index
+            )
+            simio.process_sample(
+                sample_index, sample_index, current_batch_size
+            )

@@ -33,11 +33,32 @@ def valid_dimension(value):
     return result
 
 
-def write_combined_hdf5(input_paths, output_path, nsamples, ndim):
-    """Write interleaved samples from multiple simulation trees to HDF5."""
+def write_combined_hdf5(input_paths, output_path, nsamples, ndim,
+                        batch_size=vh5.DEFAULT_BATCH_SIZE):
+    """Write block-interleaved simulation-tree batches to HDF5.
+
+    @param input_paths  Paths to the input libEnsemble directory trees.
+    @param output_path  Path of the HDF5 file to create.
+    @param nsamples  Number of samples to read from each input tree.
+    @param ndim  Number of relevant spatial dimensions.
+    @param batch_size  Maximum samples per input-tree read and write batch.
+    """
+    if not input_paths:
+        raise ValueError("At least one input tree is required.")
+    if batch_size < 1:
+        raise ValueError("Batch size must be greater than zero.")
+
+    output_sample_count = nsamples * len(input_paths)
     with h5py.File(output_path, "w") as hfile:
-        simios = [vh5.VTKToHDF5(input_path, hfile, ndim) \
-                for input_path in input_paths]
+        simios = [
+            vh5.VTKToHDF5(
+                input_path,
+                hfile,
+                ndim,
+                output_sample_count=output_sample_count,
+            )
+            for input_path in input_paths
+        ]
 
         for ip, simio in enumerate(simios):
             available = simio.nsamples
@@ -48,12 +69,21 @@ def write_combined_hdf5(input_paths, output_path, nsamples, ndim):
                 )
 
         output_index = 0
-        for sample_index in range(nsamples):
+        next_progress_index = 0
+        for sample_index in range(0, nsamples, batch_size):
+            current_batch_size = min(
+                batch_size, nsamples - sample_index
+            )
             for simio in simios:
-                if output_index % 100 == 0:
+                if output_index >= next_progress_index:
                     print(f"Output sample {output_index}")
-                simio.process_sample(sample_index, output_index)
-                output_index += 1
+                    next_progress_index = (
+                        (output_index // 100) + 1
+                    ) * 100
+                simio.process_sample(
+                    sample_index, output_index, current_batch_size
+                )
+                output_index += current_batch_size
 
 
 if __name__ == "__main__":
@@ -62,10 +92,10 @@ if __name__ == "__main__":
             "Interleave samples from multiple simulation directory trees and "
             "write them to one HDF5 file. "
             "The output HDF5 file has a dataset 'mesh' containing "
-            "the common mesh points, and group for every sample, "
-            "eg., 'sample0', 'sample1' and so on. Each such sample contains "
-            "a dataset 'fields' containing all the physical variable values "
-            "at each mesh point."
+            "the common mesh points and a dataset 'fields' with shape "
+            "(total samples, fields, spatial dimensions...) containing all "
+            "physical variable values. Samples are block-interleaved by "
+            "input tree at the requested batch size."
         )
     )
     parser.add_argument(
@@ -83,6 +113,21 @@ if __name__ == "__main__":
         type=positive_integer,
         help="number of samples to take from each input tree",
     )
+    parser.add_argument(
+        "--batch-size",
+        type=positive_integer,
+        default=vh5.DEFAULT_BATCH_SIZE,
+        help=(
+            "maximum samples per input-tree read and HDF5 write batch "
+            f"(default: {vh5.DEFAULT_BATCH_SIZE})"
+        ),
+    )
     args = parser.parse_args()
 
-    write_combined_hdf5(args.inpaths, args.outpath, args.nsamples, args.dimension)
+    write_combined_hdf5(
+        args.inpaths,
+        args.outpath,
+        args.nsamples,
+        args.dimension,
+        args.batch_size,
+    )
