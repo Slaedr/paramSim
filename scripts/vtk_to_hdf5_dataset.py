@@ -10,6 +10,67 @@ logger = logging.getLogger(__name__)
 DIM_LABELS = ('x', 'y', 'z', 'u', 'v', 'w')
 DEFAULT_BATCH_SIZE = 8
 
+
+def discover_sample_files(ensemble_root_path : str):
+    """Discover the VTK or VTU file associated with each ensemble sample.
+
+    @param ensemble_root_path  Location of the libEnsemble directory tree.
+
+    @return Mapping from integer sample IDs to VTK or VTU file paths.
+    """
+    sample_directories = {}
+    for name in os.listdir(ensemble_root_path):
+        directory = os.path.join(ensemble_root_path, name)
+        if not os.path.isdir(directory) or not name.startswith("sim"):
+            continue
+        sample_id = name[3:]
+        if not sample_id.isdigit():
+            continue
+        sample_index = int(sample_id)
+        if sample_index in sample_directories:
+            raise ValueError(
+                f"Multiple libEnsemble directories represent sample "
+                f"{sample_index}: {sample_directories[sample_index]!r} "
+                f"and {directory!r}."
+            )
+        sample_directories[sample_index] = directory
+
+    if 0 not in sample_directories:
+        raise ValueError(
+            f"No libEnsemble directory found for sample 0 "
+            f"in {ensemble_root_path!r}."
+        )
+
+    sample_files = {}
+    for sample_index, directory in sample_directories.items():
+        for filename in sorted(os.listdir(directory)):
+            filepath = os.path.join(directory, filename)
+            if not os.path.isfile(filepath):
+                continue
+            if not filename.lower().endswith((".vtk", ".vtu")):
+                continue
+            sample_files[sample_index] = filepath
+            break
+        else:
+            raise RuntimeError(
+                f"No VTK or VTU file found for sample {sample_index} "
+                f"in {directory!r}."
+            )
+
+    return sample_files
+
+
+def read_sample_file(sample_path : str, ndim : int):
+    """Read and spatially sort one VTK or VTU sample.
+
+    @param sample_path  Path to the VTK or VTU sample file.
+    @param ndim  Number of relevant spatial dimensions.
+
+    @return Tuple containing the fields and mesh point arrays.
+    """
+    sample = mio.read(sample_path)
+    return cartesian_domain_sort(sample, ndim)
+
 def get_num_components_and_names(mesh_data : dict):
     """ Get the number of physical variable components in meshio
         point or cell data object, as well as their names.
@@ -177,30 +238,12 @@ class VTKToHDF5:
         self.indirpath = ensemble_root_path
         self.ndim = ndim
         self.hfile = hfile
-        self.sample_directories = {}
-
-        for name in os.listdir(self.indirpath):
-            directory = os.path.join(self.indirpath, name)
-            if not os.path.isdir(directory) or not name.startswith("sim"):
-                continue
-            sample_id = name[3:]
-            if not sample_id.isdigit():
-                continue
-            sample_index = int(sample_id)
-            if sample_index in self.sample_directories:
-                raise ValueError(
-                    f"Multiple libEnsemble directories represent sample "
-                    f"{sample_index}: {self.sample_directories[sample_index]!r} "
-                    f"and {directory!r}."
-                )
-            self.sample_directories[sample_index] = directory
-
-        self.nsamples = len(self.sample_directories)
-        if 0 not in self.sample_directories:
-            raise ValueError(
-                f"No libEnsemble directory found for sample 0 "
-                f"in {self.indirpath!r}."
-            )
+        self.sample_files = discover_sample_files(self.indirpath)
+        self.sample_directories = {
+            sample_index: os.path.dirname(sample_path)
+            for sample_index, sample_path in self.sample_files.items()
+        }
+        self.nsamples = len(self.sample_files)
 
         if output_sample_count is None:
             output_sample_count = self.nsamples
@@ -234,27 +277,13 @@ class VTKToHDF5:
 
         @return Tuple containing the fields and mesh points arrays.
         """
-        if sample_index not in self.sample_directories:
+        if sample_index not in self.sample_files:
             raise ValueError(
                 f"No libEnsemble directory found for sample {sample_index} "
                 f"in {self.indirpath!r}."
             )
 
-        directory = self.sample_directories[sample_index]
-        for filename in sorted(os.listdir(directory)):
-            filepath = os.path.join(directory, filename)
-            if not os.path.isfile(filepath):
-                continue
-            if not filename.lower().endswith((".vtk", ".vtu")):
-                continue
-            sample = mio.read(filepath)
-            print("Reading sample 0 for mesh...")
-            return cartesian_domain_sort(sample, self.ndim)
-
-        raise RuntimeError(
-            f"No VTK or VTU file found for sample {sample_index} "
-            f"in {directory!r}."
-        )
+        return read_sample_file(self.sample_files[sample_index], self.ndim)
 
     def process_sample(self, in_sample_idx : int, out_sample_idx : int,
                        batch_size : int = 1) -> None:

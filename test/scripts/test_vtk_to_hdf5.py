@@ -1,5 +1,8 @@
 import sys
+import importlib.util
 import os
+import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -20,6 +23,13 @@ from vtk_to_hdf5_dataset import (
 
 import vtk_to_hdf5_dataset as vh5
 import ex_datacombine as dc
+import ex_datacombine_mpi as mpi_dc
+
+MPI_TESTS_AVAILABLE = (
+    h5py.get_config().mpi
+    and importlib.util.find_spec("mpi4py") is not None
+    and shutil.which("mpiexec") is not None
+)
 
 def open_3d_mesh():
     meshpath = "./data/ex3d.vtk"
@@ -307,6 +317,108 @@ class EnsembleDirectoryConversion(unittest.TestCase):
                 simio._read_sample = read_incompatible_sample
                 with self.assertRaisesRegex(ValueError, "have shape"):
                     simio.process_sample(0, 0, 2)
+
+
+class MPIEnsembleDirectoryConversion(unittest.TestCase):
+    def setUp(self):
+        self.ensemble_path = (
+            Path(__file__).resolve().parent / "data" / "tinymesh2"
+        )
+
+    def test_builds_block_interleaved_batch_tasks(self):
+        sample_files = [
+            {0: "a0", 1: "a1", 2: "a2"},
+            {0: "b0", 1: "b1", 2: "b2"},
+        ]
+
+        tasks = mpi_dc.build_batch_tasks(sample_files, 3, 2)
+
+        self.assertEqual(
+            tasks,
+            [
+                (("a0", "a1"), 0),
+                (("b0", "b1"), 2),
+                (("a2",), 4),
+                (("b2",), 5),
+            ],
+        )
+
+    def test_rejects_missing_requested_sample(self):
+        with self.assertRaisesRegex(ValueError, "sample IDs.*2"):
+            mpi_dc._prepare_conversion(
+                [str(self.ensemble_path)], 3, 2, 2, 2
+            )
+
+    def test_rejects_incompatible_batch_shape(self):
+        sample_path = (
+            self.ensemble_path / "sim000" / "test-bc_exp-0-0.vtk"
+        )
+
+        with self.assertRaisesRegex(ValueError, "have shape"):
+            mpi_dc._read_batch(
+                (str(sample_path),),
+                2,
+                (1, 1, 1),
+                np.dtype(np.float32),
+                {},
+            )
+
+    @unittest.skipUnless(
+        MPI_TESTS_AVAILABLE,
+        "requires mpi4py, MPI-enabled h5py, and mpiexec",
+    )
+    def test_mpi_output_matches_serial_output(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            serial_path = Path(temp_dir) / "serial.h5"
+            mpi_path = Path(temp_dir) / "mpi.h5"
+            input_paths = [str(self.ensemble_path), str(self.ensemble_path)]
+            dc.write_combined_hdf5(
+                input_paths,
+                str(serial_path),
+                2,
+                2,
+                batch_size=2,
+            )
+
+            command = [
+                shutil.which("mpiexec"),
+                "-n",
+                "2",
+                sys.executable,
+                str(SCRIPTS_DIR / "ex_datacombine_mpi.py"),
+                "--inpaths",
+                *input_paths,
+                "--outpath",
+                str(mpi_path),
+                "--dimension",
+                "2",
+                "--nsamples",
+                "2",
+                "--batch-size",
+                "2",
+            ]
+            result = subprocess.run(
+                command,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            self.assertEqual(
+                result.returncode,
+                0,
+                msg=f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}",
+            )
+
+            with h5py.File(serial_path, "r") as serial_file, \
+                    h5py.File(mpi_path, "r") as mpi_file:
+                self.assertEqual(set(serial_file.keys()), set(mpi_file.keys()))
+                np.testing.assert_array_equal(
+                    serial_file["mesh"][...], mpi_file["mesh"][...]
+                )
+                np.testing.assert_array_equal(
+                    serial_file["fields"][...], mpi_file["fields"][...]
+                )
 
 
 if __name__ == "__main__":
