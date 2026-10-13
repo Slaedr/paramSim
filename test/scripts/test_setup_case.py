@@ -39,10 +39,36 @@ class CommonArgsTests(unittest.TestCase):
         self.assertEqual(
             get_common_args_str(self.base_case()),
             "--dimension 3 --pde poisson_cg --case cube_exponential "
-            "--refine_levels 2 --initial_resolution 8 "
+            "--refine_levels 2 --coarse_output_levels -1 "
+            "--initial_resolution 8 "
             "--max_its 20 --tolerance 1e-07"
             " --output_prefix field"
         )
+
+    def test_coarse_output_levels_are_validated_and_forwarded(self):
+        for value in (0, 1):
+            with self.subTest(value=value):
+                case_data = self.base_case()
+                case_data["coarse_output_levels"] = value
+                self.assertIn(
+                    f"--coarse_output_levels {value}",
+                    get_common_args_str(case_data),
+                )
+
+        for value in (-2, 2, True, 1.5):
+            with self.subTest(value=value):
+                case_data = self.base_case()
+                case_data["coarse_output_levels"] = value
+                with self.assertRaisesRegex(ValueError, "coarse_output_levels"):
+                    get_common_args_str(case_data)
+
+    def test_refine_levels_must_be_positive_integer(self):
+        for value in (0, -1, True, 1.5):
+            with self.subTest(value=value):
+                case_data = self.base_case()
+                case_data["refine_levels"] = value
+                with self.assertRaisesRegex(ValueError, "refine_levels"):
+                    get_common_args_str(case_data)
 
     def test_init_pde_is_omitted_by_default(self):
         self.assertNotIn(

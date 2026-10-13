@@ -3,6 +3,7 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "../cases/case.hpp"
 #include "../pdes/pdebase.hpp"
@@ -10,29 +11,48 @@
 namespace paramsim {
 namespace solver {
 
-/**
- * Solves a (nonlinear) discrete PDE on a sequence of grids.
+/** Owns the meshes used by a grid-refinement solve.
  *
- * @tparam dim  The spatial dimensionality of the PDE solve.
- *
- * @param params  PDE discretization parameters.
- * @param sparams Solver parameters for the main PDE.
- * @param tcase  The test case to be solve (RHS, BCs).
- * @param pdeb  The discrete PDE object.
- * @param init_pde  Name of a PDE to solve to initialize the coarse grid
- *                  solution. Can be "none" for zero-initialization.
- *                  @see default_init_pde
- * @param init_solver_params  Solver parameters for the initialization PDE.
- *
- * @return  The computed solution on the finest grid.
+ * @tparam dim Spatial dimensionality of the meshes.
  */
 template <int dim>
-DiscretePDEBase::vector_type
-run_grid_refinement(const PDEParams& params, const SolverParams& sparams,
-                    std::shared_ptr<const Case<dim>> tcase,
-                    std::shared_ptr<DiscretePDEBase> pdeb,
-                    const std::string& init_pde,
-                    const SolverParams& init_solver_params);
+class MeshSequence {
+public:
+    /** Solves a discrete PDE on retained, successively refined meshes.
+     *
+     * @param params PDE discretization parameters.
+     * @param sparams Solver parameters for the main PDE.
+     * @param tcase Test case supplying source and boundary data.
+     * @param pdeb Discrete PDE object.
+     * @param init_pde PDE used to initialize the coarse solution, or "none".
+     * @param init_solver_params Solver parameters for the initialization PDE.
+     * @return Computed solution on the finest mesh.
+     */
+    DiscretePDEBase::vector_type
+    run_grid_refinement(const PDEParams& params,
+                        const SolverParams& sparams,
+                        std::shared_ptr<const Case<dim>> tcase,
+                        std::shared_ptr<DiscretePDEBase> pdeb,
+                        const std::string& init_pde,
+                        const SolverParams& init_solver_params);
+
+    /** Returns the number of retained meshes.
+     *
+     * @return Retained mesh count.
+     */
+    int mesh_count() const { return static_cast<int>(meshes_.size()); }
+
+    /** Returns a retained mesh without permitting mutation.
+     *
+     * @param index Refinement-level index.
+     * @return Shared pointer to the requested retained mesh.
+     */
+    std::shared_ptr<const dealii::Triangulation<dim>>
+    get_mesh(std::size_t index) const { return meshes_.at(index); }
+
+private:
+    std::vector<std::shared_ptr<dealii::Triangulation<dim>>> meshes_;
+};
 
 /// The value of an initialization PDE name that disables the initialization
 /// solve.

@@ -31,6 +31,9 @@ void add_common_options(bpo::options_description& desc, const std::string help_m
          "Path to the case-specific parameter file")
         ("refine_levels", bpo::value<int>()->default_value(1),
          "Number of times to refine the grid and solve")
+        ("coarse_output_levels", bpo::value<int>()->default_value(-1),
+         "Number of immediately preceding coarse meshes to output; -1 writes "
+         "all")
         ("initial_resolution", bpo::value<unsigned int>(),
          "required; Number of cells in first grid")
         ("fe_degree", bpo::value<int>()->default_value(1),
@@ -80,12 +83,26 @@ CommonParams get_common_params(const bpo::variables_map& common_cmdmap)
             ". Supported values are 2 and 3.");
     }
 
+    const int refine_levels = common_cmdmap["refine_levels"].as<int>();
+    const int coarse_output_levels =
+        common_cmdmap["coarse_output_levels"].as<int>();
+    if (refine_levels < 1) {
+        throw std::invalid_argument("--refine_levels must be at least 1.");
+    }
+    if (coarse_output_levels < -1 ||
+        coarse_output_levels > refine_levels - 1) {
+        throw std::invalid_argument(
+            "--coarse_output_levels must be -1 or between 0 and " +
+            std::to_string(refine_levels - 1) + ".");
+    }
+
     // TODO: Use C++20 designated initializers for this
     return CommonParams {
         /*case_str =          */ common_cmdmap["case"].as<std::string>(),
         /*solver_str =        */ common_cmdmap["pde"].as<std::string>(),
         /*dimension =         */ dimension,
-        /*refine_levels =     */ common_cmdmap["refine_levels"].as<int>(),
+        /*refine_levels =     */ refine_levels,
+        /*coarse_output_levels=*/ coarse_output_levels,
         /*initial_resolution =*/ common_cmdmap["initial_resolution"].as<unsigned>(),
         /*fe_degree =         */ common_cmdmap["fe_degree"].as<int>(),
         /*outpath =           */ common_cmdmap["output_prefix"].as<std::string>(),

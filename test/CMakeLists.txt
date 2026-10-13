@@ -46,6 +46,12 @@ target_link_libraries(geometry_test GTest::gtest_main)
 
 gtest_discover_tests(geometry_test)
 
+add_executable(mesh_sequence_test mesh_sequence.cpp)
+deal_ii_setup_target(mesh_sequence_test)
+target_link_libraries(mesh_sequence_test paramsim_solvers paramsim_dpdes
+                      paramsim_cases paramsim_utils utils GTest::gtest_main)
+gtest_discover_tests(mesh_sequence_test TEST_PREFIX mesh_sequence.)
+
 find_package(Python3 COMPONENTS Interpreter QUIET)
 if(Python3_Interpreter_FOUND)
     execute_process(

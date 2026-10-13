@@ -25,7 +25,12 @@ Every run must select spatial dimension 2 or 3. For example:
 run_case --dimension 3 --pde poisson_cg --case poisson_verify \
     --initial_resolution 2 --refine_levels 1 --output_prefix field
 ```
-Each refinement cycle writes the complete solution volume to `<output-prefix>-<cycle>.vtk`.
+After the finest solve converges, the program writes its solution on the finest
+mesh and interpolates it onto selected retained coarse meshes. Files are named
+`<output-prefix>-<original-level>.vtk`. By default all levels are written;
+`--coarse_output_levels N` limits output to the finest mesh and its `N`
+immediately preceding meshes. Use `0` to write only the finest level. Valid
+values are `-1` (all coarse levels) through `--refine_levels - 1`.
 
 In addition, ensembles of simulations for input parameters drawn from a random distribtion can be run from `scripts/run.py` and `scripts/run_cluster.py`. Invoke them with `--help` for more details. The scripts pass randomly-generated inpts to `run_case` internally.
 

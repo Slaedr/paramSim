@@ -16,6 +16,7 @@ struct CommonParams {
     std::string solver_str;
     unsigned int dimension;
     int refine_levels;
+    int coarse_output_levels;
     unsigned initial_resolution;
     int fe_degree;
     std::string outpath;
