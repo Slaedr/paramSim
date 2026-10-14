@@ -40,6 +40,7 @@ class CommonArgsTests(unittest.TestCase):
             get_common_args_str(self.base_case()),
             "--dimension 3 --pde poisson_cg --case cube_exponential "
             "--refine_levels 2 --coarse_output_levels -1 "
+            "--coarse_grid_solution interpolation "
             "--initial_resolution 8 "
             "--max_its 20 --tolerance 1e-07"
             " --output_prefix field"
@@ -54,6 +55,23 @@ class CommonArgsTests(unittest.TestCase):
                     f"--coarse_output_levels {value}",
                     get_common_args_str(case_data),
                 )
+
+    def test_coarse_grid_solution_is_validated_and_forwarded(self):
+        for value in ("native_simulation", "interpolation"):
+            with self.subTest(value=value):
+                case_data = self.base_case()
+                case_data["coarse_grid_solution"] = value
+                self.assertIn(
+                    f"--coarse_grid_solution {value}",
+                    get_common_args_str(case_data),
+                )
+
+        for value in ("projection", "Interpolation", 1, None):
+            with self.subTest(value=value):
+                case_data = self.base_case()
+                case_data["coarse_grid_solution"] = value
+                with self.assertRaisesRegex(ValueError, "coarse_grid_solution"):
+                    get_common_args_str(case_data)
 
         for value in (-2, 2, True, 1.5):
             with self.subTest(value=value):

@@ -39,7 +39,7 @@ std::shared_ptr<pde::PoissonCG<dim>> make_discretization()
 {
     auto test_case = std::make_shared<cases::cube::CubeExponential<dim>>();
     test_case->initialize(boost::program_options::variables_map{});
-    const PDEParams pde_parameters{"poisson_cg", 1, 4, 1, -1, false, "_"};
+    const PDEParams pde_parameters{"poisson_cg", 1, 4, 1, -1, CoarseGridSolution::interpolation, false, "_"};
     return std::make_shared<pde::PoissonCG<dim>>(test_case, pde_parameters);
 }
 

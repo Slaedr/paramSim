@@ -34,6 +34,8 @@ void add_common_options(bpo::options_description& desc, const std::string help_m
         ("coarse_output_levels", bpo::value<int>()->default_value(-1),
          "Number of immediately preceding coarse meshes to output; -1 writes "
          "all")
+        ("coarse_grid_solution", bpo::value<std::string>()->default_value("interpolation"),
+         "Coarse mesh solution source: 'native_simulation' or 'interpolation'")
         ("initial_resolution", bpo::value<unsigned int>(),
          "required; Number of cells in first grid")
         ("fe_degree", bpo::value<int>()->default_value(1),
@@ -95,6 +97,18 @@ CommonParams get_common_params(const bpo::variables_map& common_cmdmap)
             "--coarse_output_levels must be -1 or between 0 and " +
             std::to_string(refine_levels - 1) + ".");
     }
+    const std::string coarse_grid_solution_str =
+        common_cmdmap["coarse_grid_solution"].as<std::string>();
+    CoarseGridSolution coarse_grid_solution;
+    if (coarse_grid_solution_str == "native_simulation") {
+        coarse_grid_solution = CoarseGridSolution::native_simulation;
+    } else if (coarse_grid_solution_str == "interpolation") {
+        coarse_grid_solution = CoarseGridSolution::interpolation;
+    } else {
+        throw std::invalid_argument(
+            "--coarse_grid_solution must be 'native_simulation' or "
+            "'interpolation'.");
+    }
 
     // TODO: Use C++20 designated initializers for this
     return CommonParams {
@@ -103,6 +117,7 @@ CommonParams get_common_params(const bpo::variables_map& common_cmdmap)
         /*dimension =         */ dimension,
         /*refine_levels =     */ refine_levels,
         /*coarse_output_levels=*/ coarse_output_levels,
+        /*coarse_grid_solution=*/ coarse_grid_solution,
         /*initial_resolution =*/ common_cmdmap["initial_resolution"].as<unsigned>(),
         /*fe_degree =         */ common_cmdmap["fe_degree"].as<int>(),
         /*outpath =           */ common_cmdmap["output_prefix"].as<std::string>(),

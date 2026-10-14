@@ -29,6 +29,10 @@ MeshSequence<dim>::run_grid_refinement(
 
     meshes_.clear();
     meshes_.push_back(pde->get_mesh());
+    const int first_output_level =
+        params.coarse_output_levels == -1
+            ? 0
+            : params.refine_levels - 1 - params.coarse_output_levels;
     for (int imesh = 0; imesh < params.refine_levels; ++imesh) {
         solver.reinit();
         const auto result = solver.solve(u);
@@ -51,6 +55,11 @@ MeshSequence<dim>::run_grid_refinement(
                       << result.final_residual_norm << "). Continuing to the "
                       << "next level." << std::endl;
         }
+        if (params.coarse_grid_solution ==
+                CoarseGridSolution::native_simulation &&
+            result.converged && imesh >= first_output_level) {
+            pde->output_results(imesh, u);
+        }
         if (imesh < params.refine_levels - 1) {
             auto refined_mesh =
                 std::make_shared<dealii::Triangulation<dim>>();
@@ -61,6 +70,10 @@ MeshSequence<dim>::run_grid_refinement(
         }
     }
 
+    if (params.coarse_grid_solution ==
+        CoarseGridSolution::native_simulation) {
+        return u;
+    }
     auto output_pde_base = create_discrete_pde(tcase, params);
     auto output_pde = dynamic_cast<DiscretePDE<dim, dealii::FE_Q<dim>> *>(
         output_pde_base.get());
@@ -68,11 +81,6 @@ MeshSequence<dim>::run_grid_refinement(
         throw std::runtime_error(
             "Output PDE has an incompatible finite element type.");
     }
-
-    const int first_output_level =
-        params.coarse_output_levels == -1
-            ? 0
-            : params.refine_levels - 1 - params.coarse_output_levels;
     vector_type output_solution;
     for (int level = first_output_level; level < params.refine_levels; ++level) {
         output_pde->set_mesh(meshes_.at(static_cast<std::size_t>(level)));

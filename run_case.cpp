@@ -37,7 +37,8 @@ void run_dimension(const CommonParams& common_params, const int argc,
     PDEParams pdeparams{
         common_params.solver_str,          common_params.fe_degree,
         common_params.initial_resolution,  common_params.refine_levels,
-        common_params.coarse_output_levels, common_params.is_adaptive,
+        common_params.coarse_output_levels,
+        common_params.coarse_grid_solution, common_params.is_adaptive,
         common_params.outpath};
     SolverParams solver_params{common_params.tolerance,
                                common_params.max_outer_its};

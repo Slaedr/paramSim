@@ -25,12 +25,18 @@ Every run must select spatial dimension 2 or 3. For example:
 run_case --dimension 3 --pde poisson_cg --case poisson_verify \
     --initial_resolution 2 --refine_levels 1 --output_prefix field
 ```
-After the finest solve converges, the program writes its solution on the finest
-mesh and interpolates it onto selected retained coarse meshes. Files are named
-`<output-prefix>-<original-level>.vtk`. By default all levels are written;
+By default, after the finest solve converges, the program writes its solution on
+the finest mesh and interpolates it onto selected retained coarse meshes. Files
+are named `<output-prefix>-<original-level>.vtk`. Set
+`--coarse_grid_solution native_simulation` to write each selected level's own
+converged solution immediately after that level finishes. If a later solve
+fails, already written native coarse files remain and no file is written for
+the failed level; interpolation mode writes no files unless the finest solve
+converges. By default all levels are written;
 `--coarse_output_levels N` limits output to the finest mesh and its `N`
 immediately preceding meshes. Use `0` to write only the finest level. Valid
-values are `-1` (all coarse levels) through `--refine_levels - 1`.
+values are `-1` (all coarse levels) through `--refine_levels - 1`. The finest
+level is always the direct converged solution in either mode.
 
 In addition, ensembles of simulations for input parameters drawn from a random distribtion can be run from `scripts/run.py` and `scripts/run_cluster.py`. Invoke them with `--help` for more details. The scripts pass randomly-generated inpts to `run_case` internally.
 

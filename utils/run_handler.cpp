@@ -28,6 +28,7 @@ RunData<dim> get_run_data(const int nargs, const char *const argv[])
     pde_params.initial_resolution = common_params.initial_resolution;
     pde_params.refine_levels = common_params.refine_levels;
     pde_params.coarse_output_levels = common_params.coarse_output_levels;
+    pde_params.coarse_grid_solution = common_params.coarse_grid_solution;
     pde_params.is_adaptive = common_params.is_adaptive;
     pde_params.output_path = common_params.outpath;
     SolverParams solver_params;

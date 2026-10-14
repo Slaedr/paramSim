@@ -58,7 +58,7 @@ void check_uniform_sequence()
 {
     const std::string prefix =
         "/tmp/paramsim-mesh-sequence-" + std::to_string(dim);
-    const ps::PDEParams parameters{"poisson_cg", 1, 1, 3, 0, false, prefix};
+    const ps::PDEParams parameters{"poisson_cg", 1, 1, 3, 0, ps::CoarseGridSolution::interpolation, false, prefix};
     const ps::SolverParams solver_parameters{1e-8, 4};
     auto test_case = make_case<dim>();
     auto pde = std::make_shared<ps::pde::PoissonCG<dim>>(test_case, parameters);
@@ -97,7 +97,7 @@ TEST(MeshSequence, RetainsUniformMeshesInThreeDimensions)
 
 TEST(DiscretePDEMesh, RebindsAndRejectsNullMeshes)
 {
-    const ps::PDEParams parameters{"poisson_cg", 1, 1, 1, 0, false,
+    const ps::PDEParams parameters{"poisson_cg", 1, 1, 1, 0, ps::CoarseGridSolution::interpolation, false,
                                    "/tmp/unused"};
     auto pde =
         std::make_shared<ps::pde::PoissonCG<2>>(make_case<2>(), parameters);
@@ -115,7 +115,7 @@ TEST(DiscretePDEMesh, RebindsAndRejectsNullMeshes)
 
 TEST(DiscretePDEMesh, TransfersRepresentableFieldExactly)
 {
-    const ps::PDEParams parameters{"poisson_cg", 1, 2, 1, 0, false,
+    const ps::PDEParams parameters{"poisson_cg", 1, 2, 1, 0, ps::CoarseGridSolution::interpolation, false,
                                    "/tmp/unused"};
     auto test_case = make_case<2>();
     ps::pde::PoissonCG<2> coarse(test_case, parameters);
@@ -139,7 +139,7 @@ TEST(DiscretePDEMesh, TransfersRepresentableFieldExactly)
 
 TEST(DiscretePDEMesh, AdaptiveTransferSatisfiesDestinationConstraints)
 {
-    ps::PDEParams parameters{"poisson_cg", 1, 3, 1, 0, true, "/tmp/unused"};
+    ps::PDEParams parameters{"poisson_cg", 1, 3, 1, 0, ps::CoarseGridSolution::interpolation, true, "/tmp/unused"};
     auto test_case = make_case<2>();
     ps::pde::PoissonCG<2> fine(test_case, parameters);
     ps::DiscretePDEBase::vector_type fine_solution;

@@ -51,7 +51,7 @@ double solve_grid_sequence(const unsigned initial_resolution,
     test_case->initialize(case_parameters);
 
     const PDEParams pde_parameters{
-        pde_name, 1, initial_resolution, grid_count, -1, false, "_",
+        pde_name, 1, initial_resolution, grid_count, -1, CoarseGridSolution::interpolation, false, "_",
     };
     const SolverParams solver_parameters{
         nonlinear_tolerance,

@@ -12,6 +12,7 @@
 
 #include "../geometrybase.hpp"
 #include "../cases/case.hpp"
+#include "../utils/parameter_types.hpp"
 
 namespace paramsim {
 
@@ -30,6 +31,7 @@ struct PDEParams {
     unsigned initial_resolution;
     int refine_levels;
     int coarse_output_levels;
+    CoarseGridSolution coarse_grid_solution;
     bool is_adaptive;
     std::string output_path;
 };

@@ -4,6 +4,7 @@
 #include <string>
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/variables_map.hpp>
+#include "parameter_types.hpp"
 
 namespace paramsim {
 
@@ -17,6 +18,7 @@ struct CommonParams {
     unsigned int dimension;
     int refine_levels;
     int coarse_output_levels;
+    CoarseGridSolution coarse_grid_solution;
     unsigned initial_resolution;
     int fe_degree;
     std::string outpath;
