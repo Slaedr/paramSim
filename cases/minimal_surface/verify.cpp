@@ -10,7 +10,6 @@ void MinSurfBallVerify<dim>::initialize(const bpo::variables_map&)
 {
     std::shared_ptr<Function<dim>> dirichlet1;
     dirichlet1 = std::make_shared<minsurf_verify::Solution<dim>>();
-    std::cout << "Case 'verify' for Poisson: default parameters.\n";
 
     this->rhs_ = std::make_shared<minsurf_verify::RightHandSide<dim>>();
     this->exact_soln_ = std::make_shared<minsurf_verify::Solution<dim>>();
@@ -35,7 +34,6 @@ void MinSurfCubeVerify<dim>::initialize(const bpo::variables_map&)
 {
     std::shared_ptr<Function<dim>> dirichlet1;
     dirichlet1 = std::make_shared<minsurf_verify::Solution<dim>>();
-    std::cout << "Case 'verify_cube' for Poisson: default parameters.\n";
 
     this->rhs_ = std::make_shared<minsurf_verify::RightHandSide<dim>>();
     this->exact_soln_ = std::make_shared<minsurf_verify::Solution<dim>>();

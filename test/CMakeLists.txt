@@ -52,6 +52,11 @@ target_link_libraries(mesh_sequence_test paramsim_solvers paramsim_dpdes
                       paramsim_cases paramsim_utils utils GTest::gtest_main)
 gtest_discover_tests(mesh_sequence_test TEST_PREFIX mesh_sequence.)
 
+add_executable(configuration_test configuration.cpp)
+deal_ii_setup_target(configuration_test)
+target_link_libraries(configuration_test utils GTest::gtest_main)
+gtest_discover_tests(configuration_test)
+
 find_package(Python3 COMPONENTS Interpreter QUIET)
 if(Python3_Interpreter_FOUND)
     execute_process(

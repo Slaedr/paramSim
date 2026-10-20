@@ -34,6 +34,10 @@ void run_dimension(const CommonParams& common_params, const int argc,
     std::shared_ptr<const Case<dim>> tcase =
         create_case<dim>(common_params, argc, argv);
 
+    print_configuration(std::cout, common_params,
+                         dealii::MultithreadInfo::n_threads());
+    std::cout << "Solving\n=======\n\n" << std::flush;
+
     PDEParams pdeparams{
         common_params.solver_str,          common_params.fe_degree,
         common_params.initial_resolution,  common_params.refine_levels,
@@ -74,10 +78,6 @@ int main(int argc, char *argv[])
         }
 
         const auto common_params = get_common_params(common_cmdmap);
-
-        std::cout << "Solving" << std::endl
-                  << "=======" << std::endl
-                  << std::endl;
 
         switch (common_params.dimension) {
         case 2:

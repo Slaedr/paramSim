@@ -1,5 +1,9 @@
 #include "cmdparser.hpp"
 
+#include <iomanip>
+#include <limits>
+#include <locale>
+#include <sstream>
 #include <stdexcept>
 #include <boost/program_options/cmdline.hpp>
 #include <boost/program_options/parsers.hpp>
@@ -126,8 +130,58 @@ CommonParams get_common_params(const bpo::variables_map& common_cmdmap)
         /*max_its =           */ common_cmdmap["max_its"].as<int>(),
         /*init_pde_str =      */ common_cmdmap["init_pde"].as<std::string>(),
         /*init_tolerance =    */ common_cmdmap["init_tolerance"].as<double>(),
-        /*init_max_its =      */ common_cmdmap["init_max_its"].as<int>()
+        /*init_max_its =      */ common_cmdmap["init_max_its"].as<int>(),
+        /*case_params_file =  */ common_cmdmap.count("case_params_file")
+            ? common_cmdmap["case_params_file"].as<std::string>() : ""
     };
+}
+
+void print_configuration(std::ostream& output, const CommonParams& params,
+                         unsigned int thread_limit)
+{
+    std::ostringstream report;
+    report.imbue(std::locale::classic());
+    report << std::boolalpha
+           << std::setprecision(std::numeric_limits<double>::max_digits10);
+    const auto init_pde = params.init_pde_str.empty()
+        ? (params.solver_str == "minimal_surface" ? "poisson_cg" : "none")
+        : params.init_pde_str;
+    const char *coarse_solution = "projection";
+    switch (params.coarse_grid_solution) {
+    case CoarseGridSolution::native_simulation:
+        coarse_solution = "native_simulation";
+        break;
+    case CoarseGridSolution::interpolation:
+        coarse_solution = "interpolation";
+        break;
+    case CoarseGridSolution::projection:
+        break;
+    }
+    report << "Configuration\n=============\nCommon settings:\n"
+           << "  case = " << params.case_str << '\n'
+           << "  pde = " << params.solver_str << '\n'
+           << "  dimension = " << params.dimension << '\n'
+           << "  case_params_file = "
+           << (params.case_params_file.empty() ? "none" : params.case_params_file) << '\n'
+           << "  initial_resolution = " << params.initial_resolution << '\n'
+           << "  fe_degree = " << params.fe_degree << '\n'
+           << "  refine_levels = " << params.refine_levels << '\n'
+           << "  coarse_output_levels = " << params.coarse_output_levels << '\n'
+           << "  coarse_grid_solution = " << coarse_solution << '\n'
+           << "  is_adaptive = " << params.is_adaptive << '\n'
+           << "  tolerance = " << params.tolerance << '\n'
+           << "  max_its = " << params.max_outer_its << '\n'
+           << "  output_prefix = " << params.outpath << '\n'
+           << "  init_pde = "
+           << (params.init_pde_str.empty() ? "(default)" : params.init_pde_str) << '\n'
+           << "  resolved_init_pde = " << init_pde << '\n'
+           << "  initialization_enabled = "
+           << (init_pde != "none" && init_pde != params.solver_str) << '\n'
+           << "  init_tolerance = " << params.init_tolerance << '\n'
+           << "  init_max_its = " << params.init_max_its << '\n'
+           << "Runtime settings:\n  thread_limit = " << thread_limit << '\n';
+    report << "End configuration\n\n";
+    output << report.str();
 }
 
 // Convert cmd line arguments for testing
