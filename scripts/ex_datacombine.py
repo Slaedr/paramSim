@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-"""Combine samples from multiple simulation trees into one HDF5 dataset."""
+"""Combine simulation trees into one HDF5 dataset per resolution."""
 
 import argparse
 import os
@@ -38,7 +38,7 @@ def write_combined_hdf5(input_paths, output_path, nsamples, ndim,
     """Write block-interleaved simulation-tree batches to HDF5.
 
     @param input_paths  Paths to the input libEnsemble directory trees.
-    @param output_path  Path of the HDF5 file to create.
+    @param output_path  Exact filename for one resolution; prefix-ID.h5 for multiple.
     @param nsamples  Number of samples to read from each input tree.
     @param ndim  Number of relevant spatial dimensions.
     @param batch_size  Maximum samples per input-tree read and write batch.
@@ -48,49 +48,33 @@ def write_combined_hdf5(input_paths, output_path, nsamples, ndim,
     if batch_size < 1:
         raise ValueError("Batch size must be greater than zero.")
 
+    inputs, resolutions = vh5.select_samples(input_paths, nsamples)
+    outputs = vh5.resolution_output_paths(output_path, resolutions)
     output_sample_count = nsamples * len(input_paths)
-    with h5py.File(output_path, "w") as hfile:
-        simios = [
-            vh5.VTKToHDF5(
-                input_path,
-                hfile,
-                ndim,
-                output_sample_count=output_sample_count,
-            )
-            for input_path in input_paths
-        ]
-
-        for ip, simio in enumerate(simios):
-            available = simio.nsamples
-            if nsamples > available:
-                raise ValueError(
-                    f"Input tree {input_paths[ip]!r} contains {available} samples;"
-                    f" {nsamples} requested."
-                )
-
-        output_index = 0
-        next_progress_index = 0
-        for sample_index in range(0, nsamples, batch_size):
-            current_batch_size = min(
-                batch_size, nsamples - sample_index
-            )
-            for simio in simios:
-                if output_index >= next_progress_index:
-                    print(f"Output sample {output_index}")
-                    next_progress_index = (
-                        (output_index // 100) + 1
-                    ) * 100
-                simio.process_sample(
-                    sample_index, output_index, current_batch_size
-                )
-                output_index += current_batch_size
+    for resolution in resolutions:
+        with h5py.File(outputs[resolution], "w") as hfile:
+            simios = [
+                vh5.VTKToHDF5(path, hfile, ndim, output_sample_count,
+                              resolution_id=resolution, sample_files=samples)
+                for path, samples in zip(input_paths, inputs)
+            ]
+            output_index = 0
+            next_progress_index = 0
+            for sample_index in range(0, nsamples, batch_size):
+                current_batch_size = min(batch_size, nsamples - sample_index)
+                for simio in simios:
+                    if output_index >= next_progress_index:
+                        print(f"Resolution {resolution}: output sample {output_index}")
+                        next_progress_index = ((output_index // 100) + 1) * 100
+                    simio.process_sample(sample_index, output_index, current_batch_size)
+                    output_index += current_batch_size
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description=(
             "Interleave samples from multiple simulation directory trees and "
-            "write them to one HDF5 file. "
+            "write one HDF5 file per resolution. "
             "The output HDF5 file has a dataset 'mesh' containing "
             "the common mesh points and a dataset 'fields' with shape "
             "(total samples, fields, spatial dimensions...) containing all "
@@ -104,7 +88,7 @@ if __name__ == "__main__":
         required=True,
         help="one or more input simulation directory trees",
     )
-    parser.add_argument("--outpath", required=True, help="output HDF5 file")
+    parser.add_argument("--outpath", required=True, help="output filename for one resolution; prefix[-ID.h5] for multiple resolutions")
     parser.add_argument("--dimension", required=True, type=valid_dimension,
                         help="number of relevant spatial dimensions")
     parser.add_argument(
