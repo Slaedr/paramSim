@@ -1,0 +1,58 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      OMPI_MCA_rmaps_base_oversubscribe: "1"
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build pkg-config \
+            libdeal.ii-dev libboost-program-options-dev libgtest-dev \
+            openmpi-bin libopenmpi-dev libhdf5-openmpi-dev \
+            python3-dev python3-venv
+
+      - name: Prepare Python environment
+        run: |
+          /usr/bin/python3 -m venv .venv
+          .venv/bin/python -m pip install \
+            "numpy<2" mpi4py meshio "libensemble==1.6.1"
+          echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
+
+      - name: Build MPI-enabled h5py
+        run: |
+          export CC=mpicc
+          export HDF5_MPI=ON
+          python -m pip install --no-binary=h5py h5py
+          python -c \
+            "import h5py; assert h5py.get_config().mpi, 'MPI-enabled h5py is required'"
+
+      - name: Configure
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DPython3_EXECUTABLE="$GITHUB_WORKSPACE/.venv/bin/python"
+
+      - name: Build
+        run: cmake --build build --parallel 2
+
+      - name: Run C++ and Python tests
+        run: ctest --test-dir build --output-on-failure --no-tests=error
