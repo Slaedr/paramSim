@@ -38,3 +38,14 @@ check_failure "an unknown case name" "Non-existent case!" \
 check_failure "an unknown PDE solver" "Unsupported PDE solver!" \
     --dimension 2 --pde nonexistent_pde --case poisson_verify \
     --initial_resolution 4
+
+failure_prefix="failed-multiresolution"
+rm -f "${failure_prefix}-0.vtk" "${failure_prefix}-1.vtk"
+check_failure "a failed final solve" "did not converge on the final" \
+    --dimension 2 --pde poisson_cg --case poisson_verify \
+    --initial_resolution 2 --refine_levels 2 --max_its 0 \
+    --output_prefix "$failure_prefix"
+if [ -e "${failure_prefix}-0.vtk" ] || [ -e "${failure_prefix}-1.vtk" ]; then
+    echo "FAIL: a failed final solve emitted a partial dataset"
+    exit 1
+fi

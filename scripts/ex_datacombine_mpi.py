@@ -32,6 +32,8 @@ def build_batch_tasks(sample_files_by_input, nsamples, batch_size):
     """Build batch tasks in block-interleaved output order.
 
     @param sample_files_by_input  Sample-file mappings for each input tree.
+                                  This maps resolution IDs to paths for each sample
+                                  of each input tree.
     @param nsamples  Number of samples to read from each input tree.
     @param batch_size  Maximum number of samples in each task.
 
@@ -48,6 +50,7 @@ def build_batch_tasks(sample_files_by_input, nsamples, batch_size):
                     sample_index, sample_index + current_batch_size
                 )
             )
+            # Each sample maps actual resolution IDs to paths.
             tasks.append((sample_paths, output_index))
             output_index += current_batch_size
     return tasks
@@ -62,45 +65,41 @@ def _prepare_conversion(input_paths, nsamples, ndim, batch_size, comm_size):
     @param batch_size  Maximum number of samples in each task.
     @param comm_size  Number of MPI ranks receiving tasks.
 
-    @return Conversion metadata, per-rank tasks, and the first sample arrays.
+    @return Metadata, per-rank tasks, reference sample cache, and meshes.
     """
-    sample_files_by_input = []
-    for input_path in input_paths:
-        sample_files = vh5.discover_sample_files(input_path)
-        missing_indices = [
-            sample_index for sample_index in range(nsamples)
-            if sample_index not in sample_files
-        ]
-        if missing_indices:
-            raise ValueError(
-                f"No libEnsemble directories found for sample IDs "
-                f"{missing_indices} in {input_path!r}."
-            )
-        sample_files_by_input.append(sample_files)
-
-    first_sample_path = sample_files_by_input[0][0]
-    first_fields, points = vh5.read_sample_file(first_sample_path, ndim)
-    tasks = build_batch_tasks(
-        sample_files_by_input, nsamples, batch_size
-    )
+    sample_files_by_input, resolutions = vh5.select_samples(input_paths, nsamples)
+    references = {}
+    cached_samples = {}
+    meshes = {}
+    field_dtype = None
+    mesh_dtype = None
+    for resolution in resolutions:
+        path = sample_files_by_input[0][0][resolution]
+        fields, points = vh5.read_sample_file(path, ndim)
+        if field_dtype is None:
+            field_dtype = fields.dtype.str
+            mesh_dtype = points.dtype.str
+        references[resolution] = {
+            "field_shape": fields.shape, "mesh_shape": points.shape,
+            "path": path,
+        }
+        cached_samples[path] = (fields, points)
+        meshes[resolution] = points
+    tasks = build_batch_tasks(sample_files_by_input, nsamples, batch_size)
     tasks_by_rank = [[] for _ in range(comm_size)]
     for task_index, task in enumerate(tasks):
         tasks_by_rank[task_index % comm_size].append(task)
-
     metadata = {
-        "field_shape": first_fields.shape,
-        "field_dtype": first_fields.dtype.str,
-        "mesh_shape": points.shape,
-        "mesh_dtype": points.dtype.str,
+        "resolution_ids": resolutions, "references": references,
+        "field_dtype": field_dtype, "mesh_dtype": mesh_dtype,
         "output_sample_count": nsamples * len(input_paths),
         "task_count": len(tasks),
-        "first_sample_path": first_sample_path,
     }
-    return metadata, tasks_by_rank, first_fields, points
+    return metadata, tasks_by_rank, cached_samples, meshes
 
 
 def _read_batch(sample_paths, ndim, expected_shape, expected_dtype,
-                cached_sample):
+                cached_sample, resolution_id, expected_mesh):
     """Read one batch into a preallocated array.
 
     @param sample_paths  Ordered paths for the batch.
@@ -108,17 +107,23 @@ def _read_batch(sample_paths, ndim, expected_shape, expected_dtype,
     @param expected_shape  Required shape of one fields array.
     @param expected_dtype  Required NumPy dtype of one fields array.
     @param cached_sample  Optional mapping containing an already-read sample.
+    @param resolution_id  Actual resolution ID to read.
+    @param expected_mesh  Reference mesh for this resolution.
 
     @return Array containing all fields in the batch.
     """
     batch_fields = np.empty(
         (len(sample_paths), *expected_shape), dtype=expected_dtype
     )
-    for batch_index, sample_path in enumerate(sample_paths):
+    for batch_index, sample_path_res in enumerate(sample_paths):
+        sample_path = sample_path_res[resolution_id]
         if sample_path in cached_sample:
-            fields = cached_sample.pop(sample_path)
+            fields, points = cached_sample.pop(sample_path)
         else:
-            fields, _ = vh5.read_sample_file(sample_path, ndim)
+            try:
+                fields, points = vh5.read_sample_file(sample_path, ndim)
+            except Exception as exc:
+                raise ValueError(f"Reading {sample_path!r}: {exc}") from exc
         if fields.shape != expected_shape:
             raise ValueError(
                 f"Fields in {sample_path!r} have shape {fields.shape}; "
@@ -129,16 +134,19 @@ def _read_batch(sample_paths, ndim, expected_shape, expected_dtype,
                 f"Fields in {sample_path!r} have dtype {fields.dtype}; "
                 f"expected {expected_dtype}."
             )
+        if not np.array_equal(points, expected_mesh):
+            raise ValueError(f"Mesh in {sample_path!r} differs from reference mesh "
+                             f"for resolution {resolution_id}.")
         batch_fields[batch_index] = fields
     return batch_fields
 
 
-def write_combined_hdf5_mpi(input_paths, output_path, nsamples, ndim,
+def write_combined_hdf5_mpi(input_paths, output_prefix, nsamples, ndim,
                             batch_size=vh5.DEFAULT_BATCH_SIZE, comm=None):
     """Combine simulation trees using MPI and Parallel HDF5.
 
     @param input_paths  Paths to the input libEnsemble directory trees.
-    @param output_path  Path of the HDF5 file to create collectively.
+    @param output_prefix  Exact filename for one resolution; prefix-ID.h5 for multiple.
     @param nsamples  Number of samples to read from each input tree.
     @param ndim  Number of relevant spatial dimensions.
     @param batch_size  Maximum number of samples in each read/write task.
@@ -164,12 +172,12 @@ def write_combined_hdf5_mpi(input_paths, output_path, nsamples, ndim,
 
     metadata = None
     tasks_by_rank = None
-    first_fields = None
-    points = None
+    cached_sample = {}
+    meshes = None
     setup_error = None
     if rank == 0:
         try:
-            metadata, tasks_by_rank, first_fields, points = \
+            metadata, tasks_by_rank, cached_sample, meshes = \
                 _prepare_conversion(
                     input_paths, nsamples, ndim, batch_size, comm_size
                 )
@@ -182,13 +190,9 @@ def write_combined_hdf5_mpi(input_paths, output_path, nsamples, ndim,
 
     metadata = comm.bcast(metadata, root=0)
     local_tasks = comm.scatter(tasks_by_rank, root=0)
-    expected_shape = tuple(metadata["field_shape"])
     expected_dtype = np.dtype(metadata["field_dtype"])
     output_sample_count = metadata["output_sample_count"]
-    cached_sample = {}
-    if rank == 0:
-        cached_sample[metadata["first_sample_path"]] = first_fields
-
+    outputs = vh5.resolution_output_paths(output_prefix, metadata["resolution_ids"])
     if rank == 0:
         print(
             f"Writing {output_sample_count} samples with {comm_size} MPI "
@@ -196,74 +200,94 @@ def write_combined_hdf5_mpi(input_paths, output_path, nsamples, ndim,
             flush=True,
         )
 
-    failure = None
-    completed_samples = 0
-    with h5py.File(output_path, "w", driver="mpio", comm=comm) as hfile:
-        mesh = hfile.create_dataset(
-            "mesh",
-            shape=tuple(metadata["mesh_shape"]),
-            dtype=np.dtype(metadata["mesh_dtype"]),
-        )
-        fields_dataset = hfile.create_dataset(
-            "fields",
-            shape=(output_sample_count, *expected_shape),
-            dtype=expected_dtype,
-        )
-
+    num_resolutions = len(metadata["resolution_ids"])
+    for completed_resolutions, resolution in enumerate(metadata["resolution_ids"], 1):
+        failure = None
+        completed_samples = 0
+        reference = metadata["references"][resolution]
+        expected_shape = tuple(reference["field_shape"])
+        output_path = outputs[resolution]
+        # Read a mesh locally instead of broadcasting large arrays. Idle ranks
+        # need only participate in collective dataset creation and status checks.
+        points = None
         mesh_error = None
-        if rank == 0:
-            try:
-                mesh[...] = points
-            except Exception as exc:
-                mesh_error = f"{type(exc).__name__}: {exc}"
-        mesh_errors = comm.allgather(mesh_error)
-        if any(error is not None for error in mesh_errors):
-            failure = "Mesh write failed: " + "; ".join(
-                error for error in mesh_errors if error is not None
+        try:
+            if rank == 0:
+                points = meshes.pop(resolution)
+            elif local_tasks:
+                reference_fields, points = vh5.read_sample_file(reference["path"], ndim)
+                del reference_fields
+        except Exception as exc:
+            mesh_error = f"rank {rank}, resolution {resolution}, reference {reference['path']!r}: {exc}"
+        errors = comm.allgather(mesh_error)
+        if any(errors):
+            raise RuntimeError("Reference mesh read failed: " + "; ".join(error for error in errors if error))
+        with h5py.File(output_path, "w", driver="mpio", comm=comm) as hfile:
+            mesh = hfile.create_dataset(
+                "mesh",
+                shape=tuple(reference["mesh_shape"]),
+                dtype=np.dtype(metadata["mesh_dtype"]),
+            )
+            fields_dataset = hfile.create_dataset(
+                "fields",
+                shape=(output_sample_count, *expected_shape),
+                dtype=expected_dtype,
             )
 
-        task_rounds = comm.allreduce(len(local_tasks), op=MPI.MAX)
-        for task_round in range(task_rounds):
-            if failure is not None:
-                break
-
-            local_completed = 0
-            local_error = None
-            if task_round < len(local_tasks):
-                sample_paths, output_index = local_tasks[task_round]
-                try:
-                    batch_fields = _read_batch(
-                        sample_paths,
-                        ndim,
-                        expected_shape,
-                        expected_dtype,
-                        cached_sample,
-                    )
-                    output_end = output_index + len(sample_paths)
-                    fields_dataset[output_index:output_end] = batch_fields
-                    local_completed = len(sample_paths)
-                except Exception as exc:
-                    local_error = (
-                        f"rank {rank}, output sample {output_index}: "
-                        f"{type(exc).__name__}: {exc}"
-                    )
-
-            round_status = comm.allgather((local_completed, local_error))
-            errors = [error for _, error in round_status if error is not None]
-            if errors:
-                failure = "Batch processing failed: " + "; ".join(errors)
-                continue
-
-            completed_samples += sum(count for count, _ in round_status)
+            mesh_error = None
             if rank == 0:
-                print(
-                    f"Output samples completed: {completed_samples}/"
-                    f"{output_sample_count}",
-                    flush=True,
+                try:
+                    mesh[...] = points
+                except Exception as exc:
+                    mesh_error = f"rank {rank}, resolution {resolution}: {type(exc).__name__}: {exc}"
+            mesh_errors = comm.allgather(mesh_error)
+            if any(error is not None for error in mesh_errors):
+                failure = "Mesh write failed: " + "; ".join(
+                    error for error in mesh_errors if error is not None
                 )
 
-    if failure is not None:
-        raise RuntimeError(failure)
+            task_rounds = comm.allreduce(len(local_tasks), op=MPI.MAX)
+            for task_round in range(task_rounds):
+                if failure is not None:
+                    break
+
+                local_completed = 0
+                local_error = None
+                if task_round < len(local_tasks):
+                    sample_paths, output_index = local_tasks[task_round]
+                    try:
+                        batch_fields = _read_batch(
+                            sample_paths,
+                            ndim,
+                            expected_shape, expected_dtype,
+                            cached_sample, resolution, points
+                        )
+                        output_end = output_index + len(sample_paths)
+                        fields_dataset[output_index:output_end] = batch_fields
+                        local_completed = len(sample_paths)
+                    except Exception as exc:
+                        local_error = (
+                            f"rank {rank}, resolution {resolution}, output sample {output_index}: "
+                            f"{type(exc).__name__}: {exc}"
+                        )
+
+                round_status = comm.allgather((local_completed, local_error))
+                errors = [error for _, error in round_status if error is not None]
+                if errors:
+                    failure = "Batch processing failed: " + "; ".join(errors)
+                    continue
+
+                completed_samples += sum(count for count, _ in round_status)
+                if rank == 0:
+                    print(
+                        f"Resolution {resolution}: output samples completed: {completed_samples}/"
+                        f"{output_sample_count}",
+                        flush=True,
+                    )
+        if failure is not None:
+            raise RuntimeError(failure)
+        if rank == 0:
+            print(f"Mesh resolutions completed: {completed_resolutions}/{num_resolutions}", flush=True)
 
 
 def main():
@@ -280,7 +304,7 @@ def main():
         required=True,
         help="one or more input simulation directory trees",
     )
-    parser.add_argument("--outpath", required=True, help="output HDF5 file")
+    parser.add_argument("--outpath", required=True, help="output filename for one resolution; prefix[-ID.h5] for multiple resolutions")
     parser.add_argument(
         "--dimension",
         required=True,

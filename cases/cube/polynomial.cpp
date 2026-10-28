@@ -43,43 +43,10 @@ template Params<3> read_parameters<3>(const std::string&);
 template <int dim>
 void CubePolynomial<dim>::initialize(const bpo::variables_map& params)
 {
-    std::shared_ptr<polynomial::DirichletIn<dim>> dirichlet1;
-    if (params.count("case_params_file")) {
-        const auto case_params = polynomial::read_parameters<dim>(
-            params["case_params_file"].as<std::string>());
-        dirichlet1 =
-            std::make_shared<polynomial::DirichletIn<dim>>(case_params);
-
-        std::cout << "Case 'cube_polynomial': read parameters:\n";
-        std::cout << "  Center: (";
-        for (int coordinate = 0; coordinate < dim; ++coordinate) {
-            if (coordinate > 0) {
-                std::cout << ", ";
-            }
-            std::cout << case_params.center[coordinate];
-        }
-        std::cout << ")\n";
-        for (std::size_t degree = 0;
-             degree < case_params.coefficients_by_degree.size(); ++degree) {
-            const auto exponents =
-                degree_exponents<dim>(static_cast<unsigned>(degree));
-            for (std::size_t term = 0; term < exponents.size(); ++term) {
-                std::cout << "  Degree " << degree << " exponents (";
-                for (int coordinate = 0; coordinate < dim; ++coordinate) {
-                    if (coordinate > 0) {
-                        std::cout << ", ";
-                    }
-                    std::cout << exponents[term][coordinate];
-                }
-                std::cout << "): "
-                          << case_params.coefficients_by_degree[degree][term]
-                          << '\n';
-            }
-        }
-    } else {
-        dirichlet1 = std::make_shared<polynomial::DirichletIn<dim>>();
-        std::cout << "Case 'cube_polynomial': default parameters.\n";
-    }
+    const auto case_params = params.count("case_params_file")
+        ? polynomial::read_parameters<dim>(params["case_params_file"].as<std::string>())
+        : polynomial::Params<dim>{};
+    auto dirichlet1 = std::make_shared<polynomial::DirichletIn<dim>>(case_params);
 
     this->rhs_ = std::make_shared<polynomial::RightHandSide<dim>>();
 

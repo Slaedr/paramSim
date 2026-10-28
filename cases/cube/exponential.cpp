@@ -53,31 +53,10 @@ template Params<3> read_parameters<3>(const std::string&);
 template <int dim>
 void CubeExponential<dim>::initialize(const bpo::variables_map& params)
 {
-    std::shared_ptr<exponential::DirichletIn<dim>> dirichlet1;
-    if (params.count("case_params_file")) {
-        const auto case_params = exponential::read_parameters<dim>(
-            params["case_params_file"].as<std::string>());
-        dirichlet1 =
-            std::make_shared<exponential::DirichletIn<dim>>(case_params);
-
-        std::cout << "Case 'cube_exponential': read parameters:\n";
-        for (std::size_t index = 0; index < case_params.centers.size();
-             ++index) {
-            const auto& center = case_params.centers[index];
-            std::cout << "  Center " << index << ": (";
-            for (int coordinate = 0; coordinate < dim; ++coordinate) {
-                if (coordinate > 0) {
-                    std::cout << ", ";
-                }
-                std::cout << center.coordinates[coordinate];
-            }
-            std::cout << "), coeff = " << center.coefficient
-                      << ", width = " << center.width << std::endl;
-        }
-    } else {
-        dirichlet1 = std::make_shared<exponential::DirichletIn<dim>>();
-        std::cout << "Case 'cube_exponential': default parameters.\n";
-    }
+    const auto case_params = params.count("case_params_file")
+        ? exponential::read_parameters<dim>(params["case_params_file"].as<std::string>())
+        : exponential::Params<dim>{};
+    auto dirichlet1 = std::make_shared<exponential::DirichletIn<dim>>(case_params);
 
     this->rhs_ = std::make_shared<exponential::RightHandSide<dim>>();
 

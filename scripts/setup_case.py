@@ -205,11 +205,31 @@ def get_common_args_str(case_data : dict) -> str:
         raise ValueError("init_pde must be a non-empty string")
 
     refine_levels = case_data.get("refine_levels", 1)
+    if type(refine_levels) is not int or refine_levels < 1:
+        raise ValueError("refine_levels must be an integer of at least 1")
+
+    coarse_output_levels = case_data.get("coarse_output_levels", -1)
+    if (
+        type(coarse_output_levels) is not int
+        or coarse_output_levels < -1
+        or coarse_output_levels > refine_levels - 1
+    ):
+        raise ValueError(
+            "coarse_output_levels must be -1 or an integer between 0 and "
+            f"{refine_levels - 1}"
+        )
+    coarse_grid_solution = case_data.get("coarse_grid_solution", "interpolation")
+    if coarse_grid_solution not in ("native_simulation", "interpolation"):
+        raise ValueError(
+            "coarse_grid_solution must be 'native_simulation' or 'interpolation'"
+        )
     return (
         "--dimension " + str(dimension)
         + " --pde " + case_data["pde"]
         + " --case " + case_data["case_type"]
         + " --refine_levels " + str(refine_levels)
+        + " --coarse_output_levels " + str(coarse_output_levels)
+        + " --coarse_grid_solution " + coarse_grid_solution
         + " --initial_resolution " + str(case_data["resolution"])
         + " --max_its " + str(case_data.get("max_nonlinear_its", 10))
         + " --tolerance " + str(case_data.get("nonlinear_tolerance", 1e-6))

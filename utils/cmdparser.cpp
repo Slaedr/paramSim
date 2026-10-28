@@ -1,5 +1,9 @@
 #include "cmdparser.hpp"
 
+#include <iomanip>
+#include <limits>
+#include <locale>
+#include <sstream>
 #include <stdexcept>
 #include <boost/program_options/cmdline.hpp>
 #include <boost/program_options/parsers.hpp>
@@ -31,6 +35,11 @@ void add_common_options(bpo::options_description& desc, const std::string help_m
          "Path to the case-specific parameter file")
         ("refine_levels", bpo::value<int>()->default_value(1),
          "Number of times to refine the grid and solve")
+        ("coarse_output_levels", bpo::value<int>()->default_value(-1),
+         "Number of immediately preceding coarse meshes to output; -1 writes "
+         "all")
+        ("coarse_grid_solution", bpo::value<std::string>()->default_value("interpolation"),
+         "Coarse mesh solution source: 'native_simulation' or 'interpolation'")
         ("initial_resolution", bpo::value<unsigned int>(),
          "required; Number of cells in first grid")
         ("fe_degree", bpo::value<int>()->default_value(1),
@@ -80,12 +89,39 @@ CommonParams get_common_params(const bpo::variables_map& common_cmdmap)
             ". Supported values are 2 and 3.");
     }
 
+    const int refine_levels = common_cmdmap["refine_levels"].as<int>();
+    const int coarse_output_levels =
+        common_cmdmap["coarse_output_levels"].as<int>();
+    if (refine_levels < 1) {
+        throw std::invalid_argument("--refine_levels must be at least 1.");
+    }
+    if (coarse_output_levels < -1 ||
+        coarse_output_levels > refine_levels - 1) {
+        throw std::invalid_argument(
+            "--coarse_output_levels must be -1 or between 0 and " +
+            std::to_string(refine_levels - 1) + ".");
+    }
+    const std::string coarse_grid_solution_str =
+        common_cmdmap["coarse_grid_solution"].as<std::string>();
+    CoarseGridSolution coarse_grid_solution;
+    if (coarse_grid_solution_str == "native_simulation") {
+        coarse_grid_solution = CoarseGridSolution::native_simulation;
+    } else if (coarse_grid_solution_str == "interpolation") {
+        coarse_grid_solution = CoarseGridSolution::interpolation;
+    } else {
+        throw std::invalid_argument(
+            "--coarse_grid_solution must be 'native_simulation' or "
+            "'interpolation'.");
+    }
+
     // TODO: Use C++20 designated initializers for this
     return CommonParams {
         /*case_str =          */ common_cmdmap["case"].as<std::string>(),
         /*solver_str =        */ common_cmdmap["pde"].as<std::string>(),
         /*dimension =         */ dimension,
-        /*refine_levels =     */ common_cmdmap["refine_levels"].as<int>(),
+        /*refine_levels =     */ refine_levels,
+        /*coarse_output_levels=*/ coarse_output_levels,
+        /*coarse_grid_solution=*/ coarse_grid_solution,
         /*initial_resolution =*/ common_cmdmap["initial_resolution"].as<unsigned>(),
         /*fe_degree =         */ common_cmdmap["fe_degree"].as<int>(),
         /*outpath =           */ common_cmdmap["output_prefix"].as<std::string>(),
@@ -94,8 +130,58 @@ CommonParams get_common_params(const bpo::variables_map& common_cmdmap)
         /*max_its =           */ common_cmdmap["max_its"].as<int>(),
         /*init_pde_str =      */ common_cmdmap["init_pde"].as<std::string>(),
         /*init_tolerance =    */ common_cmdmap["init_tolerance"].as<double>(),
-        /*init_max_its =      */ common_cmdmap["init_max_its"].as<int>()
+        /*init_max_its =      */ common_cmdmap["init_max_its"].as<int>(),
+        /*case_params_file =  */ common_cmdmap.count("case_params_file")
+            ? common_cmdmap["case_params_file"].as<std::string>() : ""
     };
+}
+
+void print_configuration(std::ostream& output, const CommonParams& params,
+                         unsigned int thread_limit)
+{
+    std::ostringstream report;
+    report.imbue(std::locale::classic());
+    report << std::boolalpha
+           << std::setprecision(std::numeric_limits<double>::max_digits10);
+    const auto init_pde = params.init_pde_str.empty()
+        ? (params.solver_str == "minimal_surface" ? "poisson_cg" : "none")
+        : params.init_pde_str;
+    const char *coarse_solution = "projection";
+    switch (params.coarse_grid_solution) {
+    case CoarseGridSolution::native_simulation:
+        coarse_solution = "native_simulation";
+        break;
+    case CoarseGridSolution::interpolation:
+        coarse_solution = "interpolation";
+        break;
+    case CoarseGridSolution::projection:
+        break;
+    }
+    report << "Configuration\n=============\nCommon settings:\n"
+           << "  case = " << params.case_str << '\n'
+           << "  pde = " << params.solver_str << '\n'
+           << "  dimension = " << params.dimension << '\n'
+           << "  case_params_file = "
+           << (params.case_params_file.empty() ? "none" : params.case_params_file) << '\n'
+           << "  initial_resolution = " << params.initial_resolution << '\n'
+           << "  fe_degree = " << params.fe_degree << '\n'
+           << "  refine_levels = " << params.refine_levels << '\n'
+           << "  coarse_output_levels = " << params.coarse_output_levels << '\n'
+           << "  coarse_grid_solution = " << coarse_solution << '\n'
+           << "  is_adaptive = " << params.is_adaptive << '\n'
+           << "  tolerance = " << params.tolerance << '\n'
+           << "  max_its = " << params.max_outer_its << '\n'
+           << "  output_prefix = " << params.outpath << '\n'
+           << "  init_pde = "
+           << (params.init_pde_str.empty() ? "(default)" : params.init_pde_str) << '\n'
+           << "  resolved_init_pde = " << init_pde << '\n'
+           << "  initialization_enabled = "
+           << (init_pde != "none" && init_pde != params.solver_str) << '\n'
+           << "  init_tolerance = " << params.init_tolerance << '\n'
+           << "  init_max_its = " << params.init_max_its << '\n'
+           << "Runtime settings:\n  thread_limit = " << thread_limit << '\n';
+    report << "End configuration\n\n";
+    output << report.str();
 }
 
 // Convert cmd line arguments for testing

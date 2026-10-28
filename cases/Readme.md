@@ -178,6 +178,20 @@ A common configuration may omit `init_pde` to use the per-PDE default.
 Setting it to `"none"` disables the initialization solve. Any other
 non-empty value is passed to `run_case` through `--init_pde`.
 
+The common configuration may also contain `"coarse_output_levels"`. It has
+the same meaning as the command-line option: `-1` (the default) writes every
+retained level, `0` writes only the finest, and a positive value writes that
+many immediately preceding coarse levels plus the finest. It must be a JSON
+integer, not a boolean, and cannot exceed `refine_levels - 1`. Every coarse
+file contains the converged finest solution interpolated onto that mesh, not
+the intermediate solution computed while refining. The optional
+`"coarse_grid_solution"` value accepts `"interpolation"` (the default) or
+`"native_simulation"`. Native mode writes each selected level's own solution
+when it converges; if a later solve fails, previously written coarse files
+remain. Interpolation mode writes selected meshes only after the finest solve
+converges, so a failed finest solve produces no files. `coarse_output_levels`
+selects the same levels in either mode.
+
 A relative `case_params_ranges_file` path is resolved relative to the common
 JSON file. The ensemble driver samples the ranges and writes a local
 `case_params.txt` for each simulation.

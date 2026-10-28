@@ -1,7 +1,7 @@
 {
   "num_samples" : 5,
   "batch_size" : 1,
-  "simulation_exec_path" : "../../../run_case",
+  "simulation_exec_path" : "../../build/run_case",
   "dimension" : 2,
   "resolution" : 63,
   "pde" : "poisson_cg",

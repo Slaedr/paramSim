@@ -34,10 +34,16 @@ void run_dimension(const CommonParams& common_params, const int argc,
     std::shared_ptr<const Case<dim>> tcase =
         create_case<dim>(common_params, argc, argv);
 
+    print_configuration(std::cout, common_params,
+                         dealii::MultithreadInfo::n_threads());
+    std::cout << "Solving\n=======\n\n" << std::flush;
+
     PDEParams pdeparams{
-        common_params.solver_str,         common_params.fe_degree,
-        common_params.initial_resolution, common_params.refine_levels,
-        common_params.is_adaptive,        common_params.outpath};
+        common_params.solver_str,          common_params.fe_degree,
+        common_params.initial_resolution,  common_params.refine_levels,
+        common_params.coarse_output_levels,
+        common_params.coarse_grid_solution, common_params.is_adaptive,
+        common_params.outpath};
     SolverParams solver_params{common_params.tolerance,
                                common_params.max_outer_its};
     SolverParams init_solver_params{common_params.init_tolerance,
@@ -46,9 +52,10 @@ void run_dimension(const CommonParams& common_params, const int argc,
     std::shared_ptr<DiscretePDEBase> pdeb =
         create_discrete_pde(tcase, pdeparams);
 
-    solver::run_grid_refinement<dim>(pdeparams, solver_params, tcase, pdeb,
-                                     common_params.init_pde_str,
-                                     init_solver_params);
+    solver::MeshSequence<dim> mesh_sequence;
+    mesh_sequence.run_grid_refinement(pdeparams, solver_params, tcase, pdeb,
+                                      common_params.init_pde_str,
+                                      init_solver_params);
 }
 
 int main(int argc, char *argv[])
@@ -71,10 +78,6 @@ int main(int argc, char *argv[])
         }
 
         const auto common_params = get_common_params(common_cmdmap);
-
-        std::cout << "Solving" << std::endl
-                  << "=======" << std::endl
-                  << std::endl;
 
         switch (common_params.dimension) {
         case 2:
