@@ -26,6 +26,8 @@ from libensemble.libE import libE
 from libensemble.message_numbers import TASK_FAILED, WORKER_DONE
 from libensemble.tools import add_unique_random_streams, save_libE_output
 
+from ensemble_restart import load_restart_history, prepare_output_directory
+
 from setup_case import (
     get_case_parameter_args,
     get_common_args_str,
@@ -53,9 +55,11 @@ def _env_or_case(env_name: str, case_data: dict[str, Any], key: str,
 
 def gen_random_samples(H_in, persis_info, gen_specs):
     """Generate a batch of uniformly distributed parameter samples."""
-    del H_in
     user_specs = gen_specs["user"]
-    batch_size = int(user_specs["gen_batch_size"])
+    batch_size = min(
+        int(user_specs["gen_batch_size"]),
+        max(0, int(user_specs["num_samples"]) - len(H_in)),
+    )
     out = np.zeros(batch_size, dtype=gen_specs["out"])
 
     for param_spec in gen_specs["out"]:
@@ -117,8 +121,16 @@ def run_case(H_in, persis_info, sim_specs, libE_info):
     return output, persis_info, calc_status
 
 
-def run_ensemble(case_file_path: str) -> None:
-    """Configure and run a paramSim ensemble from a JSON case file."""
+def run_ensemble(case_file_path: str, restart_history=None) -> None:
+    """Configure and run or restart a paramSim ensemble.
+
+    Args:
+        case_file_path: JSON file containing ensemble configuration.
+        restart_history: Saved history path, or None for a fresh ensemble.
+
+    Returns:
+        None.
+    """
     nworkers, is_manager, libE_specs, _ = libe.tools.parse_args()
     if nworkers < 1:
         raise RuntimeError("At least one libEnsemble worker is required")
@@ -152,7 +164,6 @@ def run_ensemble(case_file_path: str) -> None:
         "ensemble",
     )
     output_dir = _resolve_path(str(output_value), Path.cwd())
-    output_dir.parent.mkdir(parents=True, exist_ok=True)
 
     num_samples = int(
         _env_or_case("PARAMSIM_NUM_SAMPLES", case_data, "num_samples")
@@ -176,11 +187,13 @@ def run_ensemble(case_file_path: str) -> None:
 
     gen_specs = {
         "gen_f": gen_random_samples,
+        "in": ["sim_id"],
         "out": [],
         "user": {
             "lower": {},
             "upper": {},
             "gen_batch_size": generation_batch,
+            "num_samples": num_samples,
         },
     }
 
@@ -208,23 +221,80 @@ def run_ensemble(case_file_path: str) -> None:
         case_parameter_ranges,
     )
 
+    history_path = (
+        _resolve_path(str(restart_history), Path.cwd())
+        if restart_history is not None else None
+    )
+    history = None
+    remaining = num_samples
+    directory_width = max(6, len(str(num_samples - 1)))
+    archive_path = None
+    preparation_error = None
+
+    if is_manager:
+        try:
+            if history_path is not None:
+                history, remaining = load_restart_history(
+                    history_path, gen_specs, sim_specs, num_samples
+                )
+            if remaining:
+                directory_width, archive_path = prepare_output_directory(
+                    output_dir, history, directory_width
+                )
+        except Exception as error:
+            preparation_error = error
+
+    communicator = libE_specs.get("mpi_comm")
+    if communicator is not None:
+        remaining, directory_width, preparation_error = communicator.bcast(
+            (remaining, directory_width, preparation_error), root=0
+        )
+    if preparation_error is not None:
+        raise preparation_error
+
+    if is_manager:
+        retries = (
+            int(np.count_nonzero(
+                ~history["sim_ended"] & ~history["cancel_requested"]
+            ))
+            if history is not None else 0
+        )
+        print(
+            f"paramSim/libEnsemble: history={history_path}, "
+            f"completed={num_samples - remaining}, retries={retries}, "
+            f"new_samples={remaining - retries}, "
+            f"seed={'fresh' if history_path is not None else random_seed}",
+            flush=True,
+        )
+        if archive_path is not None:
+            print(f"Partial outputs archived in {archive_path}", flush=True)
+    if remaining == 0:
+        if is_manager:
+            print("Requested ensemble is already complete.", flush=True)
+        return
+
     # Each MPI worker is already co-located with and bound to the CPU core on
     # which its serial subprocess should execute. No nested srun is required.
     libE_specs.update(
         {
             "sim_dirs_make": True,
             "ensemble_dir_path": str(output_dir),
-            "reuse_output_dir": False,
-            "calc_dir_id_width": max(6, len(str(num_samples - 1))),
+            "reuse_output_dir": True,
+            "calc_dir_id_width": directory_width,
             "save_every_k_sims": checkpoint_every,
             "save_H_on_completion": False,
+            "save_H_and_persis_on_abort": True,
             "disable_resource_manager": True,
             "gen_on_manager": True,
         }
     )
 
-    exit_criteria = {"sim_max": num_samples}
-    persis_info = add_unique_random_streams({}, nworkers + 1, seed=random_seed)
+    exit_criteria = {"sim_max": remaining}
+    persis_info = add_unique_random_streams(
+        {},
+        nworkers + 1,
+        seed=None if history_path is not None else random_seed,
+    )
 
     H, persis_info, flag = libE(
         sim_specs,
@@ -232,6 +302,7 @@ def run_ensemble(case_file_path: str) -> None:
         exit_criteria,
         persis_info,
         libE_specs=libE_specs,
+        H0=history,
     )
 
     if is_manager:

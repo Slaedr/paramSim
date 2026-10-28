@@ -1,4 +1,5 @@
 import json
+import os
 import socket
 import time
 from pathlib import Path
@@ -9,6 +10,8 @@ from libensemble.executors import Executor
 from libensemble.libE import libE
 from libensemble.message_numbers import TASK_FAILED, WORKER_DONE
 import libensemble.tools
+
+from ensemble_restart import load_restart_history, prepare_output_directory
 
 from setup_case import (
     get_case_parameter_args,
@@ -22,7 +25,10 @@ from setup_case import (
 def gen_random_samples(H_in, persis_info, gen_specs):
 
     user_specs = gen_specs["user"]
-    batch_size = user_specs["gen_batch_size"]
+    batch_size = min(
+        int(user_specs["gen_batch_size"]),
+        max(0, int(user_specs["num_samples"]) - len(H_in)),
+    )
 
     out = np.zeros(batch_size, dtype=gen_specs["out"])
 
@@ -86,8 +92,16 @@ def run_case(H_in, persis_info, sim_specs, libE_info):
 
     return output, persis_info, calc_status
 
-def run_ensemble(case_file_path):
+def run_ensemble(case_file_path, restart_history=None):
+    """Configure and run or restart a local paramSim ensemble.
 
+    Args:
+        case_file_path: JSON file containing ensemble configuration.
+        restart_history: Saved history path, or None for a fresh ensemble.
+
+    Returns:
+        None.
+    """
     # Read params for this ensemble-case
     case_path = Path(case_file_path).expanduser().resolve()
     with case_path.open("r", encoding="utf-8") as case_file:
@@ -95,6 +109,14 @@ def run_ensemble(case_file_path):
     case_parameter_ranges = load_case_parameter_ranges(
         case_data, case_path
     )
+
+    num_samples = int(case_data["num_samples"])
+    if num_samples <= 0:
+        raise ValueError("num_samples must be positive")
+    output_dir = Path(
+        os.environ.get("PARAMSIM_OUTPUT_DIR")
+        or case_data.get("ensemble_dir_path", "ensemble")
+    ).expanduser().resolve()
 
     comms = case_data.get("comms", "local")
     nworkers = case_data.get("nworkers", 1)
@@ -116,11 +138,13 @@ def run_ensemble(case_file_path):
 
     gen_specs = {
         "gen_f" : gen_random_samples,
+        "in" : ["sim_id"],
         "out" : [],
         "user" : {
             "lower" : {},
             "upper" : {},
             "gen_batch_size" : case_data["batch_size"],
+            "num_samples" : num_samples,
         },
     }
     sim_specs = {
@@ -142,14 +166,74 @@ def run_ensemble(case_file_path):
 
     setup_case(case_data, gen_specs, sim_specs, case_parameter_ranges)
 
-    exit_criteria = {"sim_max": case_data["num_samples"]}
+    history_path = (
+        Path(restart_history).expanduser().resolve()
+        if restart_history is not None else None
+    )
+    history = None
+    remaining = num_samples
+    if history_path is not None:
+        history, remaining = load_restart_history(
+            history_path, gen_specs, sim_specs, num_samples
+        )
+
+    directory_width = max(4, len(str(num_samples - 1)))
+    archive_path = None
+    if remaining:
+        directory_width, archive_path = prepare_output_directory(
+            output_dir, history, directory_width
+        )
+
+    retries = (
+        int(np.count_nonzero(
+            ~history["sim_ended"] & ~history["cancel_requested"]
+        ))
+        if history is not None else 0
+    )
+    print(
+        f"paramSim/libEnsemble: history={history_path}, "
+        f"completed={num_samples - remaining}, retries={retries}, "
+        f"new_samples={remaining - retries}, "
+        f"random_streams={'fresh' if history_path is not None else 'default'}",
+        flush=True,
+    )
+    if archive_path is not None:
+        print(f"Partial outputs archived in {archive_path}", flush=True)
+    if remaining == 0:
+        print("Requested ensemble is already complete.", flush=True)
+        return
+
+    libE_specs.update(
+        {
+            "ensemble_dir_path": str(output_dir),
+            "reuse_output_dir": True,
+            "calc_dir_id_width": directory_width,
+            "save_every_k_sims": int(case_data.get(
+                "checkpoint_every", max(1, min(256, num_samples))
+            )),
+            "save_H_on_completion": False,
+            "save_H_and_persis_on_abort": True,
+        }
+    )
+    exit_criteria = {"sim_max": remaining}
 
     # Seed random streams for each worker for gen_f
-    persis_info = libe.tools.add_unique_random_streams({}, nworkers + 1)
+    if history_path is not None:
+        persis_info = libe.tools.add_unique_random_streams(
+            {}, nworkers + 1, seed=None
+        )
+    else:
+        persis_info = libe.tools.add_unique_random_streams({}, nworkers + 1)
 
     # Launch libEnsemble
-    H, persis_info, flag = libE(sim_specs, gen_specs, exit_criteria, persis_info=persis_info, \
-                                libE_specs=libE_specs)
+    H, persis_info, flag = libE(
+        sim_specs,
+        gen_specs,
+        exit_criteria,
+        persis_info=persis_info,
+        libE_specs=libE_specs,
+        H0=history,
+    )
 
     if is_manager:
         libe.tools.save_libE_output(H, persis_info, "paramsim", nworkers)

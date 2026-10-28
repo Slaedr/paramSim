@@ -9,7 +9,7 @@ binary's failure contract -- a "Exception on processing:" banner on stderr
 and a nonzero exit code (see run_case.cpp) -- which keeps the test fast and
 independent of the C++ build. test_real_run_case_exception_is_recorded_as_failure
 repeats the key assertion against the actual built binary, whose path is
-supplied by test/CMakeLists.txt via the PARAMSIM_RUN_CASE environment
+supplied by test/CMakeLists.txt via the PARAMSIM_EXEC environment
 variable (using the $<TARGET_FILE:run_case> generator expression), and is
 skipped when that variable is not set.
 """
@@ -35,8 +35,9 @@ except ImportError:
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 RUN_PY = REPOSITORY_ROOT / "scripts" / "run.py"
+RUN_CLUSTER_PY = REPOSITORY_ROOT / "scripts" / "run_cluster.py"
 CHECKER = REPOSITORY_ROOT / "scripts" / "check_ensemble_results.py"
-REAL_RUN_CASE = os.environ.get("PARAMSIM_RUN_CASE")
+REAL_RUN_CASE = os.environ.get("PARAMSIM_EXEC")
 
 
 STUB_SOURCE = '''#!{python}
@@ -124,24 +125,49 @@ def write_case_files(root, executable, num_samples=5):
     return case_path
 
 
-def run_ensemble_in(root, case_file, fail_ids=()):
-    """Run scripts/run.py against case_file with cwd=root, return the
-    completed subprocess (never raises on nonzero exit)."""
+def run_ensemble_in(
+    root, case_file, fail_ids=(), *, entrypoint=RUN_PY,
+    restart_history=None, nworkers=1, output_dir=None,
+):
+    """Launch an ensemble subprocess with isolated paramSim overrides.
+
+    Args:
+        root: Launch directory.
+        case_file: Ensemble configuration file.
+        fail_ids: Simulation IDs for which the stub should fail.
+        entrypoint: Local or cluster launch script.
+        restart_history: Optional history path passed to the launch script.
+        nworkers: Worker count passed on the command line.
+        output_dir: Simulation directory, defaulting to root/ensemble.
+
+    Returns:
+        Completed subprocess with captured output and exit status.
+    """
     environment = dict(os.environ)
+    for key in (
+        "PARAMSIM_EXEC", "PARAMSIM_NUM_SAMPLES", "PARAMSIM_RANDOM_SEED",
+    ):
+        environment.pop(key, None)
+    environment["PARAMSIM_OUTPUT_DIR"] = str(
+        output_dir if output_dir is not None else root / "ensemble"
+    )
     environment["PARAMSIM_STUB_FAIL_IDS"] = ",".join(
         str(sim_id) for sim_id in fail_ids
     )
+    command = [
+        sys.executable,
+        str(entrypoint),
+        "-e",
+        str(case_file),
+        "--comms",
+        "local",
+        "--nworkers",
+        str(nworkers),
+    ]
+    if restart_history is not None:
+        command.extend(["--restart-history", str(restart_history)])
     return subprocess.run(
-        [
-            sys.executable,
-            str(RUN_PY),
-            "-e",
-            str(case_file),
-            "--comms",
-            "local",
-            "--nworkers",
-            "1",
-        ],
+        command,
         cwd=root,
         env=environment,
         capture_output=True,
@@ -266,8 +292,248 @@ class StubDrivenEnsembleTests(unittest.TestCase):
         self.assertNotIn(f"stderr={stderr_path} (missing)", result.stdout)
 
 
+class RestartEnsembleTests(unittest.TestCase):
+    def test_surplus_rows_and_invalid_restart_requests(self):
+        """Limit queued retries and protect outputs from invalid launches."""
+        for entrypoint in (RUN_PY, RUN_CLUSTER_PY):
+            with (
+                self.subTest(entrypoint=entrypoint.name),
+                tempfile.TemporaryDirectory() as temporary_directory,
+            ):
+                root = Path(temporary_directory)
+                case_file = write_case_files(
+                    root, write_stub(root), num_samples=5
+                )
+                initial = run_ensemble_in(
+                    root, case_file, entrypoint=entrypoint
+                )
+                self.assertEqual(
+                    initial.returncode, 0, initial.stdout + initial.stderr
+                )
+                original = np.load(find_history(root)[0], allow_pickle=False)
+                saved = original.copy()
+                saved["sim_ended"][2:] = False
+                np.save(root / "restart.npy", saved, allow_pickle=False)
+                np.save(
+                    root / "bad.npy",
+                    np.zeros(1, dtype=[("sim_id", np.int64)]),
+                    allow_pickle=False,
+                )
+                case_data = json.loads(case_file.read_text(encoding="utf-8"))
+                case_data.update(num_samples=3, batch_size=8)
+                case_file.write_text(json.dumps(case_data), encoding="utf-8")
+                output_dir = root / "ensemble"
+                invocations = {
+                    path: path.stat().st_mtime_ns
+                    for path in output_dir.glob("sim*/stub_invocation.txt")
+                }
+
+                for history_path, message in (
+                    (None, "--restart-history"),
+                    (Path("missing.npy"), "No such file"),
+                    (Path("bad.npy"), "missing fields"),
+                ):
+                    with self.subTest(restart_history=history_path):
+                        rejected = run_ensemble_in(
+                            root, case_file, entrypoint=entrypoint,
+                            restart_history=history_path,
+                        )
+                        self.assertNotEqual(rejected.returncode, 0)
+                        self.assertIn(message, rejected.stderr)
+                        self.assertEqual(
+                            {
+                                path: path.stat().st_mtime_ns
+                                for path in output_dir.glob(
+                                    "sim*/stub_invocation.txt"
+                                )
+                            },
+                            invocations,
+                        )
+                        self.assertFalse(
+                            (output_dir / "restart_archive").exists()
+                        )
+
+                resumed = run_ensemble_in(
+                    root, case_file, entrypoint=entrypoint,
+                    restart_history=Path("restart.npy"),
+                )
+                self.assertEqual(
+                    resumed.returncode, 0, resumed.stdout + resumed.stderr
+                )
+                self.assertIn(
+                    "completed=2, retries=1, new_samples=0", resumed.stdout
+                )
+                latest_path = max(
+                    find_history(root), key=lambda path: path.stat().st_mtime_ns
+                )
+                limited = np.load(latest_path, allow_pickle=False)
+                self.assertEqual(len(limited), 5)
+                np.testing.assert_array_equal(
+                    limited["sim_ended"], [True, True, True, False, False]
+                )
+                self.assertTrue(limited["cancel_requested"][3:].all())
+                self.assertFalse(limited["sim_started"][3:].any())
+
+                case_data["num_samples"] = 6
+                case_file.write_text(json.dumps(case_data), encoding="utf-8")
+                extended = run_ensemble_in(
+                    root, case_file, entrypoint=entrypoint,
+                    restart_history=latest_path,
+                )
+                self.assertEqual(
+                    extended.returncode, 0, extended.stdout + extended.stderr
+                )
+                self.assertIn(
+                    "completed=3, retries=2, new_samples=1", extended.stdout
+                )
+                final_path = max(
+                    find_history(root), key=lambda path: path.stat().st_mtime_ns
+                )
+                finished = np.load(final_path, allow_pickle=False)
+                self.assertEqual(len(finished), 6)
+                self.assertTrue(finished["sim_ended"].all())
+                np.testing.assert_array_equal(
+                    finished["center_coordinates"][:5],
+                    original["center_coordinates"],
+                )
+
+    def test_restart_preserves_results_and_completes_missing_work(self):
+        """Retry saved inputs, draw new samples, and preserve ended results."""
+        parameter_fields = (
+            "num_centers", "center_coordinates",
+            "center_coefficients", "center_widths",
+        )
+        for entrypoint in (RUN_PY, RUN_CLUSTER_PY):
+            with (
+                self.subTest(entrypoint=entrypoint.name),
+                tempfile.TemporaryDirectory() as temporary_directory,
+            ):
+                root = Path(temporary_directory)
+                stub = write_stub(root)
+                case_file = write_case_files(root, stub, num_samples=5)
+                output_dir = root / "custom-ensemble"
+                initial = run_ensemble_in(
+                    root, case_file, fail_ids=(1,),
+                    entrypoint=entrypoint, output_dir=output_dir,
+                )
+                self.assertEqual(
+                    initial.returncode, 0, initial.stdout + initial.stderr
+                )
+                original = np.load(find_history(root)[0], allow_pickle=False)
+                directories = {
+                    int(path.name.removeprefix("sim")): path
+                    for path in output_dir.glob("sim*")
+                    if path.is_dir()
+                }
+                completed_files = {
+                    path: (path.read_bytes(), path.stat().st_mtime_ns)
+                    for sim_id in (0, 1)
+                    for path in directories[sim_id].iterdir()
+                    if path.is_file()
+                }
+                retry_inputs = {
+                    sim_id: (directories[sim_id] / "case_params.txt").read_bytes()
+                    for sim_id in (2, 3)
+                }
+                (directories[2] / "stale.vtk").write_text(
+                    "partial output", encoding="utf-8"
+                )
+
+                saved = original[:4].copy()
+                saved["sim_ended"][2:] = False
+                saved["sim_started"][3] = False
+                np.save(root / "restart.npy", saved, allow_pickle=False)
+                case_data = json.loads(case_file.read_text(encoding="utf-8"))
+                case_data.update(
+                    num_samples=6, nworkers=2, batch_size=4, checkpoint_every=1
+                )
+                case_file.write_text(json.dumps(case_data), encoding="utf-8")
+
+                resumed = run_ensemble_in(
+                    root, case_file, entrypoint=entrypoint, nworkers=2,
+                    output_dir=output_dir, restart_history=Path("restart.npy"),
+                )
+                self.assertEqual(
+                    resumed.returncode, 0, resumed.stdout + resumed.stderr
+                )
+                self.assertIn(
+                    "completed=2, retries=2, new_samples=2", resumed.stdout
+                )
+                latest_path = max(
+                    find_history(root), key=lambda path: path.stat().st_mtime_ns
+                )
+                finished = np.load(latest_path, allow_pickle=False)
+                self.assertEqual(len(finished), 6)
+                self.assertTrue(finished["sim_ended"].all())
+                np.testing.assert_array_equal(finished["sim_id"], np.arange(6))
+                self.assertEqual(finished["success"][1], 0)
+                self.assertEqual(
+                    finished["return_code"][1], original["return_code"][1]
+                )
+                for field in parameter_fields:
+                    np.testing.assert_array_equal(
+                        finished[field][:4], saved[field]
+                    )
+                self.assertFalse(any(
+                    all(
+                        np.array_equal(new[field], old[field])
+                        for field in parameter_fields
+                    )
+                    for new in finished[4:]
+                    for old in original
+                ))
+                for path, expected in completed_files.items():
+                    self.assertEqual(
+                        (path.read_bytes(), path.stat().st_mtime_ns), expected
+                    )
+                for sim_id, expected in retry_inputs.items():
+                    self.assertEqual(
+                        (directories[sim_id] / "case_params.txt").read_bytes(),
+                        expected,
+                    )
+                self.assertFalse((directories[2] / "stale.vtk").exists())
+                archives = list((output_dir / "restart_archive").iterdir())
+                self.assertEqual(len(archives), 1)
+                self.assertEqual(
+                    {path.name for path in archives[0].iterdir()},
+                    {directories[index].name for index in (2, 3, 4)},
+                )
+                self.assertTrue(
+                    (archives[0] / directories[2].name / "stale.vtk").is_file()
+                )
+                self.assertTrue(list(root.glob(
+                    "libE_history*after_sim_*.npy"
+                )))
+                np.testing.assert_array_equal(
+                    np.load(root / "restart.npy", allow_pickle=False), saved
+                )
+
+                invocations = {
+                    path: path.stat().st_mtime_ns
+                    for path in output_dir.glob("sim*/stub_invocation.txt")
+                }
+                repeated = run_ensemble_in(
+                    root, case_file, entrypoint=entrypoint, nworkers=2,
+                    output_dir=output_dir, restart_history=latest_path,
+                )
+                self.assertEqual(
+                    repeated.returncode, 0, repeated.stdout + repeated.stderr
+                )
+                self.assertIn("already complete", repeated.stdout)
+                self.assertEqual(
+                    {
+                        path: path.stat().st_mtime_ns
+                        for path in output_dir.glob("sim*/stub_invocation.txt")
+                    },
+                    invocations,
+                )
+                self.assertEqual(
+                    list((output_dir / "restart_archive").iterdir()), archives
+                )
+
+
 @unittest.skipUnless(
-    REAL_RUN_CASE, "set PARAMSIM_RUN_CASE to the built run_case binary"
+    REAL_RUN_CASE, "set PARAMSIM_EXEC to the built run_case binary"
 )
 class RealRunCaseEnsembleTests(unittest.TestCase):
     def test_real_run_case_exception_is_recorded_as_failure(self):
