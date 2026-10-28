@@ -139,7 +139,6 @@ np.save(sys.argv[2], samples, allow_pickle=False)
     def setUpClass(cls):
         cls.drivers = (
             load_driver("ensemble"),
-            load_driver("ensemble_cluster"),
         )
 
     @staticmethod

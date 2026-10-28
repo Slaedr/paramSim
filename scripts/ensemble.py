@@ -1,15 +1,28 @@
+#!/usr/bin/env python3
+"""Local and MPI libEnsemble driver for paramSim.
+
+Runtime settings are supplied by the command-line entry point.
+Local execution defaults to one worker. MPI execution uses one manager
+rank and all remaining ranks as workers.
+
+The base Executor starts serial subprocesses in isolated simulation
+directories. Executable paths are relative to the case JSON; output
+and restart-history paths are relative to the launch directory.
+"""
+
 import json
 import os
 import socket
 import time
 from pathlib import Path
+from typing import Any
 
-import numpy as np
 import libensemble as libe
+import numpy as np
 from libensemble.executors import Executor
 from libensemble.libE import libE
 from libensemble.message_numbers import TASK_FAILED, WORKER_DONE
-import libensemble.tools
+from libensemble.tools import add_unique_random_streams, save_libE_output
 
 from ensemble_restart import load_restart_history, prepare_output_directory
 
@@ -22,23 +35,37 @@ from setup_case import (
     write_case_parameter_file,
 )
 
-def gen_random_samples(H_in, persis_info, gen_specs):
 
+def _resolve_path(value: str, base_dir: Path) -> Path:
+    path = Path(value).expanduser()
+    if not path.is_absolute():
+        path = base_dir / path
+    return path.resolve()
+
+
+def _env_or_case(env_name: str, case_data: dict[str, Any], key: str,
+                 default: Any = None) -> Any:
+    value = os.environ.get(env_name)
+    if value is not None and value != "":
+        return value
+    return case_data.get(key, default)
+
+
+def gen_random_samples(H_in, persis_info, gen_specs):
+    """Generate a batch of uniformly distributed parameter samples."""
     user_specs = gen_specs["user"]
     batch_size = min(
         int(user_specs["gen_batch_size"]),
         max(0, int(user_specs["num_samples"]) - len(H_in)),
     )
-
     out = np.zeros(batch_size, dtype=gen_specs["out"])
 
-    # Iterate over types of parameters to generate
-    for paramset in gen_specs["out"]:
-        paramname = paramset[0]
-        lower = user_specs["lower"][paramname]
-        upper = user_specs["upper"][paramname]
-        integer = paramname in user_specs.get("integer_parameters", ())
-        out[paramname] = sample_parameter_values(
+    for param_spec in gen_specs["out"]:
+        param_name = param_spec[0]
+        lower = user_specs["lower"][param_name]
+        upper = user_specs["upper"][param_name]
+        integer = param_name in user_specs.get("integer_parameters", ())
+        out[param_name] = sample_parameter_values(
             persis_info["rand_stream"],
             lower,
             upper,
@@ -46,10 +73,11 @@ def gen_random_samples(H_in, persis_info, gen_specs):
             integer=integer,
         )
 
-    # Send back our output and persis_info
     return out, persis_info
 
+
 def run_case(H_in, persis_info, sim_specs, libE_info):
+    """Launch one serial paramSim executable for every received history row."""
     output = np.zeros(len(H_in), dtype=sim_specs["out"])
     executor = libE_info.get("executor", Executor.executor)
     calc_status = WORKER_DONE
@@ -60,7 +88,7 @@ def run_case(H_in, persis_info, sim_specs, libE_info):
             sim_specs["user"]["dimension"],
             history_row,
         )
-        all_args = (
+        app_args = (
             sim_specs["user"]["common_args"]
             + get_case_parameter_args(parameter_file)
         )
@@ -68,7 +96,7 @@ def run_case(H_in, persis_info, sim_specs, libE_info):
         start = time.monotonic()
         task = executor.submit(
             app_name="run_fem_case",
-            app_args=all_args,
+            app_args=app_args,
             stdout=f"run_case_{ibatch}.out",
             stderr=f"run_case_{ibatch}.err",
         )
@@ -83,157 +111,241 @@ def run_case(H_in, persis_info, sim_specs, libE_info):
         output["success"][ibatch] = int(succeeded)
         output["return_code"][ibatch] = int(return_code)
         output["runtime_sec"][ibatch] = elapsed
-        output["hostname"][ibatch] = (
-            socket.gethostname().encode("utf-8")[:63]
-        )
+        output["hostname"][ibatch] = socket.gethostname().encode("utf-8")[:63]
 
         if not succeeded:
             calc_status = TASK_FAILED
 
     return output, persis_info, calc_status
 
-def run_ensemble(case_file_path, restart_history=None):
-    """Configure and run or restart a local paramSim ensemble.
+
+def run_ensemble(
+    case_file_path: str,
+    restart_history=None,
+    *,
+    comms="local",
+    nworkers=None,
+) -> None:
+    """Configure and run or restart a paramSim ensemble.
 
     Args:
         case_file_path: JSON file containing ensemble configuration.
         restart_history: Saved history path, or None for a fresh ensemble.
+        comms: Manager/worker communication mode, either local or mpi.
+        nworkers: Positive local worker count, defaulting to one.
+            Must be None for MPI, which derives workers from rank count.
 
     Returns:
         None.
     """
-    # Read params for this ensemble-case
+    if comms == "local":
+        nworkers = 1 if nworkers is None else nworkers
+        if nworkers < 1:
+            raise ValueError("nworkers must be positive")
+        is_manager = True
+        libE_specs = {"comms": "local", "nworkers": nworkers}
+    elif comms == "mpi":
+        if nworkers is not None:
+            raise ValueError("nworkers is only valid with local communication")
+        from mpi4py import MPI
+
+        if not MPI.Is_initialized():
+            MPI.Init()
+        communicator = MPI.COMM_WORLD
+        nworkers = communicator.Get_size() - 1
+        if nworkers < 1:
+            raise RuntimeError(
+                "MPI execution requires at least two ranks: "
+                "one manager and one worker"
+            )
+        is_manager = communicator.Get_rank() == 0
+        libE_specs = {"comms": "mpi", "mpi_comm": communicator}
+    else:
+        raise ValueError("comms must be 'local' or 'mpi'")
+
+    libe.logger.set_level("INFO")
+
     case_path = Path(case_file_path).expanduser().resolve()
     with case_path.open("r", encoding="utf-8") as case_file:
         case_data = json.load(case_file)
+    if "comms" in case_data or "nworkers" in case_data:
+        raise ValueError(
+            "JSON comms and nworkers settings are no longer supported; "
+            "use --comms and --nworkers on the command line"
+        )
     case_parameter_ranges = load_case_parameter_ranges(
         case_data, case_path
     )
 
-    num_samples = int(case_data["num_samples"])
+    executable_value = _env_or_case(
+        "PARAMSIM_EXEC",
+        case_data,
+        "simulation_exec_path",
+    )
+    if not executable_value:
+        raise ValueError("Set simulation_exec_path in the case JSON or PARAMSIM_EXEC")
+    executable = _resolve_path(str(executable_value), case_path.parent)
+    if not executable.is_file():
+        raise FileNotFoundError(f"paramSim executable not found: {executable}")
+    if not os.access(executable, os.X_OK):
+        raise PermissionError(f"paramSim executable is not executable: {executable}")
+
+    output_value = _env_or_case(
+        "PARAMSIM_OUTPUT_DIR",
+        case_data,
+        "ensemble_dir_path",
+        "ensemble",
+    )
+    output_dir = _resolve_path(str(output_value), Path.cwd())
+
+    num_samples = int(
+        _env_or_case("PARAMSIM_NUM_SAMPLES", case_data, "num_samples")
+    )
     if num_samples <= 0:
         raise ValueError("num_samples must be positive")
-    output_dir = Path(
-        os.environ.get("PARAMSIM_OUTPUT_DIR")
-        or case_data.get("ensemble_dir_path", "ensemble")
-    ).expanduser().resolve()
 
-    comms = case_data.get("comms", "local")
-    nworkers = case_data.get("nworkers", 1)
-    is_manager = True
-    #nworkers, is_manager, libE_specs, _ = libe.tools.parse_args()
-    libE_specs = dict()
-    libE_specs["comms"] = comms
-    libE_specs["nworkers"] = nworkers
-    # Create and work inside separate per-simulation directories
-    libE_specs["sim_dirs_make"] = True
-    libe.logger.set_level("INFO")
+    configured_batch = int(case_data.get("batch_size", 0))
+    generation_batch = configured_batch if configured_batch > 0 else \
+            min(num_samples, max(64, 4 * nworkers))
 
-    exctr = Executor()
+    random_seed = int(
+        _env_or_case("PARAMSIM_RANDOM_SEED", case_data, "random_seed", 0)
+    )
+    checkpoint_every = int(case_data.get("checkpoint_every", max(1, min(256, num_samples))))
 
-    # Register simulation executable with executor
-    exctr.register_app(full_path=case_data["simulation_exec_path"], app_name="run_fem_case")
+    executor = Executor()
+    executor.register_app(full_path=str(executable), app_name="run_fem_case")
 
-    common_arg_str = get_common_args_str(case_data)
+    common_args = get_common_args_str(case_data)
 
     gen_specs = {
-        "gen_f" : gen_random_samples,
-        "in" : ["sim_id"],
-        "out" : [],
-        "user" : {
-            "lower" : {},
-            "upper" : {},
-            "gen_batch_size" : case_data["batch_size"],
-            "num_samples" : num_samples,
+        "gen_f": gen_random_samples,
+        "in": ["sim_id"],
+        "out": [],
+        "user": {
+            "lower": {},
+            "upper": {},
+            "gen_batch_size": generation_batch,
+            "num_samples": num_samples,
         },
     }
+
     sim_specs = {
-        "sim_f" : run_case,
-        "in" : [],
-        "out" : [
+        "sim_f": run_case,
+        "in": [],
+        "out": [
             ("success", np.int32),
             ("return_code", np.int32),
             ("runtime_sec", np.float64),
             ("hostname", "S64"),
         ],
-        "user" : {
-            "case_type" : case_data["case_type"],
-            "dimension" : case_data["dimension"],
-            "common_args" : common_arg_str,
-            "batch_size" : case_data["batch_size"]
-        }
+        "user": {
+            "common_args": common_args,
+            "case_type": case_data["case_type"],
+            "dimension": case_data["dimension"],
+        },
     }
 
-    setup_case(case_data, gen_specs, sim_specs, case_parameter_ranges)
+    # Reuse the case-family definitions already present in paramSim.
+    setup_case(
+        case_data,
+        gen_specs,
+        sim_specs,
+        case_parameter_ranges,
+    )
 
     history_path = (
-        Path(restart_history).expanduser().resolve()
+        _resolve_path(str(restart_history), Path.cwd())
         if restart_history is not None else None
     )
     history = None
     remaining = num_samples
-    if history_path is not None:
-        history, remaining = load_restart_history(
-            history_path, gen_specs, sim_specs, num_samples
-        )
-
     directory_width = max(4, len(str(num_samples - 1)))
     archive_path = None
-    if remaining:
-        directory_width, archive_path = prepare_output_directory(
-            output_dir, history, directory_width
-        )
+    preparation_error = None
 
-    retries = (
-        int(np.count_nonzero(
-            ~history["sim_ended"] & ~history["cancel_requested"]
-        ))
-        if history is not None else 0
-    )
-    print(
-        f"paramSim/libEnsemble: history={history_path}, "
-        f"completed={num_samples - remaining}, retries={retries}, "
-        f"new_samples={remaining - retries}, "
-        f"random_streams={'fresh' if history_path is not None else 'default'}",
-        flush=True,
-    )
-    if archive_path is not None:
-        print(f"Partial outputs archived in {archive_path}", flush=True)
+    if is_manager:
+        try:
+            if history_path is not None:
+                history, remaining = load_restart_history(
+                    history_path, gen_specs, sim_specs, num_samples
+                )
+            if remaining:
+                directory_width, archive_path = prepare_output_directory(
+                    output_dir, history, directory_width
+                )
+        except Exception as error:
+            preparation_error = error
+
+    communicator = libE_specs.get("mpi_comm")
+    if communicator is not None:
+        remaining, directory_width, preparation_error = communicator.bcast(
+            (remaining, directory_width, preparation_error), root=0
+        )
+    if preparation_error is not None:
+        raise preparation_error
+
+    if is_manager:
+        retries = (
+            int(np.count_nonzero(
+                ~history["sim_ended"] & ~history["cancel_requested"]
+            ))
+            if history is not None else 0
+        )
+        print(
+            f"paramSim/libEnsemble: history={history_path}, "
+            f"completed={num_samples - remaining}, retries={retries}, "
+            f"new_samples={remaining - retries}, "
+            f"seed={'fresh' if history_path is not None else random_seed}",
+            flush=True,
+        )
+        if archive_path is not None:
+            print(f"Partial outputs archived in {archive_path}", flush=True)
     if remaining == 0:
-        print("Requested ensemble is already complete.", flush=True)
+        if is_manager:
+            print("Requested ensemble is already complete.", flush=True)
         return
 
+    # Workers launch serial subprocesses directly. In MPI mode, CPU binding
+    # is supplied by the outer launcher; no nested srun is required.
     libE_specs.update(
         {
+            "sim_dirs_make": True,
             "ensemble_dir_path": str(output_dir),
             "reuse_output_dir": True,
             "calc_dir_id_width": directory_width,
-            "save_every_k_sims": int(case_data.get(
-                "checkpoint_every", max(1, min(256, num_samples))
-            )),
+            "save_every_k_sims": checkpoint_every,
             "save_H_on_completion": False,
             "save_H_and_persis_on_abort": True,
+            "disable_resource_manager": True,
+            "gen_on_manager": True,
         }
     )
+
     exit_criteria = {"sim_max": remaining}
+    persis_info = add_unique_random_streams(
+        {},
+        nworkers + 1,
+        seed=None if history_path is not None else random_seed,
+    )
 
-    # Seed random streams for each worker for gen_f
-    if history_path is not None:
-        persis_info = libe.tools.add_unique_random_streams(
-            {}, nworkers + 1, seed=None
-        )
-    else:
-        persis_info = libe.tools.add_unique_random_streams({}, nworkers + 1)
-
-    # Launch libEnsemble
     H, persis_info, flag = libE(
         sim_specs,
         gen_specs,
         exit_criteria,
-        persis_info=persis_info,
+        persis_info,
         libE_specs=libE_specs,
         H0=history,
     )
 
     if is_manager:
-        libe.tools.save_libE_output(H, persis_info, "paramsim", nworkers)
+        # This writes NumPy history and persistent-state files in the job's
+        # current working directory, alongside ensemble.log/libE_stats.txt.
+        save_libE_output(H, persis_info, "paramsim", nworkers)
+        completed = int(np.count_nonzero(H["sim_ended"])) if "sim_ended" in H.dtype.names else len(H)
+        successful = int(np.count_nonzero(H["success"])) if "success" in H.dtype.names else -1
+        print(
+            f"paramSim/libEnsemble finished: flag={flag}, generated={len(H)}, "
+            f"completed={completed}, successful={successful}, output={output_dir}",
+            flush=True,
+        )
