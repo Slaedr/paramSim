@@ -13,7 +13,8 @@ ParamSim is distributed under the terms described in [the 'NTCL 1.0' license](Li
 
 ## Dependencies
 
-The C++ simulation code (`run_case`) requires a recent Deal.II installation, CMake and GoogleTest.
+The C++ simulation code (`run_case`) requires deal.II 9.7 or newer, CMake,
+Boost program_options, and GoogleTest.
 
 The Python-based ensemble simulations require MPI, mpi4py, meshio and h5py.
 The parallel dataset generator `scripts/ex_datacombine_mpi.py` requires parallel HDF5 and parallel
