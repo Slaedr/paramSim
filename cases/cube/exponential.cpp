@@ -22,13 +22,6 @@ Params<dim> read_parameters(const std::string& filename)
     for (unsigned index = 0; index < center_count; ++index) {
         const auto values =
             reader.read_finite_values(5, "center " + std::to_string(index));
-
-        for (std::size_t coordinate = 0; coordinate < 3; ++coordinate) {
-            if (values[coordinate] < -1.0 || values[coordinate] > 1.0) {
-                reader.fail(index + 2,
-                            "center coordinates must lie in [-1, 1]");
-            }
-        }
         if (values[4] <= 0.0) {
             reader.fail(index + 2, "center width must be positive");
         }

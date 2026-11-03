@@ -272,16 +272,6 @@ class RangeValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "positive"):
             validate_case_parameter_ranges("cube_fourier", ranges)
 
-    def test_rejects_exponential_coordinates_outside_domain(self):
-        for coordinate_bounds in ([-1.1, 0.5], [-0.5, 1.1]):
-            with self.subTest(coordinate_bounds=coordinate_bounds):
-                ranges = dict(self.valid_ranges()["cube_exponential"])
-                ranges["coordinate_bounds"] = coordinate_bounds
-                with self.assertRaisesRegex(ValueError, r"\[-1, 1\]"):
-                    validate_case_parameter_ranges(
-                        "cube_exponential", ranges
-                    )
-
     def test_rejects_unknown_case_type_and_nonobject_data(self):
         with self.assertRaisesRegex(ValueError, "Unsupported case type"):
             validate_case_parameter_ranges("unknown", {})

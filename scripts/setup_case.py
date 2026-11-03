@@ -54,8 +54,6 @@ def validate_case_parameter_ranges(case_type: str, range_data: dict):
         _validate_float_bounds(range_data, "coeff_bounds")
         width_lower, _ = _validate_float_bounds(range_data, "width_bounds")
 
-        if coordinate_lower < -1.0 or coordinate_upper > 1.0:
-            raise ValueError("coordinate_bounds must lie within [-1, 1]")
         if width_lower <= 0.0:
             raise ValueError("width_bounds must be positive")
 
