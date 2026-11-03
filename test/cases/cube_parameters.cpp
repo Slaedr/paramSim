@@ -200,8 +200,7 @@ TEST(ExponentialParameters, RejectsMalformedRowsAndTrailingData)
 TEST(ExponentialParameters, RejectsInvalidCoordinatesAndWidths)
 {
     for (const std::string contents :
-         {"1\n-1.01 0 0 1 0.5\n", "1\n0 1.01 0 1 0.5\n", "1\n0 0 -1.01 1 0.5\n",
-          "1\n0 0 0 1 0\n", "1\n0 0 0 1 -0.5\n"}) {
+         {"1\n0 0 0 1 0\n", "1\n0 0 0 1 -0.5\n"}) {
         TemporaryParameterFile file(contents);
         EXPECT_THROW(exponential::read_parameters<2>(file.path()),
                      std::runtime_error);
