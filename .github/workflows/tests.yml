@@ -55,7 +55,7 @@ jobs:
         run: |
           /usr/bin/python3 -m venv .venv
           .venv/bin/python -m pip install \
-            "numpy<2" mpi4py meshio "libensemble==1.6.1"
+            "numpy==2.5.1" mpi4py meshio "libensemble==1.6.1"
           echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
 
       - name: Build MPI-enabled h5py
