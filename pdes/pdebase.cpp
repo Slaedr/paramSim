@@ -11,6 +11,7 @@
 #include <deal.II/dofs/dof_tools.h>
 #include <deal.II/grid/grid_refinement.h>
 #include <deal.II/numerics/vector_tools.h>
+#include <deal.II/numerics/vector_tools_interpolate.h>
 #include <deal.II/numerics/matrix_tools.h>
 #include <deal.II/numerics/solution_transfer.h>
 #include <deal.II/numerics/error_estimator.h>
@@ -38,8 +39,9 @@ void DiscretePDEBase::impose_constraints(vector_type& solution) const
 template <int dim, typename FE_t>
 DiscretePDE<dim,FE_t>::DiscretePDE(std::shared_ptr<const Case<dim>> test_case,
                                    const PDEParams& params)
-    : DiscretePDEBase(params), case_{test_case}, dof_handler_(tria_),
-      fe_(params.fe_degree)
+    : DiscretePDEBase(params), case_{test_case},
+      tria_{std::make_shared<dealii::Triangulation<dim>>()},
+      dof_handler_(*tria_), fe_(params.fe_degree)
 {
     this->make_grid(params.initial_resolution);
 }
@@ -47,21 +49,54 @@ DiscretePDE<dim,FE_t>::DiscretePDE(std::shared_ptr<const Case<dim>> test_case,
 template <int dim, typename FE_t>
 void DiscretePDE<dim,FE_t>::make_grid(const unsigned n_cell_dir)
 {
-    tria_.clear();
+    tria_->clear();
     auto geom = case_->get_geometry();
-    geom->generate_grid(tria_, n_cell_dir);
-    geom->set_boundary_ids(tria_);
+    geom->generate_grid(*tria_, n_cell_dir);
+    geom->set_boundary_ids(*tria_);
 
-    std::cout << "   Number of active cells: " << tria_.n_active_cells()
+    std::cout << "   Number of active cells: " << tria_->n_active_cells()
               << std::endl
-              << "   Total number of cells: " << tria_.n_cells()
+              << "   Total number of cells: " << tria_->n_cells()
               << std::endl;
 
+    initialize_dofs_and_constraints();
+}
+
+template <int dim, typename FE_t>
+void DiscretePDE<dim, FE_t>::initialize_dofs_and_constraints()
+{
     dof_handler_.distribute_dofs(fe_);
     affine_constraints_.clear();
     dealii::DoFTools::make_hanging_node_constraints(dof_handler_,
                                             affine_constraints_);
     affine_constraints_.close();
+}
+
+template <int dim, typename FE_t>
+void DiscretePDE<dim, FE_t>::set_mesh(
+    std::shared_ptr<dealii::Triangulation<dim>> mesh)
+{
+    if (!mesh) {
+        throw std::invalid_argument(
+            "DiscretePDE::set_mesh requires a non-null mesh.");
+    }
+    dof_handler_.clear();
+    tria_ = std::move(mesh);
+    dof_handler_.reinit(*tria_);
+    initialize_dofs_and_constraints();
+}
+
+template <int dim, typename FE_t>
+void DiscretePDE<dim, FE_t>::transfer_solution_from(
+    const DiscretePDE<dim, FE_t>& source,
+    const vector_type& source_solution,
+    vector_type& destination_solution) const
+{
+    destination_solution.reinit(dof_handler_.n_dofs());
+    dealii::VectorTools::interpolate_to_different_mesh(
+        source.dof_handler_, source_solution, dof_handler_, affine_constraints_,
+        destination_solution);
+    affine_constraints_.distribute(destination_solution);
 }
 
 template <int dim, typename FE_t>
@@ -78,7 +113,7 @@ void DiscretePDE<dim,FE_t>::refine_mesh_and_interpolate_solution(vector_type& so
     const vector_type old_solution = solution;
 
     if(params_.is_adaptive) {
-        dealii::Vector<float> estimated_error_per_cell(tria_.n_active_cells());
+        dealii::Vector<float> estimated_error_per_cell(tria_->n_active_cells());
 
         dealii::KellyErrorEstimator<dim>::estimate(
           dof_handler_,
@@ -87,7 +122,7 @@ void DiscretePDE<dim,FE_t>::refine_mesh_and_interpolate_solution(vector_type& so
           solution,
           estimated_error_per_cell);
 
-        dealii::GridRefinement::refine_and_coarsen_fixed_number(tria_,
+        dealii::GridRefinement::refine_and_coarsen_fixed_number(*tria_,
                                                         estimated_error_per_cell,
                                                         0.3,
                                                         0.03);
@@ -109,19 +144,19 @@ void DiscretePDE<dim,FE_t>::refine_mesh_and_interpolate_solution(vector_type& so
         // needs to know the final set of cells that will be coarsened or refined
         // in order to store the data from the old mesh and transfer to the new
         // one. Thus, we call the function by hand:
-        tria_.prepare_coarsening_and_refinement();
+        tria_->prepare_coarsening_and_refinement();
 
         // With this out of the way, we initialize a SolutionTransfer object with
         // the present DoFHandler and attach the solution vector to it, followed
         // by doing the actual refinement and distribution of degrees of freedom
         // on the new mesh
         solution_transfer.prepare_for_coarsening_and_refinement(old_solution);
-        tria_.execute_coarsening_and_refinement();
+        tria_->execute_coarsening_and_refinement();
     }
     else {
-        tria_.prepare_coarsening_and_refinement();
+        tria_->prepare_coarsening_and_refinement();
         solution_transfer.prepare_for_coarsening_and_refinement(old_solution);
-        tria_.refine_global(1);
+        tria_->refine_global(1);
     }
 
     dof_handler_.distribute_dofs(fe_);

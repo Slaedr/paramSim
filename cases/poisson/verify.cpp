@@ -13,6 +13,7 @@ const std::array<std::string, 3> PoissonVerify<dim>::dimnames{{"x", "y", "z"}};
 template <int dim>
 void PoissonVerify<dim>::initialize(const bpo::variables_map &params)
 {
+    poisson_verify::Params<dim> case_params;
     if (params.count("width")) {
         constexpr int n_centers = poisson_verify::Params<dim>::n_centers;
         std::array<Point<dim>, n_centers> centers;
@@ -31,29 +32,14 @@ void PoissonVerify<dim>::initialize(const bpo::variables_map &params)
             coeffs[ic] = params[coflag.c_str()].as<double>();
         }
         const double width_sigma = params["width"].as<double>();
-        poisson_verify::Params<dim> params(centers, coeffs, width_sigma);
-        this->exact_soln_ =
-            std::make_shared<poisson_verify::Solution<dim>>(params);
-        this->rhs_ =
-            std::make_shared<poisson_verify::RightHandSide<dim>>(params);
-        this->neumann_ = std::make_shared<poisson_verify::Neumann<dim>>(params);
-
-        // Write out params to confirm
-        std::cout << "Case 'verify' for Poisson: read parameters:\n";
-        std::cout << "  Width = " << width_sigma << std::endl;
-        for (int ic = 0; ic < n_centers; ic++) {
-            std::cout << "  Center " << ic << ": (";
-            for (int idim = 0; idim < dim; idim++) {
-                std::cout << centers[ic][idim] << ", ";
-            }
-            std::cout << "), coeff = " << coeffs[ic] << std::endl;
-        }
-    } else {
-        this->exact_soln_ = std::make_shared<poisson_verify::Solution<dim>>();
-        this->rhs_ = std::make_shared<poisson_verify::RightHandSide<dim>>();
-        this->neumann_ = std::make_shared<poisson_verify::Neumann<dim>>();
-        std::cout << "Case 'verify' for Poisson: default parameters.\n";
+        case_params = poisson_verify::Params<dim>(centers, coeffs, width_sigma);
     }
+    this->exact_soln_ =
+        std::make_shared<poisson_verify::Solution<dim>>(case_params);
+    this->rhs_ =
+        std::make_shared<poisson_verify::RightHandSide<dim>>(case_params);
+    this->neumann_ =
+        std::make_shared<poisson_verify::Neumann<dim>>(case_params);
 
     this->bc_dirichlet_.push_back(dirichlet_bc<dim>{1, this->exact_soln_});
     this->bcid_neumann_ = 2;

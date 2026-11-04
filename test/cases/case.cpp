@@ -96,6 +96,74 @@ TEST(CommonParams, AcceptsSupportedDimensions)
 
     EXPECT_EQ(params2.dimension, 2);
     EXPECT_EQ(params3.dimension, 3);
+    EXPECT_EQ(params2.coarse_output_levels, -1);
+    EXPECT_EQ(params2.coarse_grid_solution,
+              ps::CoarseGridSolution::interpolation);
+}
+
+TEST(CommonParams, ValidatesCoarseGridSolution)
+{
+    bpo::options_description common_desc("Common options");
+    ps::add_common_options(common_desc, "help!");
+    const char *base[] = {"prog", "--dimension", "2", "--pde", "poisson_cg",
+                          "--case", "poisson_verify", "--initial_resolution", "4"};
+    const char *native_args[] = {"prog", "--dimension", "2", "--pde", "poisson_cg",
+                                 "--case", "poisson_verify", "--initial_resolution", "4",
+                                 "--coarse_grid_solution", "native_simulation"};
+    const auto native = ps::get_common_params(
+        ps::get_cmd_args(11, native_args, common_desc));
+    EXPECT_EQ(native.coarse_grid_solution,
+              ps::CoarseGridSolution::native_simulation);
+
+    const char *invalid_args[] = {"prog", "--dimension", "2", "--pde", "poisson_cg",
+                                  "--case", "poisson_verify", "--initial_resolution", "4",
+                                  "--coarse_grid_solution", "Interpolation"};
+    EXPECT_THROW(ps::get_common_params(
+                     ps::get_cmd_args(11, invalid_args, common_desc)),
+                 std::invalid_argument);
+    (void)base;
+}
+
+TEST(CommonParams, ValidatesCoarseOutputLevels)
+{
+    bpo::options_description common_desc("Common options");
+    ps::add_common_options(common_desc, "help!");
+    const char *valid_args[] = {
+        "prog", "--dimension", "2", "--pde", "poisson_cg", "--case",
+        "poisson_verify", "--initial_resolution", "4", "--refine_levels",
+        "3", "--coarse_output_levels", "2"};
+    const auto valid = ps::get_common_params(
+        ps::get_cmd_args(13, valid_args, common_desc));
+    EXPECT_EQ(valid.coarse_output_levels, 2);
+
+    const char *negative_args[] = {
+        "prog", "--dimension", "2", "--pde", "poisson_cg", "--case",
+        "poisson_verify", "--initial_resolution", "4", "--refine_levels",
+        "3", "--coarse_output_levels", "-2"};
+    EXPECT_THROW(ps::get_common_params(
+                     ps::get_cmd_args(13, negative_args, common_desc)),
+                 std::invalid_argument);
+
+    const char *excess_args[] = {
+        "prog", "--dimension", "2", "--pde", "poisson_cg", "--case",
+        "poisson_verify", "--initial_resolution", "4", "--refine_levels",
+        "3", "--coarse_output_levels", "3"};
+    EXPECT_THROW(ps::get_common_params(
+                     ps::get_cmd_args(13, excess_args, common_desc)),
+                 std::invalid_argument);
+}
+
+TEST(CommonParams, RejectsNonpositiveRefinementCounts)
+{
+    bpo::options_description common_desc("Common options");
+    ps::add_common_options(common_desc, "help!");
+    const char *args[] = {
+        "prog", "--dimension", "2", "--pde", "poisson_cg", "--case",
+        "poisson_verify", "--initial_resolution", "4", "--refine_levels",
+        "0"};
+    EXPECT_THROW(
+        ps::get_common_params(ps::get_cmd_args(11, args, common_desc)),
+        std::invalid_argument);
 }
 
 TEST(CommonParams, RejectsMissingDimension)

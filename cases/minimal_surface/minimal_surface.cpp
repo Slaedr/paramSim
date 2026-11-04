@@ -30,7 +30,7 @@ void add_sin_cmd_args(bpo::options_description& desc)
 template <int dim>
 void MinSurfDiskSinusoidal<dim>::initialize(const bpo::variables_map& params)
 {
-    std::shared_ptr<minsurf_sin::Dirichlet<dim>> dirichlet1;
+    minsurf_sin::Params<dim> case_params;
     if(params.count("wavelength")) {
         constexpr int n_modes = minsurf_sin::Params<dim>::n_modes;
         std::array<double, n_modes> as;
@@ -45,24 +45,9 @@ void MinSurfDiskSinusoidal<dim>::initialize(const bpo::variables_map& params)
         }
         const double wavelength = params["wavelength"].as<double>();
         const double a0 = params["a0"].as<double>();
-        minsurf_sin::Params<dim> params(as, bs, a0, wavelength);
-        dirichlet1 = std::make_shared<minsurf_sin::Dirichlet<dim>>(params);
-
-        // Write out params to confirm
-        std::cout <<
-            "Case 'disk_sinusoidal' for Minimum Surface: read parameters:\n";
-        std::cout << "  Fundamental wavelength = " << params.f_wavelength
-            << std::endl;
-        std::cout << "  Constant term = " << params.a0 << std::endl;
-        for(int ic = 0; ic < n_modes; ic++) {
-            std::cout << "  Modes " << ic << ": (";
-            std::cout << as[ic] << ", " << bs[ic] << ")" << std::endl;
-        }
-    } else {
-        dirichlet1 = std::make_shared<minsurf_sin::Dirichlet<dim>>();
-        std::cout
-            << "Case 'disk_sinusoidal' for Poisson: default parameters.\n";
+        case_params = minsurf_sin::Params<dim>(as, bs, a0, wavelength);
     }
+    auto dirichlet1 = std::make_shared<minsurf_sin::Dirichlet<dim>>(case_params);
 
     this->rhs_ = std::make_shared<minsurf_sin::RightHandSide<dim>>();
 

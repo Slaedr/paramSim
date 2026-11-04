@@ -51,7 +51,7 @@ double solve_grid_sequence(const unsigned initial_resolution,
     test_case->initialize(case_parameters);
 
     const PDEParams pde_parameters{
-        pde_name, 1, initial_resolution, grid_count, false, "_",
+        pde_name, 1, initial_resolution, grid_count, -1, CoarseGridSolution::interpolation, false, "_",
     };
     const SolverParams solver_parameters{
         nonlinear_tolerance,
@@ -64,7 +64,8 @@ double solve_grid_sequence(const unsigned initial_resolution,
         poisson_maximum_newton_iterations,
     };
 
-    auto solution = solver::run_grid_refinement<dim>(
+    solver::MeshSequence<dim> mesh_sequence;
+    auto solution = mesh_sequence.run_grid_refinement(
         pde_parameters, solver_parameters, test_case, discrete_pde,
         init_pde_name == "default" ? solver::default_init_pde(pde_name)
                                    : init_pde_name,

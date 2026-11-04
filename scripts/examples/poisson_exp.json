@@ -1,10 +1,15 @@
 {
-  "num_samples" : 5,
-  "batch_size" : 1,
-  "simulation_exec_path" : "../../../run_case",
+  "num_samples" : 20,
+  "batch_size" : 4,
+  "simulation_exec_path" : "../../build/run_case",
   "dimension" : 2,
-  "resolution" : 63,
+  "resolution" : 31,
+  "refine_levels" : 3,
+  "coarse_grid_solution" : "native_simulation",
+  "coarse_output_levels" : -1,
   "pde" : "poisson_cg",
   "case_type" : "cube_exponential",
-  "case_params_ranges_file" : "poisson_exp_ranges.json"
+  "case_params_ranges_file" : "poisson_exp_ranges.json",
+  "max_nonlinear_its": 5,
+  "nonlinear_tolerance" : 1e-6
 }

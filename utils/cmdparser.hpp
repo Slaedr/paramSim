@@ -1,9 +1,11 @@
 #ifndef CONVDIFF_HDG_CMD_PARSER_HPP_
 #define CONVDIFF_HDG_CMD_PARSER_HPP_
 
+#include <iosfwd>
 #include <string>
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/variables_map.hpp>
+#include "parameter_types.hpp"
 
 namespace paramsim {
 
@@ -16,6 +18,8 @@ struct CommonParams {
     std::string solver_str;
     unsigned int dimension;
     int refine_levels;
+    int coarse_output_levels;
+    CoarseGridSolution coarse_grid_solution;
     unsigned initial_resolution;
     int fe_degree;
     std::string outpath;
@@ -25,6 +29,7 @@ struct CommonParams {
     std::string init_pde_str;
     double init_tolerance;
     int init_max_its;
+    std::string case_params_file;
 };
 
 namespace bpo = boost::program_options;
@@ -35,6 +40,15 @@ bpo::variables_map get_cmd_args(int argc, const char *const argv[],
                                 const bpo::options_description& desc);
 
 CommonParams get_common_params(const bpo::variables_map& common_map);
+
+/** Print effective settings without altering the destination stream's format.
+ *
+ * @param output  Output stream to write to.
+ * @param params  Parameter struct to read common parameters from.
+ * @param thread_limit Thread limit is supplied after deal.II thread initialization.
+ */
+void print_configuration(std::ostream& output, const CommonParams& params,
+                         unsigned int thread_limit);
 
 /// Convert cmd line arguments specified within the code
 const char** allocate_setup_args(const int nargs, const char args[][100]);

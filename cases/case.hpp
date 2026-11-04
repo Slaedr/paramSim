@@ -37,7 +37,7 @@ public:
      * @param description Command-line option description to extend.
      */
     virtual void
-    add_case_cmd_args(bpo::options_description& description) const
+    add_case_cmd_args(bpo::options_description&) const
     {
     }
 

@@ -12,11 +12,11 @@ namespace solver {
 
 template <int dim>
 DiscretePDEBase::vector_type
-run_grid_refinement(const PDEParams& params, const SolverParams& sparams,
-                    std::shared_ptr<const Case<dim>> tcase,
-                    std::shared_ptr<DiscretePDEBase> pdeb,
-                    const std::string& init_pde,
-                    const SolverParams& init_solver_params)
+MeshSequence<dim>::run_grid_refinement(
+    const PDEParams& params, const SolverParams& sparams,
+    std::shared_ptr<const Case<dim>> tcase,
+    std::shared_ptr<DiscretePDEBase> pdeb, const std::string& init_pde,
+    const SolverParams& init_solver_params)
 {
     auto pde =
         std::dynamic_pointer_cast<DiscretePDE<dim, dealii::FE_Q<dim>>>(pdeb);
@@ -27,12 +27,15 @@ run_grid_refinement(const PDEParams& params, const SolverParams& sparams,
     paramsim::solver::compute_initial_guess<dim>(tcase, params, init_pde,
                                                  init_solver_params, u);
 
-    unsigned resolution = params.initial_resolution;
-    for (int imesh = 0; imesh < params.refine_levels;
-         imesh++, resolution *= 2) {
+    meshes_.clear();
+    meshes_.push_back(pde->get_mesh());
+    const int first_output_level =
+        params.coarse_output_levels == -1
+            ? 0
+            : params.refine_levels - 1 - params.coarse_output_levels;
+    for (int imesh = 0; imesh < params.refine_levels; ++imesh) {
         solver.reinit();
         const auto result = solver.solve(u);
-        pde->output_results(imesh, u);
         if (!result.converged) {
             // On an intermediate level a partially converged state is still a
             // usable starting point for the next, finer grid. On the final
@@ -52,22 +55,44 @@ run_grid_refinement(const PDEParams& params, const SolverParams& sparams,
                       << result.final_residual_norm << "). Continuing to the "
                       << "next level." << std::endl;
         }
-        if (imesh < params.refine_levels - 1) {
-            pde->refine_mesh_and_interpolate_solution(u);
+        if (params.coarse_grid_solution ==
+                CoarseGridSolution::native_simulation &&
+            result.converged && imesh >= first_output_level) {
+            pde->output_results(imesh, u);
         }
+        if (imesh < params.refine_levels - 1) {
+            auto refined_mesh =
+                std::make_shared<dealii::Triangulation<dim>>();
+            refined_mesh->copy_triangulation(*pde->get_mesh());
+            pde->set_mesh(refined_mesh);
+            pde->refine_mesh_and_interpolate_solution(u);
+            meshes_.push_back(refined_mesh);
+        }
+    }
+
+    if (params.coarse_grid_solution ==
+        CoarseGridSolution::native_simulation) {
+        return u;
+    }
+    auto output_pde_base = create_discrete_pde(tcase, params);
+    auto output_pde = dynamic_cast<DiscretePDE<dim, dealii::FE_Q<dim>> *>(
+        output_pde_base.get());
+    if (output_pde == nullptr) {
+        throw std::runtime_error(
+            "Output PDE has an incompatible finite element type.");
+    }
+    vector_type output_solution;
+    for (int level = first_output_level; level < params.refine_levels; ++level) {
+        output_pde->set_mesh(meshes_.at(static_cast<std::size_t>(level)));
+        output_pde->transfer_solution_from(*pde, u, output_solution);
+        output_pde->output_results(level, output_solution);
     }
 
     return u;
 }
 
-template DiscretePDEBase::vector_type run_grid_refinement<2>(
-    const PDEParams& params, const SolverParams& sparams,
-    std::shared_ptr<const Case<2>> tcase, std::shared_ptr<DiscretePDEBase> pdeb,
-    const std::string& init_pde, const SolverParams& init_solver_params);
-template DiscretePDEBase::vector_type run_grid_refinement<3>(
-    const PDEParams& params, const SolverParams& sparams,
-    std::shared_ptr<const Case<3>> tcase, std::shared_ptr<DiscretePDEBase> pdeb,
-    const std::string& init_pde, const SolverParams& init_solver_params);
+template class MeshSequence<2>;
+template class MeshSequence<3>;
 
 std::string default_init_pde(const std::string& pde_solver)
 {

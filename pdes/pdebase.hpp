@@ -12,6 +12,7 @@
 
 #include "../geometrybase.hpp"
 #include "../cases/case.hpp"
+#include "../utils/parameter_types.hpp"
 
 namespace paramsim {
 
@@ -29,6 +30,8 @@ struct PDEParams {
     int fe_degree;
     unsigned initial_resolution;
     int refine_levels;
+    int coarse_output_levels;
+    CoarseGridSolution coarse_grid_solution;
     bool is_adaptive;
     std::string output_path;
 };
@@ -158,19 +161,47 @@ public:
 
     void output_results(int mesh_number, const vector_type& solution) const override;
 
-    const dealii::Triangulation<dim>& get_triangulation() const { return tria_; }
-    dealii::Triangulation<dim>& get_triangulation() { return tria_; }
+    /** Rebinds this discretization to an existing non-null mesh.
+     *
+     * @param mesh Mesh to own jointly and initialize degrees of freedom on.
+     */
+    void set_mesh(std::shared_ptr<dealii::Triangulation<dim>> mesh);
+
+    /** Returns the shared mesh owned by this discretization.
+     *
+     * @return Shared triangulation pointer.
+     */
+    std::shared_ptr<dealii::Triangulation<dim>> get_mesh() const { return tria_; }
+
+    /** Transfers a compatible finite-element solution from another mesh
+     * to this FE discretization.
+     *
+     * @param source Discretization providing the source field.
+     * @param source_solution Source degrees of freedom.
+     * @param destination_solution Destination vector to resize and fill.
+     */
+    void transfer_solution_from(const DiscretePDE<dim, FE_t>& source,
+                                const vector_type& source_solution,
+                                vector_type& destination_solution) const;
+
+    /** Returns the current degree-of-freedom handler.
+     *
+     * @return Current degree-of-freedom handler.
+     */
     const dealii::DoFHandler<dim>& get_dof_handler() const { return dof_handler_; }
 
 protected:
     std::shared_ptr<const Case<dim>> case_;
 
-    dealii::Triangulation<dim> tria_;
+    std::shared_ptr<dealii::Triangulation<dim>> tria_;
     dealii::DoFHandler<dim> dof_handler_;
     FE_t fe_;
 
     /// Creates the internal triangulation and updates the DoFHandler and the affine constraints.
     void make_grid(unsigned n_cell_dir) override;
+
+    /// Redistributes degrees of freedom and rebuilds hanging-node constraints.
+    void initialize_dofs_and_constraints();
 };
 
 template <int dim>

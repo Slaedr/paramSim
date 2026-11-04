@@ -47,12 +47,12 @@ double test_grid_convergence(std::shared_ptr<const Case<dim>> test_case, const P
         solver.solve(u);
 
         const dealii::DoFHandler<dim>& dof_handler = pde->get_dof_handler();
-        const dealii::Triangulation<dim>& triangulation = pde->get_triangulation();
+        const dealii::Triangulation<dim>& triangulation = *pde->get_mesh();
         const vector_type& solution = u;
 
-        convergence_table.add_value("cells", pde->get_triangulation().n_active_cells());
+        convergence_table.add_value("cells", pde->get_mesh()->n_active_cells());
         convergence_table.add_value("dofs", dof_handler.n_dofs());
-        //h.push_back(std::pow(static_cast<double>(pde->get_triangulation().n_active_cells()),
+        //h.push_back(std::pow(static_cast<double>(pde->get_mesh()->n_active_cells()),
         //                     1.0/dim));
         h.push_back(1.0/static_cast<double>(resolution));
 

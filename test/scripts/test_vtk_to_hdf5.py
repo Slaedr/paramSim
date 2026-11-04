@@ -185,6 +185,42 @@ class VTKProcessing3dSmall(unittest.TestCase):
         self.assertTrue(np.all(solution[1,...] == self.soln[1,...]))
 
 
+def write_resolution_tree(root, tree_id=0, nsamples=5, resolutions=(2, 10),
+                          prefix="field-with-hyphens", extension="vtk"):
+    """Create small, distinct Cartesian fixtures with different resolution shapes."""
+    root = Path(root)
+    for sample in range(nsamples):
+        directory = root / f"sim{sample:03}"
+        directory.mkdir(parents=True, exist_ok=True)
+        for resolution in resolutions:
+            level = sorted(resolutions).index(resolution)
+            coordinates = np.linspace(-1, 1, level + 2, dtype=np.float32)
+            x, y = np.meshgrid(coordinates, coordinates, indexing="xy")
+            points = np.column_stack((x.ravel(), y.ravel(), np.zeros(x.size)))
+            values = tree_id * 1000 + sample * 10 + resolution * 100 + x.ravel() + 2 * y.ravel()
+            mesh = mio.Mesh(points, [("vertex", np.arange(x.size).reshape(-1, 1))],
+                            point_data={"solution": values[:, None].astype(np.float32)})
+            mio.write(directory / f"{prefix}-{resolution}.{extension}", mesh)
+    return str(root)
+
+
+def check_resolution_outputs(test, prefix, identities, resolutions=(2, 10)):
+    """Verify every coordinate and field value against fixture definitions."""
+    for level, resolution in enumerate(resolutions):
+        with test.subTest(resolution=resolution):
+            output = f"{prefix}.h5" if len(resolutions) == 1 else f"{prefix}-{resolution}.h5"
+            with h5py.File(output, "r") as hfile:
+                test.assertEqual(set(hfile), {"mesh", "fields"})
+                test.assertEqual(hfile["mesh"].dtype, np.dtype("float32"))
+                test.assertEqual(hfile["fields"].dtype, np.dtype("float32"))
+                coordinates = np.linspace(-1, 1, level + 2, dtype=np.float32)
+                x, y = np.meshgrid(coordinates, coordinates, indexing="xy")
+                np.testing.assert_array_equal(hfile["mesh"][:], np.stack((x, y)))
+                expected = np.stack([tree * 1000 + sample * 10 + resolution * 100 + x + 2 * y
+                                     for tree, sample in identities])[:, None]
+                np.testing.assert_array_equal(hfile["fields"][:], expected)
+
+
 class EnsembleDirectoryConversion(unittest.TestCase):
     def test_converts_tinymesh2_to_hdf5(self):
         ensemble_path = (
@@ -258,6 +294,16 @@ class EnsembleDirectoryConversion(unittest.TestCase):
                     hfile["fields"][1], expected_fields1
                 )
 
+        with tempfile.TemporaryDirectory() as directory:
+            tree = write_resolution_tree(Path(directory) / "tree")
+            for suffix in ("", ".h5"):
+                with self.subTest(multiple_resolutions=True, suffix=suffix):
+                    prefix = Path(directory) / "converted"
+                    vh5.ensemble_dir_to_hdf5(tree, 2, str(prefix) + suffix, batch_size=2)
+                    check_resolution_outputs(self, prefix, [(0, sample) for sample in range(5)])
+                    self.assertEqual({p.name for p in Path(directory).glob("converted*")},
+                                     {"converted-2.h5", "converted-10.h5"})
+
     def test_combines_batches_with_block_interleaving(self):
         ensemble_path = (
             Path(__file__).resolve().parent / "data" / "tinymesh2"
@@ -284,6 +330,15 @@ class EnsembleDirectoryConversion(unittest.TestCase):
                 self.assertFalse(np.allclose(
                     hfile["fields"][0], hfile["fields"][1]
                 ))
+
+        with tempfile.TemporaryDirectory() as directory:
+            trees = [write_resolution_tree(Path(directory) / f"tree{tree}", tree,
+                                           prefix=f"different-prefix-{tree}") for tree in range(2)]
+            prefix = Path(directory) / "combined"
+            dc.write_combined_hdf5(trees, str(prefix) + ".h5", 5, 2, batch_size=2)
+            identities = [(tree, sample) for start in range(0, 5, 2)
+                          for tree in range(2) for sample in range(start, min(start + 2, 5))]
+            check_resolution_outputs(self, prefix, identities)
 
     def test_rejects_invalid_batch_ranges_and_shapes(self):
         ensemble_path = (
@@ -318,6 +373,87 @@ class EnsembleDirectoryConversion(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "have shape"):
                     simio.process_sample(0, 0, 2)
 
+        with tempfile.TemporaryDirectory() as directory:
+            tree = write_resolution_tree(Path(directory) / "tree", nsamples=2)
+            with h5py.File(Path(directory) / "selected.h5", "w") as hfile:
+                with self.assertRaisesRegex(ValueError, "explicitly"):
+                    vh5.VTKToHDF5(tree, hfile, 2)
+                simio = vh5.VTKToHDF5(tree, hfile, 2, resolution_id=10)
+                original = simio._read_sample
+                for mismatch in ("shape", "mesh"):
+                    with self.subTest(mismatch=mismatch):
+                        def incompatible(index):
+                            fields, points = original(index)
+                            if index == 1:
+                                if mismatch == "shape":
+                                    fields = fields[:, :-1]
+                                else:
+                                    points = points + 0.25
+                            return fields, points
+                        simio._read_sample = incompatible
+                        with self.assertRaisesRegex(ValueError, "have shape|Mesh"):
+                            simio.process_sample(0, 0, 2)
+
+    def test_discovers_resolution_ids_and_validates_requested_samples(self):
+        with tempfile.TemporaryDirectory() as directory:
+            tree = write_resolution_tree(Path(directory) / "tree", nsamples=3,
+                                         resolutions=(10, 2))
+            other = write_resolution_tree(Path(directory) / "other", nsamples=2,
+                                          prefix="another-prefix", extension="vtu")
+            inputs, resolutions = vh5.select_samples([tree, other], 2)
+            self.assertEqual(resolutions, [2, 10])
+            self.assertEqual(set(inputs[0]), {0, 1})
+            # An unrequested sample can contain a different set of levels.
+            Path(tree, "sim002", "field-with-hyphens-10.vtk").unlink()
+            shutil.copy(Path(tree, "sim002", "field-with-hyphens-2.vtk"),
+                        Path(tree, "sim002", "extra-level-30.vtk"))
+            metadata, _, _, _ = mpi_dc._prepare_conversion([tree, other], 2, 2, 2, 2)
+            self.assertEqual(metadata["resolution_ids"], [2, 10])
+            dc.write_combined_hdf5([tree, other], str(Path(directory) / "selected"), 2, 2)
+            for location in (tree, other):
+                with self.subTest(mismatch_tree=location):
+                    path = next(Path(location, "sim001").glob("*-10.*"))
+                    renamed = path.with_name(path.name.replace("-10.", "-3."))
+                    path.rename(renamed)
+                    with self.assertRaisesRegex(
+                            ValueError,
+                            "sample 1.*missing resolutions.*10.*extra resolutions.*3"):
+                        vh5.select_samples([tree, other], 2)
+                    with self.assertRaisesRegex(ValueError, "Resolution mismatch"):
+                        mpi_dc._prepare_conversion([tree, other], 2, 2, 2, 2)
+                    renamed.rename(path)
+            missing = Path(tree, "sim001", "field-with-hyphens-10.vtk")
+            missing.unlink()
+            output = Path(directory) / "invalid.h5"
+            with self.assertRaisesRegex(ValueError, "missing resolutions.*10"):
+                dc.write_combined_hdf5([tree], output, 2, 2)
+            self.assertFalse(list(Path(directory).glob("invalid*")))
+
+    def test_rejects_empty_ambiguous_and_duplicate_samples(self):
+        for problem in ("empty", "duplicate", "unparseable", "duplicate_sample", "missing_zero"):
+            with self.subTest(problem=problem), tempfile.TemporaryDirectory() as directory:
+                tree = Path(write_resolution_tree(Path(directory) / "tree", nsamples=1,
+                                                  resolutions=(2,)))
+                sample = tree / "sim000"
+                source = sample / "field-with-hyphens-2.vtk"
+                if problem == "empty":
+                    source.unlink()
+                    message = "No VTK or VTU"
+                elif problem == "duplicate":
+                    shutil.copy(source, sample / "different-prefix-2.vtu")
+                    message = "Duplicate resolution 2"
+                elif problem == "unparseable":
+                    source.rename(sample / "ambiguous.vtk")
+                    message = "Unparseable.*ambiguous.vtk"
+                elif problem == "duplicate_sample":
+                    (tree / "sim0").mkdir()
+                    message = "Multiple libEnsemble"
+                else:
+                    sample.rename(tree / "sim001")
+                    message = "sample 0"
+                with self.assertRaisesRegex(ValueError, message):
+                    vh5.discover_sample_files(tree)
+
 
 class MPIEnsembleDirectoryConversion(unittest.TestCase):
     def setUp(self):
@@ -327,8 +463,8 @@ class MPIEnsembleDirectoryConversion(unittest.TestCase):
 
     def test_builds_block_interleaved_batch_tasks(self):
         sample_files = [
-            {0: "a0", 1: "a1", 2: "a2"},
-            {0: "b0", 1: "b1", 2: "b2"},
+            {i: {2: f"a{i}-2", 10: f"a{i}-10"} for i in range(3)},
+            {i: {2: f"b{i}-2", 10: f"b{i}-10"} for i in range(3)},
         ]
 
         tasks = mpi_dc.build_batch_tasks(sample_files, 3, 2)
@@ -336,10 +472,10 @@ class MPIEnsembleDirectoryConversion(unittest.TestCase):
         self.assertEqual(
             tasks,
             [
-                (("a0", "a1"), 0),
-                (("b0", "b1"), 2),
-                (("a2",), 4),
-                (("b2",), 5),
+                ((sample_files[0][0], sample_files[0][1]), 0),
+                ((sample_files[1][0], sample_files[1][1]), 2),
+                ((sample_files[0][2],), 4),
+                ((sample_files[1][2],), 5),
             ],
         )
 
@@ -356,69 +492,75 @@ class MPIEnsembleDirectoryConversion(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "have shape"):
             mpi_dc._read_batch(
-                (str(sample_path),),
+                ({0: str(sample_path)},),
                 2,
                 (1, 1, 1),
                 np.dtype(np.float32),
                 {},
+                0,
+                np.empty((2, 1, 1)),
             )
+
+        fields, points = vh5.read_sample_file(str(sample_path), 2)
+        with self.assertRaisesRegex(ValueError, "Mesh.*differs"):
+            mpi_dc._read_batch(({0: str(sample_path)},), 2, fields.shape,
+                               fields.dtype, {}, 0, points + 0.25)
+        cached = {str(sample_path): (fields, points)}
+        result = mpi_dc._read_batch(({0: str(sample_path)},), 2, fields.shape,
+                                    fields.dtype, cached, 0, points)
+        np.testing.assert_array_equal(result[0], fields)
+        self.assertFalse(cached)
 
     @unittest.skipUnless(
         MPI_TESTS_AVAILABLE,
         "requires mpi4py, MPI-enabled h5py, and mpiexec",
     )
     def test_mpi_output_matches_serial_output(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            serial_path = Path(temp_dir) / "serial.h5"
-            mpi_path = Path(temp_dir) / "mpi.h5"
-            input_paths = [str(self.ensemble_path), str(self.ensemble_path)]
-            dc.write_combined_hdf5(
-                input_paths,
-                str(serial_path),
-                2,
-                2,
-                batch_size=2,
-            )
+        for nsamples, ranks, resolutions in ((5, 3, (2, 10)), (1, 3, (2, 10)), (2, 2, (7,))):
+            with self.subTest(nsamples=nsamples, ranks=ranks), \
+                    tempfile.TemporaryDirectory() as directory:
+                serial_path = Path(directory) / "serial"
+                mpi_path = Path(directory) / "mpi"
+                input_paths = [write_resolution_tree(Path(directory) / f"tree{tree}", tree,
+                                                     nsamples=nsamples, resolutions=resolutions) \
+                               for tree in range(2)]
+                dc.write_combined_hdf5(input_paths, str(serial_path) + ".h5", nsamples, 2, batch_size=2)
+                command = [shutil.which("mpiexec"), "-n", str(ranks), sys.executable,
+                           str(SCRIPTS_DIR / "ex_datacombine_mpi.py"), "--inpaths", *input_paths,
+                           "--outpath", str(mpi_path) + ".h5", "--dimension", "2",
+                           "--nsamples", str(nsamples), "--batch-size", "2"]
+                result = subprocess.run(command, capture_output=True, text=True, timeout=60)
+                self.assertEqual(result.returncode, 0,
+                                 msg=f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}")
+                identities = [(tree, sample) for start in range(0, nsamples, 2)
+                              for tree in range(2) for sample in range(start, min(start + 2, nsamples))]
+                check_resolution_outputs(self, mpi_path, identities, resolutions)
+                for resolution in resolutions:
+                    suffix = ".h5" if len(resolutions) == 1 else f"-{resolution}.h5"
+                    with h5py.File(f"{serial_path}{suffix}", "r") as serial_file, \
+                            h5py.File(f"{mpi_path}{suffix}", "r") as mpi_file:
+                        for key in ("mesh", "fields"):
+                            np.testing.assert_array_equal(serial_file[key][:], mpi_file[key][:])
 
-            command = [
-                shutil.which("mpiexec"),
-                "-n",
-                "2",
-                sys.executable,
-                str(SCRIPTS_DIR / "ex_datacombine_mpi.py"),
-                "--inpaths",
-                *input_paths,
-                "--outpath",
-                str(mpi_path),
-                "--dimension",
-                "2",
-                "--nsamples",
-                "2",
-                "--batch-size",
-                "2",
-            ]
-            result = subprocess.run(
-                command,
-                check=False,
-                capture_output=True,
-                text=True,
-                timeout=60,
-            )
-            self.assertEqual(
-                result.returncode,
-                0,
-                msg=f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}",
-            )
-
-            with h5py.File(serial_path, "r") as serial_file, \
-                    h5py.File(mpi_path, "r") as mpi_file:
-                self.assertEqual(set(serial_file.keys()), set(mpi_file.keys()))
-                np.testing.assert_array_equal(
-                    serial_file["mesh"][...], mpi_file["mesh"][...]
-                )
-                np.testing.assert_array_equal(
-                    serial_file["fields"][...], mpi_file["fields"][...]
-                )
+    @unittest.skipUnless(MPI_TESTS_AVAILABLE, "requires Parallel HDF5 and MPI")
+    def test_mpi_batch_failure_stops_before_next_resolution(self):
+        with tempfile.TemporaryDirectory() as directory:
+            tree = write_resolution_tree(Path(directory) / "tree", nsamples=3)
+            # Rank one reads sample 1; its first resolution now has a wrong shape.
+            path = Path(tree) / "sim001" / "field-with-hyphens-2.vtk"
+            mesh = mio.read(Path(tree) / "sim001" / "field-with-hyphens-10.vtk")
+            mio.write(path, mesh)
+            prefix = Path(directory) / "failed"
+            command = [shutil.which("mpiexec"), "-n", "2", sys.executable,
+                       str(SCRIPTS_DIR / "ex_datacombine_mpi.py"), "--inpaths", tree,
+                       "--outpath", str(prefix), "--dimension", "2", "--nsamples", "3",
+                       "--batch-size", "1"]
+            result = subprocess.run(command, capture_output=True, text=True, timeout=60)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertRegex(result.stderr, "rank 1, resolution 2, output sample 1.*have shape")
+            self.assertIn(str(path), result.stderr)
+            self.assertTrue(Path(f"{prefix}-2.h5").exists())
+            self.assertFalse(Path(f"{prefix}-10.h5").exists())
 
 
 if __name__ == "__main__":

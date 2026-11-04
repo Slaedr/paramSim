@@ -1,5 +1,6 @@
 import os
 import logging
+import re
 
 import numpy as np
 import meshio as mio
@@ -12,52 +13,103 @@ DEFAULT_BATCH_SIZE = 8
 
 
 def discover_sample_files(ensemble_root_path : str):
-    """Discover the VTK or VTU file associated with each ensemble sample.
+    """Discover the VTK or VTU file(s) associated with each ensemble sample.
+
+    Note that each sample can comprise multiple files, one for each resolution.
 
     @param ensemble_root_path  Location of the libEnsemble directory tree.
 
-    @return Mapping from integer sample IDs to VTK or VTU file paths.
+    @return Dict of dicts. Mapping from sample ID to {resolution ID: file path}.
     """
     sample_directories = {}
     for name in os.listdir(ensemble_root_path):
         directory = os.path.join(ensemble_root_path, name)
         if not os.path.isdir(directory) or not name.startswith("sim"):
             continue
-        sample_id = name[3:]
-        if not sample_id.isdigit():
+        if not name[3:].isdigit():
             continue
-        sample_index = int(sample_id)
+        sample_index = int(name[3:])
         if sample_index in sample_directories:
             raise ValueError(
-                f"Multiple libEnsemble directories represent sample "
-                f"{sample_index}: {sample_directories[sample_index]!r} "
-                f"and {directory!r}."
+                f"Multiple libEnsemble directories represent sample {sample_index}: "
+                f"{sample_directories[sample_index]!r} and {directory!r}."
             )
         sample_directories[sample_index] = directory
-
     if 0 not in sample_directories:
         raise ValueError(
-            f"No libEnsemble directory found for sample 0 "
-            f"in {ensemble_root_path!r}."
-        )
-
+                f"No libEnsemble directory found for sample 0 in {ensemble_root_path!r}.")
     sample_files = {}
     for sample_index, directory in sample_directories.items():
-        for filename in sorted(os.listdir(directory)):
+        resolutions = {}
+        for filename in os.listdir(directory):
             filepath = os.path.join(directory, filename)
-            if not os.path.isfile(filepath):
+            if not os.path.isfile(filepath) or not filename.lower().endswith((".vtk", ".vtu")):
                 continue
-            if not filename.lower().endswith((".vtk", ".vtu")):
-                continue
-            sample_files[sample_index] = filepath
-            break
-        else:
-            raise RuntimeError(
-                f"No VTK or VTU file found for sample {sample_index} "
-                f"in {directory!r}."
-            )
-
+            match = re.fullmatch(r".+-([0-9]+)\.(?:vtk|vtu)", filename, re.IGNORECASE)
+            if match is None:
+                raise ValueError(
+                        f"Unparseable resolution filename {filepath!r} in {directory!r}.")
+            resolution = int(match[1])
+            if resolution in resolutions:
+                raise ValueError(f"Duplicate resolution {resolution} for "
+                                 f"sample {sample_index} in {directory!r}: "
+                                 f"{resolutions[resolution]!r} and {filepath!r}."
+                )
+            resolutions[resolution] = filepath
+        if not resolutions:
+            raise ValueError(f"No VTK or VTU file found for sample {sample_index} "
+                             f"in {directory!r}.")
+        sample_files[sample_index] = resolutions
     return sample_files
+
+
+def select_samples(input_paths, nsamples=None):
+    """Discover inputs and validate requested sample IDs and common resolutions.
+    With no count, select all samples (which must have consecutive sample IDs).
+
+    @param input_paths  Paths to the trees to select samples from.
+    @param nsamples  Number of samples to select from each tree.
+
+    @return Sample mappings for each tree and numerically ordered resolution IDs.
+    """
+    if not input_paths:
+        raise ValueError("At least one input tree is required.")
+    if nsamples is not None and nsamples < 1:
+        raise ValueError("Sample count must be greater than zero.")
+    inputs = []
+    expected = None
+    for input_path in input_paths:
+        samples = discover_sample_files(input_path)
+        count = len(samples) if nsamples is None else nsamples
+        missing = sorted(set(range(count)) - samples.keys())
+        if missing:
+            raise ValueError(f"No libEnsemble directories found for sample IDs {missing}"
+                             f" in {input_path!r}.")
+        selected = {index: samples[index] for index in range(count)}
+        # Now iterate over each sample
+        for index, files in selected.items():
+            # files is the map from resolution ID to VTK file path for a selected sample,
+            #  so set(files) is the set of resolution IDs in this sample.
+            actual = set(files)
+            if expected is None:
+                expected = actual
+            if actual != expected:
+                raise ValueError(
+                    f"Resolution mismatch in tree {input_path!r}, sample {index}: "
+                    f"missing resolutions {sorted(expected - actual)}, extra "
+                    f"resolutions {sorted(actual - expected)}."
+                )
+        inputs.append(selected)
+    return inputs, sorted(expected)
+
+
+def resolution_output_paths(output_path, resolution_ids):
+    """Preserve a single output filename; append actual IDs for multiple levels."""
+    output_path = os.fspath(output_path)
+    if len(resolution_ids) == 1:
+        return {resolution_ids[0]: output_path}
+    prefix = output_path[:-3] if output_path.endswith(".h5") else output_path
+    return {resolution: f"{prefix}-{resolution}.h5" for resolution in resolution_ids}
 
 
 def read_sample_file(sample_path : str, ndim : int):
@@ -113,7 +165,8 @@ def get_cartesian_meshgrid_shape(coords : np.ndarray, ndim : int, boundary_coord
     check_npoin = 1
     for i in range(ndim):
         check_npoin *= meshgrid[i]
-    assert(npoin == check_npoin)
+    if npoin != check_npoin:
+        raise ValueError(f"Mesh points do not form a Cartesian grid: {npoin} points, grid shape {meshgrid}.")
     # Put x as the fastest changing coordinate
     return tuple(meshgrid[::-1])
 
@@ -175,16 +228,14 @@ def cartesian_domain_sort(mesh : mio.Mesh, ndim : int):
     datau[:,:ndim] = points[:,:ndim]
     ivar = 0
     for _, u_vals in mesh.point_data.items():
-        assert(points.shape[0] == u_vals.shape[0])
+        if points.shape[0] != u_vals.shape[0]:
+            raise ValueError(f"Field has {u_vals.shape[0]} points; expected {points.shape[0]}.")
         nuvars = (1 if u_vals.ndim == 1 else u_vals.shape[1])
-        datau[:, ndim+ivar:ndim+ivar+nuvars] = u_vals
+        datau[:, ndim+ivar:ndim+ivar+nuvars] = u_vals.reshape(points.shape[0], nuvars)
         ivar += nuvars
-    assert(ivar == nvars)
     dtypes = [*[(label, np.float32) for label in DIM_LABELS[:ndim]],
               *[(name, np.float32) for name in varnames]]
     datas = datau.view(dtypes).reshape(-1)
-    assert(datas.shape[0] == points.shape[0])
-    assert(len(datas[0]) == ndim+nvars)
 
     datas = np.unique(datas, axis=0)
 
@@ -220,7 +271,7 @@ class VTKToHDF5:
     Assumes all the samples come from the same physical mesh.
     """
     def __init__(self, ensemble_root_path, hfile, ndim : int,
-                 output_sample_count=None):
+                 output_sample_count=None, resolution_id=None, sample_files=None):
         """ Prepares to read VTK data from an ensemble tree and write to an
             HDF5 file.
 
@@ -231,6 +282,8 @@ class VTKToHDF5:
         @param ensemble_root_path  Location of the ensemble directory.
         @param hfile  Open HDF5 file object.
         @param ndim  Number of relevant spatial dimensions.
+        @param resolution_id  Resolution to select; required for multiple levels.
+        @param sample_files  Optional previously validated sample/resolution mapping.
         @param output_sample_count  Number of samples in the output fields
                                     dataset. Defaults to the number of input
                                     samples.
@@ -238,10 +291,22 @@ class VTKToHDF5:
         self.indirpath = ensemble_root_path
         self.ndim = ndim
         self.hfile = hfile
-        self.sample_files = discover_sample_files(self.indirpath)
+        if sample_files is None:
+            inputs, resolutions = select_samples([self.indirpath])
+            sample_files = inputs[0]
+        else:
+            resolutions = sorted(sample_files[0])
+        if resolution_id is None:
+            if len(resolutions) != 1:
+                raise ValueError("Select a resolution_id explicitly for multiple resolutions.")
+            resolution_id = resolutions[0]
+        if resolution_id not in resolutions:
+            raise ValueError(f"Unknown resolution {resolution_id}; available resolutions: {resolutions}.")
+        self.resolution_id = resolution_id
+        self.sample_files = sample_files
         self.sample_directories = {
-            sample_index: os.path.dirname(sample_path)
-            for sample_index, sample_path in self.sample_files.items()
+            index: os.path.dirname(paths[resolution_id])
+            for index, paths in sample_files.items()
         }
         self.nsamples = len(self.sample_files)
 
@@ -270,6 +335,8 @@ class VTKToHDF5:
                 f"{self.output_sample_count} expected."
             )
 
+        self.reference_mesh = self.hfile["mesh"][...]
+
     def _read_sample(self, sample_index : int):
         """Read and spatially sort one sample's fields and mesh points.
 
@@ -283,7 +350,7 @@ class VTKToHDF5:
                 f"in {self.indirpath!r}."
             )
 
-        return read_sample_file(self.sample_files[sample_index], self.ndim)
+        return read_sample_file(self.sample_files[sample_index][self.resolution_id], self.ndim)
 
     def process_sample(self, in_sample_idx : int, out_sample_idx : int,
                        batch_size : int = 1) -> None:
@@ -320,7 +387,7 @@ class VTKToHDF5:
         expected_shape = output_fields.shape[1:]
         expected_dtype = output_fields.dtype
         for sample_index in input_indices:
-            fields, _ = self._read_sample(sample_index)
+            fields, points = self._read_sample(sample_index)
             if fields.shape != expected_shape:
                 raise ValueError(
                     f"Fields for sample {sample_index} have shape "
@@ -331,6 +398,8 @@ class VTKToHDF5:
                     f"Fields for sample {sample_index} have dtype "
                     f"{fields.dtype}; expected {expected_dtype}."
                 )
+            if not np.array_equal(points, self.reference_mesh):
+                raise ValueError(f"Mesh for sample {sample_index}, resolution {self.resolution_id} differs from reference mesh.")
             batch_fields.append(fields)
 
         output_fields[out_sample_idx:output_end] = np.stack(batch_fields)
@@ -341,19 +410,19 @@ def ensemble_dir_to_hdf5(path, ndim : int, outpath,
 
     @param path  Path to the libEnsemble output directory.
     @param ndim  Number of relevant spatial dimensions.
-    @param outpath  Path of the HDF5 file to create.
+    @param outpath  Exact filename for one resolution; prefix-ID.h5 for multiple.
     @param batch_size  Maximum number of samples per read and write batch.
     """
     if batch_size < 1:
         raise ValueError("Batch size must be greater than zero.")
 
-    logger.info(f" Writing data to HDF5 file {outpath}.")
-    with h5py.File(outpath, "w") as hfile:
-        simio = VTKToHDF5(path, hfile, ndim)
-        for sample_index in range(0, simio.nsamples, batch_size):
-            current_batch_size = min(
-                batch_size, simio.nsamples - sample_index
-            )
-            simio.process_sample(
-                sample_index, sample_index, current_batch_size
-            )
+    inputs, resolutions = select_samples([path])
+    outputs = resolution_output_paths(outpath, resolutions)
+    for resolution in resolutions:
+        logger.info(f" Writing resolution {resolution} to {outputs[resolution]}.")
+        with h5py.File(outputs[resolution], "w") as hfile:
+            simio = VTKToHDF5(path, hfile, ndim, resolution_id=resolution,
+                              sample_files=inputs[0])
+            for sample_index in range(0, simio.nsamples, batch_size):
+                simio.process_sample(sample_index, sample_index,
+                                     min(batch_size, simio.nsamples - sample_index))

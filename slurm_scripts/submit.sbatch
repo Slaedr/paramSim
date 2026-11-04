@@ -76,7 +76,7 @@ srun --unbuffered \
   --cpu-bind=threads \
   --threads-per-core=1 \
   -m block:cyclic \
-  python3 -u "$PARAMSIM_ROOT/scripts/run_cluster.py" \
+  python3 -u "$PARAMSIM_ROOT/scripts/run.py" \
     --comms mpi \
     -e "$RUN_ROOT/case.json"
 
