@@ -147,6 +147,89 @@ class CheckEnsembleResultsTests(unittest.TestCase):
                 result.stdout,
             )
 
+    def _write_mixed_history(self, root):
+        save_history(
+            root / "paramsim_history_mixed.npy",
+            [
+                {
+                    "sim_id": 0,
+                    "sim_ended": True,
+                    "success": 1,
+                    "return_code": 0,
+                },
+                {
+                    "sim_id": 1,
+                    "sim_ended": True,
+                    "success": 0,
+                    "return_code": 4,
+                },
+                {
+                    "sim_id": 2,
+                    "sim_ended": True,
+                    "success": 0,
+                    "return_code": 5,
+                },
+            ],
+        )
+
+    def test_delete_failed_removes_only_failed_directories(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            self._write_mixed_history(root)
+            ensemble_dir = root / "ensemble"
+            sim_0 = ensemble_dir / "sim0000"
+            sim_1 = ensemble_dir / "sim0001"
+            sim_0.mkdir(parents=True)
+            sim_1.mkdir()
+            (sim_1 / "run_case_0.err").write_text(
+                "solver failed\n", encoding="utf-8"
+            )
+
+            result = run_checker(root, "--delete-failed")
+
+            self.assertEqual(result.returncode, 1, result.stderr)
+            self.assertIn("failed: 2", result.stdout)
+            self.assertTrue(sim_0.is_dir())
+            self.assertFalse(sim_1.exists())
+            self.assertIn(f"deleted {sim_1}", result.stdout)
+            self.assertIn(
+                f"not deleting {ensemble_dir / 'sim000002'}: "
+                "directory is missing",
+                result.stdout,
+            )
+
+    def test_failed_directories_are_kept_without_delete_flag(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            self._write_mixed_history(root)
+            sim_1 = root / "ensemble" / "sim0001"
+            sim_1.mkdir(parents=True)
+
+            result = run_checker(root)
+
+            self.assertEqual(result.returncode, 1, result.stderr)
+            self.assertTrue(sim_1.is_dir())
+            self.assertNotIn("deleted", result.stdout)
+
+    def test_delete_failed_does_not_follow_symbolic_links(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            self._write_mixed_history(root)
+            ensemble_dir = root / "ensemble"
+            ensemble_dir.mkdir()
+            target = root / "elsewhere"
+            target.mkdir()
+            (target / "keep.txt").write_text("keep\n", encoding="utf-8")
+            link = ensemble_dir / "sim0001"
+            link.symlink_to(target, target_is_directory=True)
+
+            result = run_checker(root, "--delete-failed")
+
+            self.assertEqual(result.returncode, 1)
+            self.assertTrue(link.is_symlink())
+            self.assertTrue((target / "keep.txt").exists())
+            self.assertIn("not a regular directory", result.stderr)
+
     def test_unstarted_surplus_rows_are_allowed(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)

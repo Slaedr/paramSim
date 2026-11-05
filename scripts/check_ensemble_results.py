@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import shutil
 import sys
 from pathlib import Path
 
@@ -82,6 +83,49 @@ def path_with_status(path: Path) -> str:
     return f"{path}{suffix}"
 
 
+def delete_simulation_directory(
+    simulation_dir: Path,
+    ensemble_dir: Path,
+) -> bool:
+    """Delete a failed simulation directory inside the ensemble tree.
+
+    Missing directories and symbolic links are left untouched, as is
+    anything that is not a direct child of the ensemble directory.
+
+    Args:
+        simulation_dir: Directory of the failed simulation.
+        ensemble_dir: Resolved simulation output directory.
+
+    Returns:
+        True if the directory was deleted, False otherwise.
+    """
+    if not simulation_dir.exists() and not simulation_dir.is_symlink():
+        print(f"not deleting {simulation_dir}: directory is missing")
+        return False
+    if simulation_dir.is_symlink() or not simulation_dir.is_dir():
+        print(
+            f"not deleting {simulation_dir}: not a regular directory",
+            file=sys.stderr,
+        )
+        return False
+    if simulation_dir.parent.resolve() != ensemble_dir:
+        print(
+            f"not deleting {simulation_dir}: outside {ensemble_dir}",
+            file=sys.stderr,
+        )
+        return False
+    try:
+        shutil.rmtree(simulation_dir)
+    except OSError as error:
+        print(
+            f"failed to delete {simulation_dir}: {error}",
+            file=sys.stderr,
+        )
+        return False
+    print(f"deleted {simulation_dir}")
+    return True
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("run_root", type=Path)
@@ -90,6 +134,11 @@ def main() -> None:
         type=Path,
         default=Path("ensemble"),
         help="simulation output directory, relative to run_root by default",
+    )
+    parser.add_argument(
+        "--delete-failed",
+        action="store_true",
+        help="delete the simulation directories of failed simulations",
     )
     args = parser.parse_args()
 
@@ -153,6 +202,8 @@ def main() -> None:
             f"case_params={path_with_status(case_params)}; "
             f"stderr={path_with_status(stderr)}"
         )
+        if args.delete_failed:
+            delete_simulation_directory(simulation_dir, ensemble_dir)
 
     if np.any(failed):
         raise SystemExit(1)
