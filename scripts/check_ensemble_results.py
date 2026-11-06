@@ -126,6 +126,61 @@ def delete_simulation_directory(
     return True
 
 
+def renumber_simulation_directories(ensemble_dir: Path) -> bool:
+    """Rename simulation directories to consecutive integers from 0.
+
+    Directories named ``sim<digits>`` are ordered by their numeric
+    suffix and renamed in ascending order, keeping the widest zero
+    padding already in use. Because every new number is no greater
+    than the old one, a rename never overwrites a directory that has
+    not yet been moved. Symbolic links are left untouched; if one
+    occupies a target name, renumbering stops.
+
+    Args:
+        ensemble_dir: Resolved simulation output directory.
+
+    Returns:
+        True if renumbering completed, False if it stopped early.
+    """
+    found = []
+    for candidate in ensemble_dir.glob("sim*"):
+        suffix = candidate.name.removeprefix("sim")
+        if (
+            suffix.isdigit()
+            and candidate.is_dir()
+            and not candidate.is_symlink()
+        ):
+            found.append((int(suffix), len(suffix), candidate))
+    if not found:
+        return True
+    found.sort(key=lambda item: (item[0], item[1]))
+    width = max(item[1] for item in found)
+
+    renamed = 0
+    for new_id, (_, _, old_path) in enumerate(found):
+        new_path = ensemble_dir / f"sim{new_id:0{width}d}"
+        if new_path == old_path:
+            continue
+        if new_path.exists() or new_path.is_symlink():
+            print(
+                f"not renumbering: {new_path} already exists",
+                file=sys.stderr,
+            )
+            return False
+        try:
+            old_path.rename(new_path)
+        except OSError as error:
+            print(
+                f"failed to rename {old_path}: {error}",
+                file=sys.stderr,
+            )
+            return False
+        print(f"renamed {old_path} -> {new_path}")
+        renamed += 1
+    print(f"renumbered {renamed} of {len(found)} simulation directories")
+    return True
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("run_root", type=Path)
@@ -140,7 +195,18 @@ def main() -> None:
         action="store_true",
         help="delete the simulation directories of failed simulations",
     )
+    parser.add_argument(
+        "--renumber-dirs",
+        action="store_true",
+        help=(
+            "after deleting failed simulations, renumber the remaining "
+            "simulation directories consecutively from 0 "
+            "(requires --delete-failed)"
+        ),
+    )
     args = parser.parse_args()
+    if args.renumber_dirs and not args.delete_failed:
+        parser.error("--renumber-dirs requires --delete-failed")
 
     run_root = args.run_root.expanduser().resolve()
     ensemble_dir = args.ensemble_dir.expanduser()
@@ -205,6 +271,10 @@ def main() -> None:
         if args.delete_failed:
             delete_simulation_directory(simulation_dir, ensemble_dir)
 
+    if args.renumber_dirs and not renumber_simulation_directories(
+        ensemble_dir
+    ):
+        raise SystemExit(2)
     if np.any(failed):
         raise SystemExit(1)
 

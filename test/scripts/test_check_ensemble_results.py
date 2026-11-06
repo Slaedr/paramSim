@@ -198,6 +198,52 @@ class CheckEnsembleResultsTests(unittest.TestCase):
                 result.stdout,
             )
 
+    def test_renumber_dirs_makes_directories_consecutive(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            save_history(
+                root / "paramsim_history_gaps.npy",
+                [
+                    {"sim_id": 120, "sim_ended": True, "success": 1},
+                    {
+                        "sim_id": 121,
+                        "sim_ended": True,
+                        "success": 0,
+                        "return_code": 4,
+                    },
+                    {"sim_id": 130, "sim_ended": True, "success": 1},
+                ],
+            )
+            ensemble_dir = root / "ensemble"
+            for number in (120, 121, 130):
+                directory = ensemble_dir / f"sim{number:05d}"
+                directory.mkdir(parents=True)
+                (directory / "id.txt").write_text(str(number))
+
+            result = run_checker(
+                root, "--delete-failed", "--renumber-dirs"
+            )
+
+            self.assertEqual(result.returncode, 1, result.stderr)
+            names = sorted(p.name for p in ensemble_dir.iterdir())
+            self.assertEqual(names, ["sim00000", "sim00001"])
+            self.assertEqual(
+                (ensemble_dir / "sim00000" / "id.txt").read_text(), "120"
+            )
+            self.assertEqual(
+                (ensemble_dir / "sim00001" / "id.txt").read_text(), "130"
+            )
+
+    def test_renumber_dirs_requires_delete_failed(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            self._write_mixed_history(root)
+
+            result = run_checker(root, "--renumber-dirs")
+
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("requires --delete-failed", result.stderr)
+
     def test_failed_directories_are_kept_without_delete_flag(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
