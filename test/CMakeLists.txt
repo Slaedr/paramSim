@@ -59,19 +59,25 @@ gtest_discover_tests(configuration_test)
 
 find_package(Python3 COMPONENTS Interpreter QUIET)
 if(Python3_Interpreter_FOUND)
-    add_test(
-        NAME python_unittests
-        COMMAND ${CMAKE_COMMAND} -E env
-                "PARAMSIM_EXEC=$<TARGET_FILE:run_case>"
-                "${Python3_EXECUTABLE}" -m unittest discover
-                -s "${CMAKE_CURRENT_SOURCE_DIR}/scripts"
-                -p "test_*.py" -v
-    )
-    set_tests_properties(python_unittests PROPERTIES
-        WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
-        TIMEOUT 900
-        RUN_SERIAL TRUE
-    )
+    # One CTest per Python test module in scripts/
+    file(GLOB python_test_files CONFIGURE_DEPENDS
+         "${CMAKE_CURRENT_SOURCE_DIR}/scripts/*.py")
+    foreach(python_test_file ${python_test_files})
+        get_filename_component(python_module "${python_test_file}" NAME_WE)
+        add_test(
+            NAME python_${python_module}
+            COMMAND ${CMAKE_COMMAND} -E env
+                    "PARAMSIM_EXEC=$<TARGET_FILE:run_case>"
+                    "${Python3_EXECUTABLE}" -m unittest discover
+                    -s "${CMAKE_CURRENT_SOURCE_DIR}/scripts"
+                    -p "${python_module}.py" -v
+        )
+        set_tests_properties(python_${python_module} PROPERTIES
+            WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
+            TIMEOUT 120
+            RUN_SERIAL TRUE
+        )
+    endforeach()
 endif()
 
 add_subdirectory(pdes)
