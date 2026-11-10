@@ -62,6 +62,8 @@ public:
         }
     }
 
+    virtual ~DomainGeometry() { }
+
 protected:
     /** A list of pairs of a bounary marker and its boundary face location
      * identifier function.
@@ -134,6 +136,8 @@ public:
 template <int dim>
 class FaceFunction {
 public:
+    virtual ~FaceFunction() { }
+
     virtual double value_normal(const dealii::Point<dim> &p,
                                 const dealii::Tensor<1, dim> &normal,
                                 const unsigned int = 0) const = 0;

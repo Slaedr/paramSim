@@ -60,6 +60,8 @@ public:
         return bc_dirichlet_;
     }
 
+    virtual ~Case() { }
+
 protected:
     std::shared_ptr<const DomainGeometry<dim>> geom_;
     std::shared_ptr<dealii::Function<dim>> rhs_;
